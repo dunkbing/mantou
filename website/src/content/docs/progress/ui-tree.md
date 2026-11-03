@@ -30,7 +30,7 @@ The Worker builds a UI tree and sends it to the native core as **ops**; the core
 - **Ids:** released ids are reused.
 - **Tests:** `runtime/mock.ts` records decoded commits; `runtime/headless.ts` (`HeadlessCore`) drives a real headless instance.
 
-**The counter example** (`examples/counter`, `bun run counter`): a Solid component, `Counter.tsx`, written with `View`, `createSignal`, `Index` and shared styles. There's no text yet, so the count is shown as squares and in the window title.
+**The counter example** (`examples/counter`, `bun run counter`): a Solid component, `Counter.tsx`, written with `View`, `createSignal`, `Index` and shared styles. When this page was written there was no text, so the count showed as squares; it now has labels and the count as text ([Text and Mantou Mail](/progress/text/)).
 
 **The Solid layer** ([§7.2](/design/runtime/#72-components-reactivity-compiled-jsx)):
 - **Compilation:** `.tsx` files are compiled by a Bun plugin (`runtime/solid/plugin.ts`) with `babel-preset-solid` in universal mode; compiled JSX calls the renderer in `runtime/solid/renderer.ts`.

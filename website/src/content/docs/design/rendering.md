@@ -15,6 +15,8 @@ description: "The frame pipeline, scene, wgpu renderer, scrolling and animation,
 - Layers: scroll containers and nodes with a running transform or opacity animation form a layer. Its transform is applied at composite time, so scrolling and these animations need no relayout and no scene rebuild.
 
 ### 9.3 Renderer (wgpu)
+**Status:** one pipeline draws every quad in paint order: filled rectangles with rounded corners and borders (an SDF in the fragment shader), and glyphs from the atlas. Each quad carries a clip rectangle (`overflow: hidden`, intersected down the tree). Shadows, gradients, images and rounded clips aren't built yet.
+
 - One instanced quad per operation. An "uber" fragment shader computes the SDF for rounded rects, analytic blurred shadows (Evan Wallace's method), gradients, border dashes, atlas coverage and the innermost rounded clip. Outer clips become scissor rects.
 - Batches share a scissor rect and a texture. Operations completely hidden by a later opaque fill are dropped.
 - Frames are drawn only when asked for: something changed, a scroll or animation is running, or the window resized. With nothing pending, the display link stays paused.

@@ -81,6 +81,7 @@ Style and prop ids, and their types, are **generated from one schema** shared by
 ### 8.5 Text
 - parley lays text out on the Worker thread, inside `mt_commit` during layout. Measurements are cached by a hash of the layout-relevant content plus the width constraint; colour is excluded, so a colour change never triggers layout.
 - swash rasterizes glyphs into a coverage atlas and a colour atlas. A glyph seen for the first time goes into a transient zone and moves to a lasting one once drawn again. If an atlas fills mid-frame, the core makes room and repaints rather than showing missing glyphs.
+- **Status:** implemented in `mantou-text`. The bundled font is Inter (Regular, Medium, SemiBold, Bold; OFL), with the system's fonts as the fallback. Layouts are cached by text, style and width, and the parley font context is built once per process. Glyphs are rasterized at device size with four horizontal subpixel positions into one coverage atlas, so colour emoji draw as monochrome shapes for now. `maxLines` cuts off with an ellipsis. Text styles aren't inherited yet, and a `<Text>` has one style (no spans).
 - **Decided (Q5): parley on every platform in v1, behind a `TextEngine` trait**.
   - **Why:** one implementation to build and debug. Layout is also identical on every OS when the fonts are the same: tests bundle a test font, so headless text and image snapshots taken on Linux CI hold everywhere.
   - **Cost:** text won't match each OS's own toolkit pixel for pixel, as a system text stack would.

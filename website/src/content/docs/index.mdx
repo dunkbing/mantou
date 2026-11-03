@@ -20,7 +20,7 @@ hero:
 Mantou lets you write desktop apps in TypeScript and TSX, run them on Bun, and show UI that Mantou draws itself on the GPU. It never shows a webview. The main thread never runs app JavaScript and never waits for it. That keeps scrolling, resizing and animation smooth while the app's JS is busy or paused for garbage collection.
 
 ```tsx
-import { Index, View, createSignal, defineStyle, run } from "mantou-ui";
+import { Index, Text, View, createSignal, defineStyle, run } from "mantou-ui";
 
 const dot = defineStyle({ width: 28, height: 28, backgroundColor: "#f59e0b" });
 
@@ -28,7 +28,10 @@ function Counter() {
   const [count, setCount] = createSignal(0);
   return (
     <View style={{ flexGrow: 1, padding: 24, gap: 16 }}>
-      <View style={{ width: 88, height: 44, backgroundColor: "#16a34a" }} onPress={() => setCount((n) => n + 1)} />
+      <View style={{ width: 88, height: 44, borderRadius: 8, justifyContent: "center", backgroundColor: "#16a34a" }} onPress={() => setCount((n) => n + 1)}>
+        <Text style={{ color: "#ffffff", fontWeight: 600, textAlign: "center" }}>+1</Text>
+      </View>
+      <Text style={{ fontSize: 32, fontWeight: 700 }}>{count()}</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <Index each={Array.from({ length: count() })}>{() => <View style={dot} />}</Index>
       </View>
@@ -39,11 +42,11 @@ function Counter() {
 run(() => <Counter />, { title: "Counter" });
 ```
 
-This runs today (`examples/counter`). There's no text yet, so the count shows as squares; `<Text>` and the rest of the API sketch ([§7.3](/design/runtime/#73-public-api-sketch)) come later.
+This runs today (`examples/counter`). For something bigger, `examples/mail` is a three-pane mail client built the same way ([Text and Mantou Mail](/progress/text/)).
 
 ## Status
 
-**Early development.** The threading model works with a real window on Linux, macOS and Windows. The op protocol, the shadow tree, flexbox layout, a rectangle renderer, presses and headless test instances work; a counter example updates through ops. There's no text yet, and no JSX layer. See [threading](/progress/threading/) and [UI tree, layout and rendering](/progress/ui-tree/).
+**Early development.** The threading model works with a real window on Linux, macOS and Windows. Solid-style JSX, flexbox layout, text, rounded corners and borders, clipping, presses, keys and the wheel work, and so do headless test instances. Text input, images and shadows don't exist yet. See [threading](/progress/threading/), [UI tree, layout and rendering](/progress/ui-tree/) and [text and Mantou Mail](/progress/text/).
 
 ## Documentation
 

@@ -14,10 +14,12 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `runtime/solid/` | The JSX layer: `plugin.ts` (Bun plugin: Babel + `babel-preset-solid`, universal mode), `renderer.ts` (Solid's universal renderer over the node tree), `components.ts`, `mount.ts`, `solid.ts` (Solid's client build), `preload.ts` |
 | `runtime/` | The rest: `main.ts` (bootstrap, main thread), `worker.ts` (Worker entry: registers the plugin, imports the app), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
 | `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`. No platform deps |
-| `core/crates/mantou-render` | wgpu renderer (instanced quads), to a window surface or offscreen |
+| `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL) |
+| `core/crates/mantou-render` | wgpu renderer: one instanced pipeline for rectangles (SDF rounded corners, borders) and glyphs, with clip rects; to a window surface or offscreen |
 | `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`), the winit window (`window.rs`), headless test hooks |
 | `core/fuzz` | cargo-fuzz targets (`decode`, `apply`, `layout`); nightly only, its own workspace |
 | `examples/counter` | `Counter.tsx`, a Solid component; `main.tsx` runs it; `Counter.test.tsx` tests it on the mock core |
+| `examples/mail` | Mantou Mail: `data.ts` (sample mail), `state.ts` (signals and actions), `App.tsx` (UI, keys), `Mail.test.tsx` (headless) |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
@@ -35,7 +37,8 @@ bun run test:headless       # Bun tests on the real core, no window (captures ne
 bun run test:core           # cargo tests: tree, fixtures, random batches, incremental-vs-scratch layout
 bun run selftest            # window self-test; on headless Linux: xvfb-run -a bun run selftest
 bun run counter             # the counter in a window (bun runtime/main.ts <entry.tsx> runs any app)
-cd core/fuzz && cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
+bun run mail                # Mantou Mail in a window
+cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)
 ```
 
@@ -53,6 +56,8 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 8. **`mantou-tree` stays platform-free**, and incremental layout must equal layout from scratch (`tests/layout.rs`, fuzz target `layout`).
 9. **JSX goes through Mantou's plugin, and Solid's API comes from `mantou-ui`.** Bun resolves a bare `solid-js` to Solid's server build (no reactivity) and its runtime plugins can't redirect bare imports, so `.ts` files must never import `solid-js` directly; the plugin rewrites it in `.tsx` files. Apps run through `runtime/main.ts` (the Worker entry registers the plugin); tests get it from `bunfig.toml`'s preload.
 10. **A Solid owner's nodes are released when it's disposed** (`createElement` registers the cleanup); never release a node a component still owns.
+11. **Text goes inside `<Text>`**, which holds only text (its content is its text leaves joined, sent as one `TEXT` op per change). Text elsewhere isn't drawn, and the runtime warns once.
+12. **Layout is CSS flexbox.** `flexShrink` defaults to 1 and flex items are at least as tall as their content unless they clip, so fixed-size parts need `flexShrink: 0` and scroll containers' ancestors need `minHeight: 0`. Use `node.measure()` for sizes the app needs (it commits first, then asks the core).
 
 ## Before you finish
 
