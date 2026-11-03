@@ -51,7 +51,7 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 2. **One commit per JS turn.** `Ui.schedule()` flushes in a microtask; never call `mt_commit` per node or per property.
 3. **The protocol changes only in `schema/protocol.ts`.** Never edit generated files; never renumber or reuse a code; append. Run `bun run gen` and commit the generated files and fixtures. Bump `PROTOCOL_VERSION` when meaning changes, and `ABI_VERSION` (`mantou-ffi` and `runtime/ffi.ts`, together) when an exported signature or the event format changes.
 4. **A node already in place is never re-inserted** (`Node.insertBefore` and `Tree::insert` both skip it).
-5. **C ABI functions take scalars, pointers and lengths only** (no structs by value), take an instance handle when they act on a UI, and catch panics (`guard`).
+5. **C ABI functions take scalars, pointers and lengths only** (no structs by value), take an instance handle when they act on a UI, and catch panics (`guard`; the window's event handlers too). The core logs with `log!`, never `eprintln!`, which panics when stderr (non-blocking under Bun) is full.
 6. **Validate before allocating.** Counts and lengths from a batch are checked against its size first (the fuzzer found an abort from exactly this).
 7. **Tests wait for conditions, not time, and assert counts, not durations.** Op counts per interaction are part of the tests (pressing + in the counter is exactly 4 ops).
 8. **`mantou-tree` stays platform-free**, and incremental layout must equal layout from scratch (`tests/layout.rs`, fuzz target `layout`).

@@ -58,7 +58,7 @@ pub struct SystemClipboard {
 
 impl SystemClipboard {
     pub fn new() -> SystemClipboard {
-        let system = arboard::Clipboard::new().inspect_err(|e| eprintln!("mantou-core: no system clipboard ({e}); using one in memory")).ok();
+        let system = arboard::Clipboard::new().inspect_err(|e| log!("no system clipboard ({e}); using one in memory")).ok();
         SystemClipboard { system, fallback: MemoryClipboard::default() }
     }
 }
@@ -74,7 +74,7 @@ impl Clipboard for SystemClipboard {
         match self.system.as_mut() {
             Some(c) => {
                 if let Err(e) = c.set_text(text) {
-                    eprintln!("mantou-core: could not copy: {e}");
+                    log!("could not copy: {e}");
                 }
             }
             None => self.fallback.set(text),
@@ -241,12 +241,12 @@ impl Instance {
         match tree.apply(bytes) {
             Ok(report) => {
                 for e in &report.errors {
-                    eprintln!("mantou-core: op skipped: {e}");
+                    log!("op skipped: {e}");
                 }
                 self.stats.op_errors.fetch_add(report.errors.len() as u64, Ordering::Relaxed);
             }
             Err(e) => {
-                eprintln!("mantou-core: batch rejected: {e}");
+                log!("batch rejected: {e}");
                 return -1;
             }
         }

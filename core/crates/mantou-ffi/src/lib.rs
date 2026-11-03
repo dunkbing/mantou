@@ -20,6 +20,16 @@
 //! Every exported function takes scalars, pointers and lengths only (`bun:ffi`
 //! cannot pass structs by value), and none lets a panic cross the ABI.
 
+/// Writes "mantou-core: …" to stderr, ignoring failure. Never `eprintln!`:
+/// it panics when the write fails, and Bun makes stderr non-blocking, so a
+/// full pipe (EAGAIN) would take the whole event loop down.
+macro_rules! log {
+    ($($arg:tt)*) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr().lock(), "mantou-core: {}", format_args!($($arg)*));
+    }};
+}
+
 mod instance;
 mod window;
 
@@ -104,7 +114,7 @@ fn guard<R>(fallback: R, f: impl FnOnce() -> R) -> R {
                 .map(|s| s.to_string())
                 .or_else(|| p.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".into());
-            eprintln!("mantou-core: panic: {msg}");
+            log!("panic: {msg}");
             fallback
         }
     }
@@ -115,7 +125,7 @@ fn with<R: Copy>(handle: u32, fallback: R, f: impl FnOnce(&Arc<Instance>) -> R) 
     guard(fallback, || match get(handle) {
         Some(inst) => f(&inst),
         None => {
-            eprintln!("mantou-core: no instance {handle}");
+            log!("no instance {handle}");
             fallback
         }
     })
@@ -195,7 +205,7 @@ pub unsafe extern "C" fn mt_run(cfg: *const u8, len: u32) -> i32 {
         let event_loop = match EventLoop::<UserEvent>::with_user_event().build() {
             Ok(el) => el,
             Err(e) => {
-                eprintln!("mantou-core: cannot start the event loop: {e}");
+                log!("cannot start the event loop: {e}");
                 return 102;
             }
         };
@@ -210,7 +220,7 @@ pub unsafe extern "C" fn mt_run(cfg: *const u8, len: u32) -> i32 {
         *lock(&G.proxy) = None;
         drop(app);
         if let Err(e) = result {
-            eprintln!("mantou-core: event loop failed: {e}");
+            log!("event loop failed: {e}");
             return 103;
         }
         G.exit_code.load(Ordering::Acquire)
@@ -548,7 +558,7 @@ pub unsafe extern "C" fn mt_test_capture(inst: u32, dst: *mut u8, cap: u32) -> i
         }
         let mut slot = lock(&G.offscreen);
         let offscreen = slot.get_or_insert_with(|| {
-            Offscreen::new().inspect_err(|e| eprintln!("mantou-core: offscreen rendering unavailable: {e}"))
+            Offscreen::new().inspect_err(|e| log!("offscreen rendering unavailable: {e}"))
         });
         let Ok(offscreen) = offscreen.as_mut() else { return -1 };
         let pixels = offscreen.capture(&scene);

@@ -16,7 +16,7 @@ use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::instance::{Instance, bump, lock};
-use crate::{G, UserEvent, app, key_text};
+use crate::{G, UserEvent, app, guard, key_text};
 
 use mantou_tree::protocol::{key_modifier, named_key as key};
 use winit::event::MouseScrollDelta;
@@ -87,16 +87,20 @@ impl Gpu {
         }
     }
 
-    fn draw(&mut self, scene: &Scene) -> bool {
+    fn draw(&mut self, scene: &Scene) -> Drawn {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
                 self.surface.configure(&self.device, &self.config);
-                return false;
+                return Drawn::Retry;
             }
+            // Not ready yet: skip this frame (wgpu's advice) and try the next.
+            wgpu::CurrentSurfaceTexture::Timeout => return Drawn::Retry,
+            // Hidden: draw again when the window shows (WindowEvent::Occluded(false)).
+            wgpu::CurrentSurfaceTexture::Occluded => return Drawn::Skipped,
             other => {
-                eprintln!("mantou-core: no surface texture: {other:?}");
-                return false;
+                log!("no surface texture: {other:?}");
+                return Drawn::Skipped;
             }
         };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -104,8 +108,16 @@ impl Gpu {
         let commands = self.renderer.draw(&self.device, &self.queue, &view, size, scene);
         self.queue.submit([commands]);
         self.queue.present(frame);
-        true
+        Drawn::Yes
     }
+}
+
+enum Drawn {
+    Yes,
+    /// Not this time: ask for another frame.
+    Retry,
+    /// Not until something changes.
+    Skipped,
 }
 
 pub struct App {
@@ -153,10 +165,10 @@ impl App {
         let scene = lock(&self.inst.scene).clone();
         let Some(gpu) = self.gpu.as_mut() else { return };
         window.pre_present_notify();
-        if gpu.draw(&scene) {
-            bump(&self.inst.stats.frames);
-        } else {
-            window.request_redraw();
+        match gpu.draw(&scene) {
+            Drawn::Yes => bump(&self.inst.stats.frames),
+            Drawn::Retry => window.request_redraw(),
+            Drawn::Skipped => {}
         }
     }
 
@@ -207,8 +219,24 @@ fn modifier_bits(m: ModifiersState) -> u32 {
         | (if m.super_key() { key_modifier::META } else { 0 })
 }
 
+// Each handler catches its own panics: one bad event is logged, and the
+// window keeps running.
 impl ApplicationHandler<UserEvent> for App {
     fn resumed(&mut self, el: &ActiveEventLoop) {
+        guard((), || self.on_resumed(el));
+    }
+
+    fn user_event(&mut self, el: &ActiveEventLoop, event: UserEvent) {
+        guard((), || self.on_user_event(el, event));
+    }
+
+    fn window_event(&mut self, el: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        guard((), || self.on_window_event(el, id, event));
+    }
+}
+
+impl App {
+    fn on_resumed(&mut self, el: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
         }
@@ -218,7 +246,7 @@ impl ApplicationHandler<UserEvent> for App {
         let window = match el.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
-                eprintln!("mantou-core: cannot create a window: {e}");
+                log!("cannot create a window: {e}");
                 G.exit_code.store(104, Ordering::Release);
                 el.exit();
                 return;
@@ -230,7 +258,7 @@ impl ApplicationHandler<UserEvent> for App {
                 self.gpu = Some(gpu);
             }
             Err(e) => {
-                eprintln!("mantou-core: GPU unavailable, nothing will be drawn: {e}");
+                log!("GPU unavailable, nothing will be drawn: {e}");
                 *lock(&G.info) = format!("no GPU ({e}); {}", std::env::consts::OS);
             }
         }
@@ -242,7 +270,7 @@ impl ApplicationHandler<UserEvent> for App {
         window.request_redraw();
     }
 
-    fn user_event(&mut self, el: &ActiveEventLoop, event: UserEvent) {
+    fn on_user_event(&mut self, el: &ActiveEventLoop, event: UserEvent) {
         match event {
             UserEvent::Redraw => {
                 if let Some(w) = &self.window {
@@ -263,7 +291,7 @@ impl ApplicationHandler<UserEvent> for App {
         }
     }
 
-    fn window_event(&mut self, _el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn on_window_event(&mut self, _el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         let inst = self.inst.clone();
         match event {
             WindowEvent::CloseRequested => inst.push_event([ev::CLOSE_REQUESTED, 0, 0, 0]),
@@ -329,6 +357,7 @@ impl ApplicationHandler<UserEvent> for App {
                 inst.wheel(x, y, dx, dy);
             }
             WindowEvent::RedrawRequested => self.draw(),
+            WindowEvent::Occluded(false) => self.redraw_if(true),
             _ => {}
         }
     }
