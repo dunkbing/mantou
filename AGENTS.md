@@ -69,7 +69,7 @@ Apps report what they need as issues here, through the templates in `.github/ISS
 
 ## Releases
 
-Push a tag `vX.Y.Z` (or run the `release` workflow, a dry run by default): it builds the core on each platform, stages and packs the packages, smoke-tests them from the tarballs on Linux (x64, arm64), macOS and Windows, publishes the platform packages and then `mantou-ui` with provenance (secret `NPM_TOKEN`), and tests the published version from npm. `package.json`'s version stays `0.0.0`; the tag sets it. A prebuilt core is found through `runtime/ffi.ts`'s `libPath()`: `MANTOU_CORE`, then a core built in `core/target`, then the platform package.
+Push a tag `vX.Y.Z` (or run the `release` workflow, a dry run by default): it builds the core on each platform, stages and packs the packages, smoke-tests them from the tarballs on Linux (x64, arm64), macOS and Windows, publishes the platform packages and then `mantou-ui` with provenance (secret `NPM_TOKEN`), and tests the published version from npm (npm checks new uploads first, so a version can take up to ~10 minutes to be served; the test waits up to 30). `package.json`'s version stays `0.0.0`; the tag sets it. A prebuilt core is found through `runtime/ffi.ts`'s `libPath()`: `MANTOU_CORE`, then a core built in `core/target`, then the platform package.
 
 ## Before you finish
 

@@ -174,8 +174,9 @@ jobs:
     needs: publish
     if: ${{ needs.publish.outputs.published == 'true' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 45 # npm can take minutes to serve a new version (scripts/smoke.ts waits up to 30)
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
     steps:

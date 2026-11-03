@@ -55,9 +55,10 @@ test("mantou-ui runs on its prebuilt core", () => {
 
 const run = (cmd: string[]) => Bun.spawnSync(cmd, { cwd: app, stdio: ["inherit", "inherit", "inherit"] }).exitCode;
 
-// The registry can take a while to serve a version just published.
+// npm checks new uploads before serving them: a version can take several
+// minutes to appear (9 for one package of 0.1.1). Keep trying for 30.
 let installed = false;
-for (let attempt = 1; attempt <= (mode === "registry" ? 10 : 1); attempt++) {
+for (let attempt = 1; attempt <= (mode === "registry" ? 60 : 1); attempt++) {
   if (run(["bun", "install"]) === 0) {
     installed = true;
     break;
