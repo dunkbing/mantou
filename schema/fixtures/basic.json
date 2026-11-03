@@ -1,0 +1,129 @@
+[
+  {
+    "op": "CREATE",
+    "id": 1,
+    "kind": 1
+  },
+  {
+    "op": "CREATE",
+    "id": 2,
+    "kind": 1
+  },
+  {
+    "op": "CREATE",
+    "id": 3,
+    "kind": 1
+  },
+  {
+    "op": "STYLE_DEF",
+    "styleId": 1,
+    "props": [
+      [
+        "width",
+        24
+      ],
+      [
+        "height",
+        "50%"
+      ],
+      [
+        "backgroundColor",
+        "#f59e0bff"
+      ],
+      [
+        "flexDirection",
+        "row"
+      ],
+      [
+        "opacity",
+        0.5
+      ]
+    ]
+  },
+  {
+    "op": "STYLE",
+    "id": 1,
+    "prop": "flexDirection",
+    "value": "column"
+  },
+  {
+    "op": "STYLE",
+    "id": 1,
+    "prop": "paddingTop",
+    "value": 12
+  },
+  {
+    "op": "STYLE",
+    "id": 1,
+    "prop": "width",
+    "value": "auto"
+  },
+  {
+    "op": "STYLE",
+    "id": 1,
+    "prop": "backgroundColor",
+    "value": "#10203080"
+  },
+  {
+    "op": "STYLE",
+    "id": 1,
+    "prop": "flexGrow",
+    "value": 1.25
+  },
+  {
+    "op": "STYLE_USE",
+    "id": 2,
+    "styleId": 1
+  },
+  {
+    "op": "STYLE_USE",
+    "id": 3,
+    "styleId": 1
+  },
+  {
+    "op": "INSERT",
+    "parent": 1,
+    "child": 2,
+    "before": 0
+  },
+  {
+    "op": "INSERT",
+    "parent": 1,
+    "child": 3,
+    "before": 2
+  },
+  {
+    "op": "LISTEN",
+    "id": 3,
+    "mask": 1
+  },
+  {
+    "op": "SET_ROOT",
+    "id": 1
+  },
+  {
+    "op": "CLEAR_COLOR",
+    "r": 0.10000000149011612,
+    "g": 0.20000000298023224,
+    "b": 0.30000001192092896,
+    "a": 1
+  },
+  {
+    "op": "TITLE",
+    "title": "Mantou ✓"
+  },
+  {
+    "op": "STYLE_RESET",
+    "id": 1,
+    "prop": "width"
+  },
+  {
+    "op": "REMOVE",
+    "parent": 1,
+    "child": 2
+  },
+  {
+    "op": "RELEASE",
+    "id": 2
+  }
+]

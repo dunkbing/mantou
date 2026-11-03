@@ -1,9 +1,10 @@
-// M0 self-test (runs in the app Worker). Checks the exit criteria of
-// DESIGN.md §13 M0 and §12.5 and writes m0-report.json; exit code 0 = all pass.
+// Window self-test (runs in the app Worker). Checks the exit criteria of
+// M0 and M1 (DESIGN.md §13, §12.5) and writes m0-report.json; exit code 0 = all pass.
 //
 // Rules from §12.1: wait for conditions, not for time; assert counts, not
 // durations (CPU % is reported for information and checked loosely).
 import { MantouCore, type Stats } from "../runtime/core";
+import { counter } from "../examples/counter/counter";
 
 const core = new MantouCore();
 type Check = { name: string; pass: boolean; detail: Record<string, unknown> };
@@ -121,6 +122,53 @@ async function main() {
       resizeEventsDeliveredAfter: inJs,
     });
   }
+
+  // 6. M1: the counter's tree is laid out by the core and drawn as quads.
+  const c = counter(core.ui);
+  {
+    const before = core.stats();
+    await until("the counter's first frame", () => core.stats().quads >= 5 && core.stats().frames > before.frames, 5_000);
+    const s = core.stats();
+    const plus = core.nodeRect(c.plus.id);
+    check("M1: ops → tree → layout → quads", s.quads === 5 && s.opErrors === 0 && plus !== null && plus[2] - plus[0] === 88, {
+      quads: s.quads, nodes: s.nodes, opErrors: s.opErrors, ops: s.ops, plusRect: plus, firstCommitOps: core.ui.lastCommitOps,
+    });
+  }
+
+  // 7. M1: a press hit-tested by the core reaches the handler, whose commit is drawn.
+  {
+    const [x0, y0, x1, y1] = core.nodeRect(c.plus.id)!;
+    const before = core.stats();
+    const sent = performance.now();
+    core.testPointer("down", (x0 + x1) / 2, (y0 + y1) / 2);
+    core.testPointer("up", (x0 + x1) / 2, (y0 + y1) / 2);
+    await until("the new square is drawn", () => core.stats().quads === 6 && core.stats().frames > before.frames, 5_000);
+    const ms = performance.now() - sent;
+    const d = delta(before, core.stats());
+    check("M1: press → handler → one commit → frame", c.count() === 1 && d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 4, {
+      count: c.count(), presses: d.presses, commits: d.commits, opsInCommit: core.ui.lastCommitOps, msPressToFrame: +ms.toFixed(1),
+    });
+    // A press that misses every listener reaches nobody.
+    const missBefore = core.stats().presses;
+    const board = core.nodeRect(c.board.id)!;
+    core.testPointer("down", board[0] + 4, board[1] + 4);
+    core.testPointer("up", board[0] + 4, board[1] + 4);
+    await sleep(100);
+    check("M1: no press without a listener", core.stats().presses === missBefore && c.count() === 1, { presses: core.stats().presses - missBefore });
+  }
+
+  // 8. M1: resizes lay out on the main thread while the Worker is blocked.
+  {
+    await sleep(200);
+    const before = core.stats();
+    core.testResize(8, 50, [800, 520], [640, 400]);
+    const spinUntil = performance.now() + 800;
+    while (performance.now() < spinUntil) {}
+    const d = delta(before, core.stats());
+    check("M1: relayout without JS", d.layouts >= 4 && d.commits === 0 && d.frames >= 4, {
+      layoutsWhileBlocked: d.layouts, commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
+    });
+  }
 }
 
 let code = 0;
@@ -136,6 +184,6 @@ const report = {
   rssMB: +(process.memoryUsage().rss / 2 ** 20).toFixed(1), stats: core.stats(), checks,
   result: code === 0 ? "pass" : "fail",
 };
-await Bun.write("m0-report.json", JSON.stringify(report, null, 2));
-console.log(`\nM0 self-test: ${report.result.toUpperCase()} (${checks.length - failed.length}/${checks.length}) · RSS ${report.rssMB} MB · ${report.gpu}`);
+await Bun.write("selftest-report.json", JSON.stringify(report, null, 2));
+console.log(`\nSelf-test: ${report.result.toUpperCase()} (${checks.length - failed.length}/${checks.length}) · RSS ${report.rssMB} MB · ${report.gpu}`);
 core.quit(code);

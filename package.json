@@ -2,13 +2,19 @@
   "name": "mantou-ui",
   "version": "0.0.0",
   "private": true,
-  "description": "Mantou: a native GUI framework for Bun + TypeScript (M0 spike)",
+  "description": "Mantou: a native GUI framework for Bun + TypeScript",
   "type": "module",
   "scripts": {
     "build:core": "cargo build --release --manifest-path core/Cargo.toml",
+    "gen": "bun schema/gen.ts",
+    "gen:check": "bun schema/gen.ts --check",
+    "typecheck": "tsc -p .",
+    "test": "bun test runtime examples schema",
+    "test:core": "cargo test --manifest-path core/Cargo.toml -p mantou-tree",
+    "selftest": "bun runtime/main.ts spike/selftest.ts --title \"Mantou self-test\"",
+    "counter": "bun runtime/main.ts examples/counter/main.ts --title Mantou",
     "app": "bun runtime/main.ts spike/app.ts --title \"Mantou M0\"",
-    "selftest": "bun runtime/main.ts spike/selftest.ts --title \"Mantou M0 self-test\"",
-    "typecheck": "tsc -p ."
+    "docs": "bun --cwd website run dev"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",

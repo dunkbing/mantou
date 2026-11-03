@@ -1,7 +1,10 @@
-// Worker-side client of the native core: encodes ops, flushes them once per JS
-// turn, and drains events when the core wakes the Worker (DESIGN.md §8).
+// Worker-side client of the native core: commits the Ui's op batches through
+// FFI (one per JS turn) and drains events when the core wakes the Worker
+// (DESIGN.md §8).
 import { JSCallback } from "bun:ffi";
 import { openCore, type CoreLib } from "./ffi";
+import { Event } from "./gen/protocol";
+import { Ui } from "./ui";
 
 export type CoreEvent =
   | { type: "windowReady"; width: number; height: number; scale: number }
@@ -11,7 +14,8 @@ export type CoreEvent =
   | { type: "keyDown"; key: string; repeat: boolean }
   | { type: "keyUp"; key: string }
   | { type: "closeRequested" }
-  | { type: "scaleChanged"; scale: number };
+  | { type: "scaleChanged"; scale: number }
+  | { type: "press"; target: number; x: number; y: number };
 
 export interface Stats {
   frames: number;
@@ -20,10 +24,14 @@ export interface Stats {
   events: number;
   resizes: number;
   redrawRequests: number;
+  layouts: number;
+  ops: number;
+  opErrors: number;
+  quads: number;
+  nodes: number;
+  presses: number;
 }
-
-const OP_CLEAR_COLOR = 1;
-const OP_TITLE = 2;
+const STAT_NAMES: (keyof Stats)[] = ["frames", "commits", "wakes", "events", "resizes", "redrawRequests", "layouts", "ops", "opErrors", "quads", "nodes", "presses"];
 
 function keyName(code: number): string {
   if (code === 0x110000) return "Escape";
@@ -32,57 +40,14 @@ function keyName(code: number): string {
   return String.fromCodePoint(code);
 }
 
-class OpEncoder {
-  private buf = new ArrayBuffer(4096);
-  private u32 = new Uint32Array(this.buf);
-  private f32 = new Float32Array(this.buf);
-  private len = 0; // in words
-
-  private reserve(words: number) {
-    if (this.len + words <= this.u32.length) return;
-    const next = new ArrayBuffer(Math.max(this.buf.byteLength * 2, (this.len + words) * 4));
-    new Uint32Array(next).set(this.u32.subarray(0, this.len));
-    this.buf = next;
-    this.u32 = new Uint32Array(next);
-    this.f32 = new Float32Array(next);
-  }
-
-  clearColor(r: number, g: number, b: number, a: number) {
-    this.reserve(5);
-    this.u32[this.len] = OP_CLEAR_COLOR;
-    this.f32.set([r, g, b, a], this.len + 1);
-    this.len += 5;
-  }
-
-  title(s: string) {
-    const bytes = new TextEncoder().encode(s);
-    const words = Math.ceil(bytes.length / 4);
-    this.reserve(2 + words);
-    this.u32[this.len] = OP_TITLE;
-    this.u32[this.len + 1] = bytes.length;
-    new Uint8Array(this.buf, (this.len + 2) * 4, words * 4).fill(0).set(bytes);
-    this.len += 2 + words;
-  }
-
-  get empty() {
-    return this.len === 0;
-  }
-
-  take(): Uint8Array {
-    const out = new Uint8Array(this.buf, 0, this.len * 4);
-    this.len = 0;
-    return out;
-  }
-}
-
 export class MantouCore {
   readonly lib: CoreLib = openCore();
+  readonly ui: Ui;
   /** Events delivered to JS so far, by type. */
   readonly received: Record<string, number> = {};
+  /** Called for every event, after presses reach their handlers. */
   onEvent: (e: CoreEvent) => void = () => {};
 
-  private ops = new OpEncoder();
-  private scheduled = false;
   private evbuf = new Uint8Array(64 * 1024);
   private ev32 = new Uint32Array(this.evbuf.buffer);
   private evf32 = new Float32Array(this.evbuf.buffer);
@@ -92,9 +57,16 @@ export class MantouCore {
   private keepAlive = setInterval(() => {}, 1e9);
 
   constructor() {
+    this.ui = new Ui({
+      commit: (bytes) => {
+        const r = this.lib.symbols.mt_commit(bytes, bytes.byteLength);
+        if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
+      },
+    });
     this.wake = new JSCallback(() => this.drain(), { args: [], returns: "void", threadsafe: true });
     this.lib.symbols.mt_set_wake(this.wake.ptr);
-    // The main thread runs no JS, so nothing there would notice a crash here.
+    // The main thread runs no JS, so nothing there would notice a crash here
+    // (DESIGN.md §5.2 invariant 6).
     const fatal = (what: string, err: unknown) => {
       console.error(`mantou: ${what} in the app Worker:`, err);
       this.quit(70);
@@ -109,28 +81,11 @@ export class MantouCore {
   }
 
   clearColor(r: number, g: number, b: number, a = 1) {
-    this.ops.clearColor(r, g, b, a);
-    this.schedule();
+    this.ui.clearColor(r, g, b, a);
   }
 
   title(s: string) {
-    this.ops.title(s);
-    this.schedule();
-  }
-
-  /** One commit per JS turn (DESIGN.md §5.2 invariant 3). */
-  private schedule() {
-    if (this.scheduled) return;
-    this.scheduled = true;
-    queueMicrotask(() => this.flush());
-  }
-
-  flush() {
-    this.scheduled = false;
-    if (this.ops.empty) return;
-    const bytes = this.ops.take();
-    const r = this.lib.symbols.mt_commit(bytes, bytes.byteLength);
-    if (r !== 0) throw new Error(`mantou: the core refused a commit (${r})`);
+    this.ui.title(s);
   }
 
   private drain() {
@@ -145,26 +100,27 @@ export class MantouCore {
     const w = this.ev32, f = this.evf32;
     let e: CoreEvent;
     switch (w[i]) {
-      case 1: e = { type: "windowReady", width: w[i + 1], height: w[i + 2], scale: f[i + 3] }; break;
-      case 2: e = { type: "resized", width: w[i + 1], height: w[i + 2] }; break;
-      case 3: e = { type: "pointerMove", x: f[i + 2], y: f[i + 3] }; break;
-      case 4: e = { type: "pointerDown", button: w[i + 1], x: f[i + 2], y: f[i + 3] }; break;
-      case 5: e = { type: "pointerUp", button: w[i + 1], x: f[i + 2], y: f[i + 3] }; break;
-      case 6: e = { type: "keyDown", key: keyName(w[i + 1]), repeat: w[i + 2] !== 0 }; break;
-      case 7: e = { type: "keyUp", key: keyName(w[i + 1]) }; break;
-      case 8: e = { type: "closeRequested" }; break;
-      case 9: e = { type: "scaleChanged", scale: f[i + 3] }; break;
+      case Event.WINDOW_READY: e = { type: "windowReady", width: w[i + 1], height: w[i + 2], scale: f[i + 3] }; break;
+      case Event.RESIZED: e = { type: "resized", width: w[i + 1], height: w[i + 2] }; break;
+      case Event.POINTER_MOVE: e = { type: "pointerMove", x: f[i + 2], y: f[i + 3] }; break;
+      case Event.POINTER_DOWN: e = { type: "pointerDown", button: w[i + 1], x: f[i + 2], y: f[i + 3] }; break;
+      case Event.POINTER_UP: e = { type: "pointerUp", button: w[i + 1], x: f[i + 2], y: f[i + 3] }; break;
+      case Event.KEY_DOWN: e = { type: "keyDown", key: keyName(w[i + 1]), repeat: w[i + 2] !== 0 }; break;
+      case Event.KEY_UP: e = { type: "keyUp", key: keyName(w[i + 1]) }; break;
+      case Event.CLOSE_REQUESTED: e = { type: "closeRequested" }; break;
+      case Event.SCALE_CHANGED: e = { type: "scaleChanged", scale: f[i + 3] }; break;
+      case Event.PRESS: e = { type: "press", target: w[i + 1], x: f[i + 2], y: f[i + 3] }; break;
       default: return;
     }
     this.received[e.type] = (this.received[e.type] ?? 0) + 1;
+    if (e.type === "press") this.ui.dispatchPress(e.target, e.x, e.y);
     this.onEvent(e);
   }
 
   stats(): Stats {
-    const a = new BigUint64Array(6);
+    const a = new BigUint64Array(STAT_NAMES.length);
     this.lib.symbols.mt_stats(a, a.length);
-    const [frames, commits, wakes, events, resizes, redrawRequests] = Array.from(a, Number);
-    return { frames, commits, wakes, events, resizes, redrawRequests };
+    return Object.fromEntries(STAT_NAMES.map((k, i) => [k, Number(a[i])])) as unknown as Stats;
   }
 
   info(): string {
@@ -178,8 +134,19 @@ export class MantouCore {
     this.lib.symbols.mt_test_resize(count, intervalMs, a[0], a[1], b[0], b[1]);
   }
 
+  /** Test hook: pointer input in logical px, handled like the window's own. */
+  testPointer(kind: "down" | "up" | "move", x: number, y: number) {
+    this.lib.symbols.mt_test_pointer(kind === "down" ? 0 : kind === "up" ? 1 : 2, x, y);
+  }
+
+  /** Test hook: a node's laid-out box [x0, y0, x1, y1] in logical px, or null. */
+  nodeRect(id: number): [number, number, number, number] | null {
+    const r = new Float32Array(4);
+    return this.lib.symbols.mt_test_node_rect(id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
+  }
+
   quit(code = 0) {
-    this.flush();
+    this.ui.flush();
     clearInterval(this.keepAlive);
     this.lib.symbols.mt_quit(code);
   }

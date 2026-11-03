@@ -3,7 +3,7 @@
 import { dlopen, suffix } from "bun:ffi";
 import { join } from "node:path";
 
-export const ABI_VERSION = 1;
+export const ABI_VERSION = 2;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -14,6 +14,8 @@ export const symbols = {
   mt_stats: { args: ["ptr", "u32"], returns: "u32" },
   mt_info: { args: ["ptr", "u32"], returns: "u32" },
   mt_test_resize: { args: ["u32", "u32", "u32", "u32", "u32", "u32"], returns: "void" },
+  mt_test_pointer: { args: ["u32", "f32", "f32"], returns: "void" },
+  mt_test_node_rect: { args: ["u32", "ptr"], returns: "i32" },
   mt_quit: { args: ["i32"], returns: "void" },
 } as const;
 

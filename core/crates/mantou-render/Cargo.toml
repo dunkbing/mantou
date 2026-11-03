@@ -1,0 +1,10 @@
+[package]
+name = "mantou-render"
+description = "Mantou's wgpu renderer. M1: instanced solid rectangles."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wgpu = "30"
+mantou-tree = { path = "../mantou-tree" }

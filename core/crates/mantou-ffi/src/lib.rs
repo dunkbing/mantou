@@ -1,18 +1,18 @@
-//! Mantou native core — M0 spike.
+//! Mantou native core: the C ABI loaded by Bun through `bun:ffi`.
 //!
-//! Proves the process/thread model of DESIGN.md §4–§5:
+//! Threads (DESIGN.md §4–§5):
 //!
 //! - `mt_run` is called by Bun's **main thread** and runs the winit event loop
 //!   there until the app quits. No JavaScript runs on this thread after that.
-//! - The app's JavaScript runs in a Bun `Worker`. It sends ops with
-//!   `mt_commit` and receives events with `mt_take_events` after a coalesced
-//!   wake-up through a threadsafe `JSCallback` (`mt_set_wake`).
-//! - Frames are drawn with wgpu only when something asked for one, so an idle
-//!   window draws nothing and wakes nobody.
+//! - The app runs in a Bun `Worker`. `mt_commit` runs on the Worker's thread:
+//!   it applies the batch to the shadow tree, lays it out and publishes a new
+//!   scene, then asks the main thread for a frame.
+//! - The main thread draws the latest scene with wgpu, lays out again on
+//!   resize, and hit-tests input. Events reach the Worker with one coalesced
+//!   wake-up per batch (a threadsafe `JSCallback`) and `mt_take_events`.
 //!
-//! Every exported function takes scalars, pointers and lengths only, because
-//! `bun:ffi` cannot pass structs by value (DESIGN.md §11). Panics never cross
-//! the ABI: each entry point catches them.
+//! Every exported function takes scalars, pointers and lengths only (`bun:ffi`
+//! cannot pass structs by value), and none lets a panic cross the ABI.
 
 use std::error::Error;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -20,6 +20,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering}
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::time::Duration;
 
+use mantou_render::Renderer;
+use mantou_tree::protocol::event as ev;
+use mantou_tree::{Scene, Tree};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, MouseButton, WindowEvent};
@@ -27,28 +30,9 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
-/// Bumped on any change to an exported signature, the op format or the event format.
-pub const ABI_VERSION: u32 = 1;
-
-/// Event records: four little-endian u32 words (16 bytes) each.
-/// `[type, a, b, c]`; floats travel as their bit patterns.
-mod ev {
-    pub const WINDOW_READY: u32 = 1; // a = width px, b = height px, c = scale (f32)
-    pub const RESIZED: u32 = 2; // a = width px, b = height px
-    pub const POINTER_MOVE: u32 = 3; // b = x (f32), c = y (f32), physical px
-    pub const POINTER_DOWN: u32 = 4; // a = button, b = x, c = y
-    pub const POINTER_UP: u32 = 5; // a = button, b = x, c = y
-    pub const KEY_DOWN: u32 = 6; // a = key (Unicode scalar or named code), b = repeat
-    pub const KEY_UP: u32 = 7; // a = key
-    pub const CLOSE_REQUESTED: u32 = 8;
-    pub const SCALE_CHANGED: u32 = 9; // c = scale (f32)
-}
-
-/// Ops: a stream of little-endian u32 words.
-mod op {
-    pub const CLEAR_COLOR: u32 = 1; // r, g, b, a (f32 each)
-    pub const TITLE: u32 = 2; // byteLen, UTF-8 bytes padded to 4
-}
+/// Bumped on any change to an exported signature or the op/event formats.
+/// 2: M1 (shadow tree protocol, PRESS, logical pointer coordinates).
+pub const ABI_VERSION: u32 = 2;
 
 /// Named keys travel above the Unicode range.
 mod key {
@@ -62,6 +46,8 @@ enum UserEvent {
     Redraw,
     Quit,
     Resize(u32, u32),
+    /// Test input, handled exactly as real pointer input: kind 0 = down, 1 = up, 2 = move.
+    TestPointer(u32, f32, f32),
 }
 
 #[derive(Default)]
@@ -72,15 +58,15 @@ struct Stats {
     events: AtomicU64,
     resizes: AtomicU64,
     redraw_requests: AtomicU64,
-}
-
-struct Scene {
-    clear: [f64; 4],
-    title: Option<String>,
+    op_errors: AtomicU64,
+    presses: AtomicU64,
 }
 
 struct Shared {
-    scene: Mutex<Scene>,
+    /// The shadow tree. Taken by commits (Worker thread) and resizes (main thread).
+    tree: Mutex<Tree>,
+    /// The latest scene; drawing never holds the tree lock.
+    scene: Mutex<Arc<Scene>>,
     events: Mutex<Vec<u32>>,
     wake_pending: AtomicBool,
     /// `extern "C" fn()` of the threadsafe JSCallback, 0 when none.
@@ -93,7 +79,8 @@ struct Shared {
 }
 
 static S: LazyLock<Shared> = LazyLock::new(|| Shared {
-    scene: Mutex::new(Scene { clear: [0.08, 0.08, 0.1, 1.0], title: None }),
+    tree: Mutex::new(Tree::new()),
+    scene: Mutex::new(Arc::new(Scene { clear: [0.08, 0.08, 0.1, 1.0], ..Scene::default() })),
     events: Mutex::new(Vec::new()),
     wake_pending: AtomicBool::new(false),
     wake: AtomicUsize::new(0),
@@ -142,6 +129,12 @@ fn wake_js() {
     f();
 }
 
+/// Lays out if needed and publishes a new scene. Call with the tree locked.
+fn publish(tree: &mut Tree) {
+    tree.layout();
+    *lock(&S.scene) = Arc::new(tree.scene());
+}
+
 fn guard<R>(fallback: R, f: impl FnOnce() -> R) -> R {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(r) => r,
@@ -168,10 +161,6 @@ unsafe fn bytes<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
     }
 }
 
-fn words(b: &[u8]) -> Vec<u32> {
-    b.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
-}
-
 // ---------------------------------------------------------------------------
 // C ABI
 // ---------------------------------------------------------------------------
@@ -192,55 +181,33 @@ pub extern "C" fn mt_set_wake(f: Option<extern "C" fn()>) {
     })
 }
 
-/// Applies a batch of ops (one per JS turn) and asks the main thread for a frame.
-/// Returns 0, or a negative error code for a malformed batch (nothing applied).
+/// Applies a batch of ops (one per JS turn), lays out, publishes the scene and
+/// asks the main thread for a frame. Returns 0, or -1 for a malformed batch,
+/// which is rejected whole. Ops that make no sense (unknown ids…) are skipped
+/// and counted in the stats (`op_errors`).
 ///
 /// # Safety
 /// `ptr` must be valid for `len` bytes for the duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn mt_commit(ptr: *const u8, len: u32) -> i32 {
+    // SAFETY: guaranteed by the caller.
+    let b = unsafe { bytes(ptr, len) };
     guard(-99, || {
-        // SAFETY: guaranteed by the caller.
-        let b = unsafe { bytes(ptr, len) };
-        if b.len() % 4 != 0 {
-            return -1;
-        }
-        let w = words(b);
-        let mut clear = None;
-        let mut title = None;
-        let mut i = 0;
-        while i < w.len() {
-            match w[i] {
-                op::CLEAR_COLOR if i + 5 <= w.len() => {
-                    let c = |k: usize| f32::from_bits(w[i + k]) as f64;
-                    clear = Some([c(1), c(2), c(3), c(4)]);
-                    i += 5;
+        let mut tree = lock(&S.tree);
+        match tree.apply(b) {
+            Ok(report) => {
+                for e in &report.errors {
+                    eprintln!("mantou-core: op skipped: {e}");
                 }
-                op::TITLE if i + 2 <= w.len() => {
-                    let n = w[i + 1] as usize;
-                    let padded = n.div_ceil(4);
-                    if i + 2 + padded > w.len() {
-                        return -3;
-                    }
-                    let start = (i + 2) * 4;
-                    match std::str::from_utf8(&b[start..start + n]) {
-                        Ok(s) => title = Some(s.to_owned()),
-                        Err(_) => return -4,
-                    }
-                    i += 2 + padded;
-                }
-                _ => return -2,
+                S.stats.op_errors.fetch_add(report.errors.len() as u64, Ordering::Relaxed);
+            }
+            Err(e) => {
+                eprintln!("mantou-core: batch rejected: {e}");
+                return -1;
             }
         }
-        {
-            let mut scene = lock(&S.scene);
-            if let Some(c) = clear {
-                scene.clear = c;
-            }
-            if title.is_some() {
-                scene.title = title;
-            }
-        }
+        publish(&mut tree);
+        drop(tree);
         bump(&S.stats.commits);
         if send(UserEvent::Redraw) {
             bump(&S.stats.redraw_requests);
@@ -275,7 +242,8 @@ pub unsafe extern "C" fn mt_take_events(dst: *mut u8, cap: u32) -> u32 {
 }
 
 /// Writes up to `cap` counters into `dst` and returns how many it wrote:
-/// frames, commits, wakes, events, resizes, redraw requests.
+/// frames, commits, wakes, events, resizes, redraw requests, layouts, ops,
+/// op errors, quads (last scene), nodes, presses.
 ///
 /// # Safety
 /// `dst` must be valid for writes of `cap` u64 values.
@@ -283,27 +251,39 @@ pub unsafe extern "C" fn mt_take_events(dst: *mut u8, cap: u32) -> u32 {
 pub unsafe extern "C" fn mt_stats(dst: *mut u64, cap: u32) -> u32 {
     guard(0, || {
         let st = &S.stats;
+        let (layouts, ops, nodes) = {
+            let t = lock(&S.tree);
+            (t.stats().layouts, t.stats().ops, t.node_count() as u64)
+        };
+        let quads = lock(&S.scene).quads.len() as u64;
+        let load = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let all = [
-            &st.frames,
-            &st.commits,
-            &st.wakes,
-            &st.events,
-            &st.resizes,
-            &st.redraw_requests,
+            load(&st.frames),
+            load(&st.commits),
+            load(&st.wakes),
+            load(&st.events),
+            load(&st.resizes),
+            load(&st.redraw_requests),
+            layouts,
+            ops,
+            load(&st.op_errors),
+            quads,
+            nodes,
+            load(&st.presses),
         ];
         let n = all.len().min(cap as usize);
         if dst.is_null() {
             return 0;
         }
-        for (i, c) in all.iter().take(n).enumerate() {
+        for (i, v) in all.iter().take(n).enumerate() {
             // SAFETY: i < n <= cap.
-            unsafe { *dst.add(i) = c.load(Ordering::Relaxed) };
+            unsafe { *dst.add(i) = *v };
         }
         n as u32
     })
 }
 
-/// Writes a UTF-8 description of the GPU adapter and window system into `dst`.
+/// Writes a UTF-8 description of the GPU adapter and OS into `dst`.
 ///
 /// # Safety
 /// `dst` must be valid for writes of `cap` bytes.
@@ -322,7 +302,7 @@ pub unsafe extern "C" fn mt_info(dst: *mut u8, cap: u32) -> u32 {
 
 /// Test hook: from a native thread, asks the main thread to resize the window
 /// `count` times, `interval_ms` apart, alternating between two sizes. It runs
-/// even while the Worker is busy, which is what the self-test needs.
+/// even while the Worker is busy.
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_test_resize(count: u32, interval_ms: u32, w0: u32, h0: u32, w1: u32, h1: u32) {
     guard((), || {
@@ -333,6 +313,33 @@ pub extern "C" fn mt_test_resize(count: u32, interval_ms: u32, w0: u32, h0: u32,
                 send(UserEvent::Resize(w, h));
             }
         });
+    })
+}
+
+/// Test hook: pointer input at (x, y) in logical px, handled on the main thread
+/// exactly as the window's own input. kind: 0 = down, 1 = up, 2 = move.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_pointer(kind: u32, x: f32, y: f32) {
+    guard((), || {
+        send(UserEvent::TestPointer(kind, x, y));
+    })
+}
+
+/// Test hook: writes the node's box (x0, y0, x1, y1, logical px, last layout)
+/// into `dst[0..4]`. Returns 0, or -1 when the node isn't laid out.
+///
+/// # Safety
+/// `dst` must be valid for writes of 4 f32 values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_node_rect(id: u32, dst: *mut f32) -> i32 {
+    guard(-1, || {
+        let Some(r) = lock(&S.tree).rect(id) else { return -1 };
+        if dst.is_null() {
+            return -1;
+        }
+        // SAFETY: dst is valid for 4 f32 writes.
+        unsafe { std::ptr::copy_nonoverlapping(r.as_ptr(), dst, 4) };
+        0
     })
 }
 
@@ -371,7 +378,7 @@ pub unsafe extern "C" fn mt_run(cfg: *const u8, len: u32) -> i32 {
             *lock(&S.proxy) = None;
             return S.exit_code.load(Ordering::Acquire);
         }
-        let mut app = App { config, window: None, gpu: None, cursor: PhysicalPosition::new(0.0, 0.0) };
+        let mut app = App { config, window: None, gpu: None, cursor: (0.0, 0.0), pressed_on: None };
         let result = event_loop.run_app(&mut app);
         *lock(&S.proxy) = None;
         drop(app);
@@ -395,7 +402,7 @@ struct Config {
 
 impl Config {
     fn parse(b: &[u8]) -> Config {
-        let w = words(&b[..b.len().min(12)]);
+        let w: Vec<u32> = b[..b.len().min(12)].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
         let get = |i: usize, d: u32| w.get(i).copied().unwrap_or(d);
         let n = get(2, 0) as usize;
         let title = b.get(12..12 + n).and_then(|t| std::str::from_utf8(t).ok()).unwrap_or("Mantou");
@@ -408,6 +415,7 @@ struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    renderer: Renderer,
 }
 
 impl Gpu {
@@ -434,8 +442,9 @@ impl Gpu {
             .ok_or("the surface is not supported by the adapter")?;
         config.present_mode = wgpu::PresentMode::AutoVsync;
         surface.configure(&device, &config);
+        let renderer = Renderer::new(&device, config.format);
         let desc = format!("{} ({:?}, {:?})", info.name, info.backend, info.device_type);
-        Ok((Gpu { surface, device, queue, config }, desc))
+        Ok((Gpu { surface, device, queue, config, renderer }, desc))
     }
 
     fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -446,7 +455,7 @@ impl Gpu {
         }
     }
 
-    fn draw(&mut self, clear: [f64; 4]) -> bool {
+    fn draw(&mut self, scene: &Scene) -> bool {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f) | wgpu::CurrentSurfaceTexture::Suboptimal(f) => f,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -459,24 +468,9 @@ impl Gpu {
             }
         };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        {
-            let [r, g, b, a] = clear;
-            let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("clear"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r, g, b, a }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                ..Default::default()
-            });
-        }
-        self.queue.submit([encoder.finish()]);
+        let size = (self.config.width, self.config.height);
+        let commands = self.renderer.draw(&self.device, &self.queue, &view, size, scene);
+        self.queue.submit([commands]);
         self.queue.present(frame);
         true
     }
@@ -486,25 +480,55 @@ struct App {
     config: Config,
     window: Option<Arc<Window>>,
     gpu: Option<Gpu>,
-    cursor: PhysicalPosition<f64>,
+    /// Pointer position, logical px.
+    cursor: (f32, f32),
+    /// The press target under the pointer when the primary button went down.
+    pressed_on: Option<u32>,
 }
 
 impl App {
     fn draw(&mut self) {
         let Some(window) = self.window.clone() else { return };
-        let (clear, title) = {
-            let mut scene = lock(&S.scene);
-            (scene.clear, scene.title.take())
-        };
-        if let Some(t) = title {
+        if let Some(t) = lock(&S.tree).take_title() {
             window.set_title(&t);
         }
+        let scene = lock(&S.scene).clone();
         let Some(gpu) = self.gpu.as_mut() else { return };
         window.pre_present_notify();
-        if gpu.draw(clear) {
+        if gpu.draw(&scene) {
             bump(&S.stats.frames);
         } else {
             window.request_redraw();
+        }
+    }
+
+    fn relayout(&mut self, size: PhysicalSize<u32>, scale: f32) {
+        let mut tree = lock(&S.tree);
+        tree.set_viewport(size.width, size.height, scale);
+        publish(&mut tree);
+    }
+
+    fn scale(&self) -> f32 {
+        self.window.as_ref().map_or(1.0, |w| w.scale_factor() as f32)
+    }
+
+    fn pointer(&mut self, kind: u32, x: f32, y: f32) {
+        self.cursor = (x, y);
+        match kind {
+            0 => {
+                self.pressed_on = lock(&S.tree).press_target(x, y);
+                push_event([ev::POINTER_DOWN, 0, x.to_bits(), y.to_bits()]);
+            }
+            1 => {
+                let target = lock(&S.tree).press_target(x, y);
+                push_event([ev::POINTER_UP, 0, x.to_bits(), y.to_bits()]);
+                if let Some(t) = target.filter(|t| self.pressed_on == Some(*t)) {
+                    bump(&S.stats.presses);
+                    push_event([ev::PRESS, t, x.to_bits(), y.to_bits()]);
+                }
+                self.pressed_on = None;
+            }
+            _ => push_event([ev::POINTER_MOVE, 0, x.to_bits(), y.to_bits()]),
         }
     }
 }
@@ -557,9 +581,11 @@ impl ApplicationHandler<UserEvent> for App {
             }
         }
         let size = window.inner_size();
-        push_event([ev::WINDOW_READY, size.width, size.height, (window.scale_factor() as f32).to_bits()]);
+        let scale = window.scale_factor() as f32;
+        self.window = Some(window.clone());
+        self.relayout(size, scale);
+        push_event([ev::WINDOW_READY, size.width, size.height, scale.to_bits()]);
         window.request_redraw();
-        self.window = Some(window);
     }
 
     fn user_event(&mut self, el: &ActiveEventLoop, event: UserEvent) {
@@ -575,6 +601,7 @@ impl ApplicationHandler<UserEvent> for App {
                     let _ = win.request_inner_size(PhysicalSize::new(w, h));
                 }
             }
+            UserEvent::TestPointer(kind, x, y) => self.pointer(kind, x, y),
         }
     }
 
@@ -585,6 +612,9 @@ impl ApplicationHandler<UserEvent> for App {
                 if let Some(gpu) = self.gpu.as_mut() {
                     gpu.resize(size);
                 }
+                // Lay out at the new size before drawing, without waiting for JS.
+                let scale = self.scale();
+                self.relayout(size, scale);
                 bump(&S.stats.resizes);
                 push_event([ev::RESIZED, size.width, size.height, 0]);
                 if let Some(w) = &self.window {
@@ -592,16 +622,24 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Some(w) = &self.window {
+                    self.relayout(w.inner_size(), scale_factor as f32);
+                }
                 push_event([ev::SCALE_CHANGED, 0, 0, (scale_factor as f32).to_bits()]);
             }
             WindowEvent::CursorMoved { position, .. } => {
-                self.cursor = position;
-                push_event([ev::POINTER_MOVE, 0, (position.x as f32).to_bits(), (position.y as f32).to_bits()]);
+                let p: PhysicalPosition<f64> = position;
+                let s = self.scale();
+                self.pointer(2, p.x as f32 / s, p.y as f32 / s);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let kind = if state == ElementState::Pressed { ev::POINTER_DOWN } else { ev::POINTER_UP };
-                let p = self.cursor;
-                push_event([kind, button_code(button), (p.x as f32).to_bits(), (p.y as f32).to_bits()]);
+                let (x, y) = self.cursor;
+                if button == MouseButton::Left {
+                    self.pointer(if state == ElementState::Pressed { 0 } else { 1 }, x, y);
+                } else {
+                    let kind = if state == ElementState::Pressed { ev::POINTER_DOWN } else { ev::POINTER_UP };
+                    push_event([kind, button_code(button), x.to_bits(), y.to_bits()]);
+                }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 let kind = if event.state == ElementState::Pressed { ev::KEY_DOWN } else { ev::KEY_UP };

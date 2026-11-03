@@ -12,3 +12,5 @@ crate-type = ["cdylib"]
 winit = "0.30.13"
 wgpu = "30"
 pollster = "1"
+mantou-tree = { path = "../mantou-tree" }
+mantou-render = { path = "../mantou-render" }

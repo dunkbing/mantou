@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/mantou-ffi"]
+members = ["crates/mantou-ffi", "crates/mantou-render", "crates/mantou-tree"]
 
 [workspace.package]
 version = "0.0.1"
