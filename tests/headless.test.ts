@@ -97,7 +97,7 @@ test("captured pixels show what the scene says", () => {
   expect(shot.at(50, 110)).toEqual([0xf5, 0x9e, 0x0b, 255]); // the first square
   expect(shot.at(300, 200)).toEqual([0x1f, 0x24, 0x30, 255]); // the board
   expect(h.stats().frames).toBe(1);
-});
+}, 30_000); // the first capture opens a GPU device and compiles its shaders
 
 test("instances are independent", () => {
   const a = headless(), b = headless();

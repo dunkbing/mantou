@@ -137,10 +137,31 @@ const OFFSCREEN_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrg
 
 impl Offscreen {
     /// Opens any adapter (a software one such as lavapipe or WARP is fine).
+    /// Vulkan, Metal and D3D12 come first; OpenGL only when none of them has
+    /// an adapter, because EGL without a display can stall for seconds on
+    /// some machines (seen on GitHub's Linux runners). `WGPU_BACKEND` overrides.
     pub fn new() -> Result<Offscreen, String> {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
-            .map_err(|e| format!("no GPU adapter for offscreen rendering: {e}"))?;
+        let explicit = std::env::var_os("WGPU_BACKEND").is_some();
+        let order = if explicit {
+            vec![wgpu::InstanceDescriptor::new_without_display_handle_from_env().backends]
+        } else {
+            vec![wgpu::Backends::PRIMARY, wgpu::Backends::SECONDARY]
+        };
+        let mut last = String::from("no backends to try");
+        let mut found = None;
+        for backends in order {
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle_from_env();
+            desc.backends = backends;
+            let instance = wgpu::Instance::new(desc);
+            match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())) {
+                Ok(a) => {
+                    found = Some(a);
+                    break;
+                }
+                Err(e) => last = e.to_string(),
+            }
+        }
+        let adapter = found.ok_or_else(|| format!("no GPU adapter for offscreen rendering: {last}"))?;
         let i = adapter.get_info();
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("mantou offscreen"),
