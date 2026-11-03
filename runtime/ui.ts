@@ -1,7 +1,7 @@
 // The Worker's mirror of the UI tree. Every mutation updates the mirror and
 // appends an op; the batch is committed once per JS turn (design §7, §8).
-// This is the layer the Solid renderer will sit on; for now apps use it
-// directly.
+// The Solid renderer (runtime/solid) drives this layer; apps can use it
+// directly too.
 import { EventMask, NodeKind, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import { expandStyle, type Style } from "./style";
@@ -22,20 +22,46 @@ export interface PressEvent {
   stopPropagation(): void;
 }
 
-/** A style defined once and shared by many nodes (STYLE_DEF / STYLE_USE). */
+/**
+ * A style defined once and shared by many nodes (STYLE_DEF / STYLE_USE). It
+ * isn't tied to a Ui: each Ui sends its definition the first time a node uses it.
+ */
 export class SharedStyle {
-  constructor(readonly id: number, readonly style: Style) {}
+  constructor(readonly style: Style) {}
 }
+
+/** Defines a shared style; nodes then reference it with one op each. */
+export function defineStyle(style: Style): SharedStyle {
+  return new SharedStyle(style);
+}
+
+/**
+ * Text in the tree. It lives only in the Worker's mirror for now: the core has
+ * no text nodes yet, so text sends no ops (and isn't drawn). Solid also uses
+ * empty text leaves as placeholders.
+ */
+export class TextLeaf {
+  parent: Node | null = null;
+  constructor(public text: string) {}
+}
+
+export type Child = Node | TextLeaf;
 
 export class Node {
   parent: Node | null = null;
-  readonly children: Node[] = [];
+  /** All children, text leaves included, in order. */
+  readonly children: Child[] = [];
   released = false;
   private own = new Map<StylePropName, unknown>();
   private shared: SharedStyle | null = null;
   private pressHandlers: ((e: PressEvent) => void)[] = [];
 
   constructor(readonly ui: Ui, readonly id: number, readonly kind: number) {}
+
+  /** Child nodes, without text leaves. */
+  get elements(): Node[] {
+    return this.children.filter((c): c is Node => c instanceof Node);
+  }
 
   /** Sets style properties on this node; `undefined` removes one. Unchanged values send nothing. */
   style(style: Style): this {
@@ -59,48 +85,67 @@ export class Node {
     this.alive();
     if (this.shared === shared) return this;
     this.shared = shared;
-    this.ui.enc.styleUse(this.id, shared?.id ?? 0);
+    this.ui.enc.styleUse(this.id, shared ? this.ui.styleId(shared) : 0);
     this.ui.schedule();
     return this;
   }
 
   /** Appends a child (moving it if it is elsewhere). */
-  append(child: Node): this {
+  append(child: Child): this {
     return this.insertBefore(child, null);
   }
 
-  /** Inserts or moves `child` before `before` (null = at the end). A node already in place sends nothing. */
-  insertBefore(child: Node, before: Node | null): this {
+  /**
+   * Inserts or moves `child` before `before` (null = at the end). The core
+   * only sees nodes, so a move that leaves a node's next node sibling unchanged
+   * sends nothing (design §5.2 invariant 5), and text leaves never send ops.
+   */
+  insertBefore(child: Child, before: Child | null): this {
     this.alive();
-    child.alive();
+    if (child instanceof Node) child.alive();
     if (before && before.parent !== this) throw new Error("mantou: `before` is not a child of this node");
     if (child === before) return this;
-    if (child.parent === this) {
-      const i = this.children.indexOf(child);
-      if ((this.children[i + 1] ?? null) === before) return this; // already in place (design §5.2 invariant 5)
-      this.children.splice(i, 1);
-    } else {
-      child.parent?.detach(child);
-    }
+    const wasHere = child.parent === this;
+    const oldNext = wasHere ? this.nextNode(child) : undefined;
+    if (wasHere) this.children.splice(this.children.indexOf(child), 1);
+    else child.parent?.detach(child);
     const at = before ? this.children.indexOf(before) : this.children.length;
     this.children.splice(at, 0, child);
     child.parent = this;
-    this.ui.enc.insert(this.id, child.id, before?.id ?? 0);
-    this.ui.schedule();
+    if (child instanceof Node) {
+      const next = this.nextNode(child);
+      if (wasHere && next === oldNext) return this;
+      this.ui.enc.insert(this.id, child.id, next?.id ?? 0);
+      this.ui.schedule();
+    }
     return this;
   }
 
-  /** Detaches a child. It stays alive and can be inserted again until released. */
-  remove(child: Node): this {
-    this.alive();
-    if (child.parent !== this) throw new Error("mantou: not a child of this node");
+  /** The first node (not text leaf) after `child`, or null. */
+  private nextNode(child: Child): Node | null {
+    for (let i = this.children.indexOf(child) + 1; i < this.children.length; i++) {
+      const c = this.children[i];
+      if (c instanceof Node) return c;
+    }
+    return null;
+  }
+
+  /**
+   * Detaches a child; it stays alive and can be inserted again until released.
+   * A child that is no longer here (Solid may release a node before removing
+   * it) is ignored.
+   */
+  remove(child: Child): this {
+    if (child.parent !== this) return this;
     this.detach(child);
-    this.ui.enc.remove(this.id, child.id);
-    this.ui.schedule();
+    if (child instanceof Node && !this.released && !child.released) {
+      this.ui.enc.remove(this.id, child.id);
+      this.ui.schedule();
+    }
     return this;
   }
 
-  private detach(child: Node) {
+  private detach(child: Child) {
     this.children.splice(this.children.indexOf(child), 1);
     child.parent = null;
   }
@@ -111,6 +156,7 @@ export class Node {
     this.parent?.detach(this);
     for (const c of this.children) c.parent = null;
     this.children.length = 0;
+    this.pressHandlers.length = 0;
     this.released = true;
     this.ui.free(this);
   }
@@ -158,6 +204,7 @@ export class Ui {
   private nextId = 1;
   private freeIds: number[] = [];
   private nextStyleId = 1;
+  private styleIds = new WeakMap<SharedStyle, number>();
   private root: Node | null = null;
 
   constructor(private sink: Sink) {}
@@ -173,12 +220,28 @@ export class Ui {
     return node;
   }
 
-  /** Defines a style once; nodes then reference it with a single op each. */
+  /** Creates a text leaf (see TextLeaf). */
+  text(value: string): TextLeaf {
+    return new TextLeaf(value);
+  }
+
+  /** Defines a style and sends its definition now. */
   defineStyle(style: Style): SharedStyle {
-    const shared = new SharedStyle(this.nextStyleId++, style);
-    this.enc.styleDef(shared.id, expandStyle(style));
-    this.schedule();
+    const shared = new SharedStyle(style);
+    this.styleId(shared);
     return shared;
+  }
+
+  /** @internal The id of a shared style in this Ui, sending its definition the first time. */
+  styleId(shared: SharedStyle): number {
+    let id = this.styleIds.get(shared);
+    if (id === undefined) {
+      id = this.nextStyleId++;
+      this.styleIds.set(shared, id);
+      this.enc.styleDef(id, expandStyle(shared.style));
+      this.schedule();
+    }
+    return id;
   }
 
   setRoot(node: Node | null) {

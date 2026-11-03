@@ -5,7 +5,8 @@
 // Rules from §12.1: wait for conditions, not for time; assert counts, not
 // durations (CPU % is reported for information and checked loosely).
 import { MantouCore, type Stats } from "../runtime/core";
-import { counter } from "../examples/counter/counter";
+import { Counter } from "../examples/counter/Counter";
+import { mount } from "../runtime/solid/mount";
 
 const core = new MantouCore();
 type Check = { name: string; pass: boolean; detail: Record<string, unknown> };
@@ -124,38 +125,37 @@ async function main() {
     });
   }
 
-  // 6. The counter's tree is laid out by the core and drawn as quads.
-  const c = counter(core.ui);
+  // 6. The counter (a Solid component) is laid out by the core and drawn as quads.
+  mount(core.ui, Counter);
+  const PLUS = [68, 46] as const, BOARD = [300, 200] as const;
   {
     const before = core.stats();
     await until("the counter's first frame", () => core.stats().quads >= 5 && core.stats().frames > before.frames, 5_000);
     const s = core.stats();
-    const plus = core.nodeRect(c.plus.id);
+    const plus = core.nodeRect(core.hit(...PLUS));
     check("ops → tree → layout → quads", s.quads === 5 && s.opErrors === 0 && plus !== null && plus[2] - plus[0] === 88, {
-      quads: s.quads, nodes: s.nodes, opErrors: s.opErrors, ops: s.ops, plusRect: plus, firstCommitOps: core.ui.lastCommitOps,
+      quads: s.quads, nodes: s.nodes, opErrors: s.opErrors, plusRect: plus, firstCommitOps: core.ui.lastCommitOps,
     });
   }
 
   // 7. A press hit-tested by the core reaches the handler, whose commit is drawn.
   {
-    const [x0, y0, x1, y1] = core.nodeRect(c.plus.id)!;
     const before = core.stats();
     const sent = performance.now();
-    core.testPointer("down", (x0 + x1) / 2, (y0 + y1) / 2);
-    core.testPointer("up", (x0 + x1) / 2, (y0 + y1) / 2);
+    core.testPointer("down", ...PLUS);
+    core.testPointer("up", ...PLUS);
     await until("the new square is drawn", () => core.stats().quads === 6 && core.stats().frames > before.frames, 5_000);
     const ms = performance.now() - sent;
     const d = delta(before, core.stats());
-    check("press → handler → one commit → frame", c.count() === 1 && d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 4, {
-      count: c.count(), presses: d.presses, commits: d.commits, opsInCommit: core.ui.lastCommitOps, msPressToFrame: +ms.toFixed(1),
+    // The first square also sends the `dot` style's definition: 5 ops.
+    check("press → handler → one commit → frame", d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 5, {
+      presses: d.presses, commits: d.commits, opsInCommit: core.ui.lastCommitOps, msPressToFrame: +ms.toFixed(1),
     });
-    // A press that misses every listener reaches nobody.
     const missBefore = core.stats().presses;
-    const board = core.nodeRect(c.board.id)!;
-    core.testPointer("down", board[0] + 4, board[1] + 4);
-    core.testPointer("up", board[0] + 4, board[1] + 4);
+    core.testPointer("down", ...BOARD);
+    core.testPointer("up", ...BOARD);
     await sleep(100);
-    check("no press without a listener", core.stats().presses === missBefore && c.count() === 1, { presses: core.stats().presses - missBefore });
+    check("no press without a listener", core.stats().presses === missBefore && core.stats().quads === 6, { presses: core.stats().presses - missBefore });
   }
 
   // 8. Resizes lay out on the main thread while the Worker is blocked.

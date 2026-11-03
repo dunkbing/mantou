@@ -20,26 +20,26 @@ hero:
 Mantou lets you write desktop apps in TypeScript and TSX, run them on Bun, and show UI that Mantou draws itself on the GPU. It never shows a webview. The main thread never runs app JavaScript and never waits for it. That keeps scrolling, resizing and animation smooth while the app's JS is busy or paused for garbage collection.
 
 ```tsx
-import { run, Window, View, Text, Button, Scroll, signal } from "mantou-ui";
+import { Index, View, createSignal, defineStyle, run } from "mantou-ui";
+
+const dot = defineStyle({ width: 28, height: 28, backgroundColor: "#f59e0b" });
 
 function Counter() {
-  const n = signal(0);
+  const [count, setCount] = createSignal(0);
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
-      <Text style={{ fontSize: 40, fontWeight: 700 }}>{n()}</Text>
-      <Button onPress={() => n.set(n() + 1)}>Increment</Button>
+    <View style={{ flexGrow: 1, padding: 24, gap: 16 }}>
+      <View style={{ width: 88, height: 44, backgroundColor: "#16a34a" }} onPress={() => setCount((n) => n + 1)} />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <Index each={Array.from({ length: count() })}>{() => <View style={dot} />}</Index>
+      </View>
     </View>
   );
 }
 
-run(() => (
-  <Window title="Counter" width={360} height={240}>
-    <Counter />
-  </Window>
-));
+run(() => <Counter />, { title: "Counter" });
 ```
 
-This is the API sketch from the design ([§7.3](/design/runtime/#73-public-api-sketch)); it doesn't run yet.
+This runs today (`examples/counter`). There's no text yet, so the count shows as squares; `<Text>` and the rest of the API sketch ([§7.3](/design/runtime/#73-public-api-sketch)) come later.
 
 ## Status
 

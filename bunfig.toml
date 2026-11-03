@@ -1,0 +1,3 @@
+[test]
+# Compile .tsx with Mantou's JSX plugin (runtime/solid/plugin.ts).
+preload = ["./runtime/solid/preload.ts"]

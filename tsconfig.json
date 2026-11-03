@@ -3,11 +3,34 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ESNext"],
-    "types": ["bun"],
+    "lib": [
+      "ESNext"
+    ],
+    "types": [
+      "bun"
+    ],
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "preserve",
+    "jsxImportSource": "mantou-ui",
+    "paths": {
+      "mantou-ui": [
+        "./runtime/index.ts"
+      ],
+      "mantou-ui/solid": [
+        "./runtime/solid/renderer.ts"
+      ],
+      "mantou-ui/jsx-runtime": [
+        "./runtime/jsx-runtime.ts"
+      ]
+    }
   },
-  "include": ["runtime", "spike", "schema", "examples", "tests"]
+  "include": [
+    "runtime",
+    "spike",
+    "schema",
+    "examples",
+    "tests"
+  ]
 }

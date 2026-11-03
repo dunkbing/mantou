@@ -21,6 +21,11 @@ process.exit(core.symbols.mt_exit_code());
 - **JSX:** Bun's built-in transform is React-style (`jsx()` calls), so it doesn't fit. A `Bun.plugin` runs `babel-preset-solid` with `generate: "universal"` and `moduleName` pointing at our renderer. The plugin runs in `dev`, in `build` and in the test runner. A faster Oxc-based compiler can come later, like NSH's.
 - **Renderer:** `solid-js/universal`'s `createRenderer`, implemented over a **JS mirror tree**. Solid's renderer API needs synchronous `getParentNode`, `getFirstChild` and `getNextSibling`. Each mirror node holds an id, a parent, its children and its handlers. Every mutation updates the mirror and appends an op.
 
+**Status:** implemented as described, with three findings.
+- **Bun resolves `solid-js` to Solid's server build.** The package's `node` export condition points at `dist/server.js`, whose effects never re-run. Bun's runtime plugins can't redirect bare imports (`onResolve` never sees them), but `onLoad` does run for files in `node_modules`. So Mantou imports the client build by path (`runtime/solid/solid.ts`), and the plugin rewrites `solid-js` imports in Solid's own `universal` and `store` builds and in app `.tsx` files. Apps import Solid's API from `mantou-ui`.
+- **Text leaves.** Solid uses empty text nodes as placeholders, so the mirror tree has text leaves (`TextLeaf`). They send no ops until the core has text; a node inserted next to one is anchored on the next real node.
+- **Where it runs.** The Worker's entry (`runtime/worker.ts`) registers the plugin before anything that uses Solid loads, then imports the app; `bun test` preloads it (`bunfig.toml`). Babel adds about 30 MB to the Worker and compiles at start-up: the counter's first frame appears about 150 ms after launch on Linux. Compiling ahead of time for release builds is still to do.
+
 ### 7.3 Public API sketch
 ```tsx
 import { run, Window, View, Text, Button, Scroll, signal } from "mantou-ui";
@@ -51,4 +56,5 @@ run(() => (
 - **Decided (Q3):** a node is released when the Solid owner that created it is disposed (`onCleanup` registered in `createElement`). A `FinalizationRegistry` acts only as a safety net.
   - Development builds count live nodes and warn when the safety net releases a node, because that means a release path was missed.
   - Inserting a node whose owner has been disposed is an error in development builds and a no-op in production.
+  - **Status:** release on owner disposal is implemented (`runtime/solid/renderer.ts`); the `FinalizationRegistry` safety net and the development-build checks aren't yet.
   - NSH frees nodes only through GC finalizers. We avoid that because the timing of JavaScriptCore's garbage collection is unpredictable, and native resources (GPU textures, text layouts) would linger.

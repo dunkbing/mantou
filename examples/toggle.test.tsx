@@ -1,0 +1,17 @@
+// The README's example works as written (on a headless instance).
+import { expect, test } from "bun:test";
+import { View, createSignal, mount } from "mantou-ui";
+import { HeadlessCore } from "../runtime/headless";
+
+test("the README's toggle changes colour on press", () => {
+  const h = new HeadlessCore({ width: 200, height: 100 });
+  const [on, setOn] = createSignal(false);
+  mount(h.ui, () => <View style={{ width: 120, height: 48, backgroundColor: on() ? "#16a34a" : "#4b5563" }} onPress={() => setOn(!on())} />);
+  expect(h.scene()).toContain("quad 0 0 120 48 #4b5563ff");
+  const commits = h.stats().commits;
+  h.press([60, 24]);
+  expect(h.scene()).toContain("quad 0 0 120 48 #16a34aff");
+  expect(h.stats().commits).toBe(commits + 1);
+  expect(h.ui.lastCommitOps).toBe(1); // just the colour
+  h.free();
+});

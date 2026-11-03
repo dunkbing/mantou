@@ -9,15 +9,27 @@
     "gen": "bun schema/gen.ts",
     "gen:check": "bun schema/gen.ts --check",
     "typecheck": "bun check",
-    "test": "bun test runtime examples schema",
+    "test": "bun test runtime examples/counter schema",
     "test:core": "cargo test --manifest-path core/Cargo.toml -p mantou-tree",
     "selftest": "bun runtime/main.ts spike/selftest.ts --title \"Mantou self-test\"",
-    "counter": "bun runtime/main.ts examples/counter/main.ts --title Mantou",
+    "counter": "bun runtime/main.ts examples/counter/main.tsx --title Mantou",
     "app": "bun runtime/main.ts spike/app.ts --title \"Mantou demo\"",
     "docs": "bun --cwd website run dev",
-    "test:headless": "bun test tests"
+    "test:headless": "bun test tests examples/toggle.test.tsx"
   },
   "devDependencies": {
+    "@types/babel__core": "7.20.5",
     "@types/bun": "^1.4.4"
+  },
+  "dependencies": {
+    "@babel/core": "7.29.7",
+    "@babel/preset-typescript": "7.29.7",
+    "babel-preset-solid": "1.9.16",
+    "solid-js": "1.9.18"
+  },
+  "exports": {
+    ".": "./runtime/index.ts",
+    "./solid": "./runtime/solid/renderer.ts",
+    "./jsx-runtime": "./runtime/jsx-runtime.ts"
   }
 }

@@ -89,6 +89,11 @@ export class MantouCore {
     this.lib.symbols.mt_test_input(this.handle, kind === "down" ? 0 : kind === "up" ? 1 : 2, x, y);
   }
 
+  /** Test hook: the id of the topmost node at logical (x, y), or 0. */
+  hit(x: number, y: number): number {
+    return this.lib.symbols.mt_test_hit(this.handle, x, y);
+  }
+
   /** Test hook: a node's laid-out box [x0, y0, x1, y1] in logical px, or null. */
   nodeRect(id: number): [number, number, number, number] | null {
     const r = new Float32Array(4);

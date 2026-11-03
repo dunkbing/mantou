@@ -16,19 +16,28 @@ const opt = (name: string, d: string) => {
 process.env.MANTOU_T0 ??= String(Date.now());
 const core = openCore();
 
-const worker = new Worker(Bun.pathToFileURL(resolve(entry)).href);
+// The Worker entry registers the JSX plugin, then imports the app.
+const worker = new Worker(new URL("./worker.ts", import.meta.url).href);
 await new Promise<void>((ok, fail) => {
   const timer = setTimeout(() => fail(new Error("mantou: the app Worker did not start within 10 s")), 10_000);
   worker.addEventListener("message", (e) => {
-    if ((e as MessageEvent).data === "mantou:ready") {
+    const data = (e as MessageEvent).data;
+    if (data === "mantou:ready") {
       clearTimeout(timer);
       ok();
+    } else if (data === "mantou:failed") {
+      clearTimeout(timer);
+      fail(new Error("mantou: the app failed to load (see the error above)"));
     }
   });
   worker.addEventListener("error", (e) => {
     clearTimeout(timer);
     fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
   });
+  worker.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href });
+}).catch((err) => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(70);
 });
 
 // From here on this thread runs no JavaScript: Worker messages and errors go

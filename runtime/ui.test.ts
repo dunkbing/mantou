@@ -67,7 +67,7 @@ test("an insert that changes nothing sends nothing; a move sends one op", async 
   p.insertBefore(b, a);
   await core.settle();
   expect(core.lastCommit).toEqual([{ op: "INSERT", parent: p.id, child: b.id, before: a.id }]);
-  expect(p.children.map((c) => c.id)).toEqual([b.id, a.id]);
+  expect(p.elements.map((c) => c.id)).toEqual([b.id, a.id]);
 });
 
 test("presses bubble to ancestors until stopped", async () => {

@@ -30,7 +30,12 @@ The Worker builds a UI tree and sends it to the native core as **ops**; the core
 - **Ids:** released ids are reused.
 - **Tests:** `runtime/mock.ts` records decoded commits; `runtime/headless.ts` (`HeadlessCore`) drives a real headless instance.
 
-**The counter example** (`examples/counter`, `bun run counter`): there's no text yet, so the count is shown as squares and in the window title. It's written against the node API directly; the Solid-style JSX layer ([§7.2](/design/runtime/#72-components-reactivity-compiled-jsx)) isn't built yet.
+**The counter example** (`examples/counter`, `bun run counter`): a Solid component, `Counter.tsx`, written with `View`, `createSignal`, `Index` and shared styles. There's no text yet, so the count is shown as squares and in the window title.
+
+**The Solid layer** ([§7.2](/design/runtime/#72-components-reactivity-compiled-jsx)):
+- **Compilation:** `.tsx` files are compiled by a Bun plugin (`runtime/solid/plugin.ts`) with `babel-preset-solid` in universal mode; compiled JSX calls the renderer in `runtime/solid/renderer.ts`.
+- **Rendering:** Solid's universal renderer over the mirror tree; `<View>` takes `style` (own properties, a shared style, or a list of them), `onPress` and `ref`. Nodes are released when the Solid owner that created them is disposed.
+- **Entry points:** `run(app)` renders in the window from the Worker; `mount(ui, app)` renders into any `Ui`, which is how tests use the mock core and headless instances.
 
 ## Tests
 
@@ -41,9 +46,9 @@ The Worker builds a UI tree and sends it to the native core as **ops**; the core
 | Incremental vs from-scratch layout | `bun run test:core` | 400 random UIs × 40 frames of random valid changes, plus 10 runs of 400 frames: after each frame, every node's box and the whole scene equal those of a tree rebuilt from scratch, **to the bit** |
 | Random and corrupted batches | `bun run test:core` | 20,000 random batches and 3,000 corrupted valid ones never panic, and the tree stays consistent (`Tree::check`) |
 | Fuzzing | `cargo +nightly fuzz run <target>` in `core/fuzz` | `decode` (any bytes), `apply` (any batches, then layout, scene, hit-testing, consistency), `layout` (fuzzer-driven valid changes, incremental vs from scratch) |
-| Runtime | `bun run test` | Encoder/decoder round trip, colours, validation, op counts, moves, bubbling, listening, id reuse, the counter against the mock core |
-| Headless core | `bun run test:headless` | The counter on the real core without a window: layout, presses (a press commit is exactly **4 ops**), wrapping, resizing at 2×, the scene dump, captured pixels, independent instances |
-| Window | `bun run selftest` | The threading checks, plus: ops → layout → quads; a press → handler → one commit → frame (about 7–13 ms); no press without a listener; relayout while the Worker is blocked (8 resizes → 8 layouts, 0 commits) |
+| Runtime | `bun run test` | Encoder/decoder round trip, colours, validation, op counts, moves, bubbling, listening; the Solid counter against the mock core: one batch for the first render, **4 ops** per square, one commit for several presses in a turn, everything released on dispose |
+| Headless core | `bun run test:headless` | The Solid counter on the real core without a window: layout, presses (a press commit is exactly **4 ops**), wrapping, releasing, resizing at 2×, `<Show>` adding and removing nodes, captured pixels, independent instances |
+| Window | `bun run selftest` | The threading checks, plus, with the Solid counter: ops → layout → quads; a press → handler → one commit → frame (about 7–13 ms); no press without a listener; relayout while the Worker is blocked (8 resizes → 8 layouts, 0 commits) |
 
 **Fuzzing so far** (60 s per target, Linux): `decode` 5.5 million runs, `apply` 657,000, `layout` 98,000; no failures. The random batch test found one bug before that: a `STYLE_DEF` with a garbage property count reserved memory for it before checking it, and a count of 2³² aborted the process. The count is now checked against the op's length first, with a regression test.
 
