@@ -193,11 +193,14 @@ async function main() {
     const r = core.nodeRect(view.id)!;
     const top0 = core.nodeRect(rows[0].id)![1];
     const before = core.stats();
-    const spinUntil = performance.now() + 600;
     for (let i = 0; i < 5; i++) core.testWheel((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, 40);
-    while (performance.now() < spinUntil) {}
+    // The Worker stays blocked (it never yields) until the main thread has
+    // scrolled all five turns, reading positions from the core synchronously.
+    const giveUp = performance.now() + 10_000;
+    let moved = 0;
+    while ((moved = top0 - core.nodeRect(rows[0].id)![1]) < 200 && performance.now() < giveUp) {}
+    while (core.stats().frames === before.frames && performance.now() < giveUp) {}
     const d = delta(before, core.stats());
-    const moved = top0 - core.nodeRect(rows[0].id)![1];
     check("scrolling without JS", moved === 200 && d.commits === 0 && d.frames >= 1, {
       scrolledPx: moved, commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
     });
