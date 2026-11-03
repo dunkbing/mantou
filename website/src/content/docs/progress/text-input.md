@@ -30,7 +30,7 @@ const [draft, setDraft] = createSignal("");
 | `placeholder` | Shown while it's empty, in `placeholderColor` (default: the text colour at 40%) |
 | `multiline` | Enter adds a line; the input grows with its text unless its height is set |
 | `maxLength`, `readOnly` | Checked in the core, so no keystroke has to wait for JS to be refused. Read-only text can still be selected and copied |
-| `autoFocus` | Focus it when it's created |
+| `autoFocus` | Focus it when it's created; later changes to it do nothing (call `node.focus()` to move the focus) |
 | `style` | A `<View>`'s box properties and a `<Text>`'s text properties, plus `caretColor` and `selectionColor` |
 
 Without a width from its style or its parent, an input is 200 px wide (like a browser's), and it has no minimum width, so it shrinks in a row. A single-line input is one line tall plus its padding, with its text centred vertically.

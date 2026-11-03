@@ -47,6 +47,9 @@ function setHandler(node: Node, name: string, value: unknown, add: (f: never) =>
   if (typeof value === "function") offs.set(name, add(value as never));
 }
 
+/** Inputs whose autoFocus was read: it counts only when the input is created (dunkbing/mantou#4). */
+const autoFocusRead = new WeakSet<Node>();
+
 const inputEvents: Record<string, "change" | "submit" | "focus" | "blur"> = { onChange: "change", onSubmit: "submit", onFocus: "focus", onBlur: "blur" };
 
 function setInputProperty(node: Node, name: string, value: unknown, prev: unknown): boolean {
@@ -68,7 +71,12 @@ function setInputProperty(node: Node, name: string, value: unknown, prev: unknow
       node.setOptions({ maxLength: Number(value ?? 0) });
       return true;
     case "autoFocus":
-      if (value && !prev) node.focus();
+      // Its first value (set while the input is created) decides; later ones
+      // don't move the focus, as in the DOM. Call node.focus() for that.
+      if (!autoFocusRead.has(node)) {
+        autoFocusRead.add(node);
+        if (value) node.focus();
+      }
       return true;
   }
   const type = inputEvents[name];

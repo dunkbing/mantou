@@ -41,7 +41,7 @@ export interface InputProps {
   readOnly?: boolean;
   /** In characters. */
   maxLength?: number;
-  /** Focus it when it's created. */
+  /** Focus it when it's created. Later changes to it do nothing (use `node.focus()`). */
   autoFocus?: boolean;
   /** The user changed the text. */
   onChange?: (value: string) => void;

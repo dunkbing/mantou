@@ -175,3 +175,19 @@ test("a change larger than the event buffer arrives whole", () => {
   expect(got.length).toBe(big.length);
   expect(got).toBe(big);
 });
+
+test("autoFocus focuses only when the input is created (#4)", () => {
+  const [later, setLater] = createSignal(false);
+  let a!: Node, b!: Node;
+  const h = app(() => (
+    <View>
+      <Input ref={a} autoFocus />
+      <Input ref={b} autoFocus={later()} />
+    </View>
+  ));
+  expect(h.focused()?.id).toBe(a.id);
+  setLater(true);
+  h.step();
+  expect(h.focused()?.id).toBe(a.id);
+  void b;
+});
