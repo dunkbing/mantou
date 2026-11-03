@@ -29,16 +29,22 @@ The core runs without winit or a GPU surface. The tree, layout, text, scene buil
 
 This makes the core **multi-instance**: every ABI function takes an instance handle, and there are no global singletons. That's NSH's rule, and it also enables embedding several surfaces in one app. [§6.3](/design/native-core/#63-c-abi) changes accordingly: `mt_run` creates the app instance, and the functions below create headless ones.
 
+**As built (C ABI version 3).** Handles are `u32`, every per-UI function (`mt_commit`, `mt_take_events`, `mt_stats`, `mt_set_wake`) takes one, and the window is the instance `mt_app()` returns. The design's buffer-based `mt_test_input` and `mt_test_query` became scalar calls for now; they grow when keys, text and accessibility queries arrive.
+
 ```c
-uint64_t mt_headless_new(const uint8_t* config, uint32_t len);          // size, scale, color scheme, locale, fonts
-void     mt_headless_free(uint64_t inst);
-void     mt_test_input(uint64_t inst, const uint8_t* ev, uint32_t len);   // synthetic pointer/key/text/IME/wheel/a11y action
-uint32_t mt_test_step(uint64_t inst, double advance_ms);                // advance clock, run animations/scroll/layout; returns idle flags
-uint32_t mt_test_query(uint64_t inst, const uint8_t* q, uint32_t len, uint8_t* out, uint32_t cap); // a11y-tree queries
-uint32_t mt_test_capture(uint64_t inst, uint8_t* rgba, uint32_t cap);   // offscreen render (wgpu, software adapter OK)
-uint32_t mt_test_scene(uint64_t inst, uint8_t* out, uint32_t cap);      // text dump of the scene, for snapshots
-uint32_t mt_test_stats(uint64_t inst, uint8_t* out, uint32_t cap);      // counters: ops, layouts, measures, frames, wakes
+uint32_t mt_headless_new(uint32_t width_px, uint32_t height_px, float scale);
+void     mt_headless_free(uint32_t inst);
+void     mt_test_input(uint32_t inst, uint32_t kind, float x, float y);       // pointer down / up / move, logical px
+void     mt_test_viewport(uint32_t inst, uint32_t w_px, uint32_t h_px, float scale);
+uint32_t mt_test_step(uint32_t inst, double advance_ms);                  // advance the manual clock; bit 0 = events waiting, bit 1 = layout ran
+uint32_t mt_test_hit(uint32_t inst, float x, float y);                    // topmost node, or 0
+int32_t  mt_test_node_rect(uint32_t inst, uint32_t id, float* out4);       // laid-out box, logical px
+uint32_t mt_test_scene(uint32_t inst, uint8_t* out, uint32_t cap);        // text dump of the scene, for snapshots
+int32_t  mt_test_capture(uint32_t inst, uint8_t* rgba, uint32_t cap);     // offscreen render (wgpu, software adapter OK)
+uint32_t mt_stats(uint32_t inst, uint64_t* out, uint32_t cap);            // counters: frames, commits, wakes, events, resizes, …
 ```
+
+`runtime/headless.ts` wraps them as `HeadlessCore` (`step`, `press`, `pointer`, `rect`, `hit`, `resize`, `scene`, `capture`, `stats`), which the app test API of §12.3 will build on.
 
 **No Worker in headless mode.** There's no native event loop to own the main thread, so the app runs on the test's own thread. `mt_commit` is synchronous, and events are collected with `mt_take_events` right after each `mt_test_input` and `mt_test_step`. Tests are therefore deterministic and single-threaded.
 
@@ -108,7 +114,7 @@ The same test files run with `mantou test --target window`. Each `open` starts t
 
 On top of the shared app tests, a **platform suite** covers what headless mode can't:
 
-- **Threading (the M0 claims, kept as regression tests):**
+- **Threading (the claims the design depends on, kept as regression tests):**
   - While the Worker runs a 2-second busy loop, a scripted scroll still advances frames. Asserted by count: the frames presented during the block are at least the expected number for the display's refresh rate, minus slack.
   - A live resize while the Worker has `fetch` and timers in flight: both complete, and the window presents frames at its new size.
   - Idle: over a 5-second window with nothing changing, **0 frames presented and 0 Worker wake-ups** (counters from `mt_test_stats`, not CPU percentages).
@@ -147,20 +153,7 @@ On top of the shared app tests, a **platform suite** covers what headless mode c
 
 Regressions above a threshold open an issue automatically. They never fail PRs, because timings are noisy.
 
-### 12.8 Test infrastructure per milestone
-
-| Milestone | Testing work delivered with it |
-|---|---|
-| M0 | Window-mode harness skeleton; the threading and idle tests of [§12.5](/design/testing/#125-window-mode-the-real-threading-model-and-platform-layer) on all three OSes |
-| M1 | Schema round-trip and golden tests, decoder fuzzing, mock core, headless instance + `mt_test_step`/`mt_test_stats`, op-count assertions |
-| M2 | Offscreen reference-image tests and the `toMatchImage` matcher |
-| M3 | Text tests, measure-cache counters |
-| M4 | `mantou-ui/test` actions and queries, manual clock, window-mode driver |
-| M5 | IME state-machine tests + the manual IME checklist |
-| M7 | AccessKit tree tests + OS accessibility smoke tests |
-| M8 | Package job, `--self-test`, `bun-canary` |
-
-### 12.9 Testing decisions
+### 12.8 Testing decisions
 
 - **T1 Clock — decided:** use `bun:test`'s fake timers for the JS side and drive the core's clock with `mt_test_step`, both behind `app.clock` ([§12.1](/design/testing/#121-principles)). Verified in Bun 1.4.4: `jest.useFakeTimers()` moves `setTimeout`, `setInterval`, `Date.now()` and `performance.now()`, and `runAllTimers` exists. Bun has no `requestAnimationFrame`; Mantou provides its own on the core's clock.
 - **T2 Image comparison — decided:** pixelmatch-style comparison that ignores anti-aliasing, with `maxDiffPixels` defaulting to 0. References are updated locally only; CI uploads actual, expected and diff images ([§12.6](/design/testing/#126-ci-matrix)).

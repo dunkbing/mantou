@@ -2,7 +2,7 @@
 
 Native desktop apps in TypeScript, on Bun. Your app runs in a Bun Worker; a Rust core loaded with `bun:ffi` owns the window and draws the UI on the GPU with wgpu. No webview.
 
-> **Early development.** The threading model works on Linux, macOS and Windows (M0). The op protocol, layout and a rectangle renderer work (M1, in progress). There's no text yet.
+> **Early development.** The threading model works on Linux, macOS and Windows. The op protocol, flexbox layout, a rectangle renderer and presses work. There's no text yet.
 
 ## Try it
 
@@ -22,7 +22,7 @@ bun run counter
 
 ## Docs
 
-The design, the protocol and milestone results are in [`website/`](website/) (Astro + Starlight, on Bun):
+The design, the protocol and test results are in [`website/`](website/) (Astro + Starlight, on Bun):
 
 ```bash
 bun run docs

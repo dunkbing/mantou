@@ -8,8 +8,8 @@ hero:
     - text: Read the design
       link: /design/overview/
       icon: right-arrow
-    - text: M0 results
-      link: /progress/m0/
+    - text: Status
+      link: /progress/threading/
       variant: minimal
     - text: GitHub
       link: https://github.com/dunkbing/mantou
@@ -43,7 +43,7 @@ This is the API sketch from the design ([§7.3](/design/runtime/#73-public-api-s
 
 ## Status
 
-**Early development.** M0 proved the threading model with a real window on Linux, macOS and Windows. M1 is under way: the op protocol, the shadow tree, flexbox layout and a rectangle renderer work, and a counter example updates through ops. There's no text yet. See [M0](/progress/m0/), [M1](/progress/m1/) and the [milestones](/design/roadmap/).
+**Early development.** The threading model works with a real window on Linux, macOS and Windows. The op protocol, the shadow tree, flexbox layout, a rectangle renderer, presses and headless test instances work; a counter example updates through ops. There's no text yet, and no JSX layer. See [threading](/progress/threading/) and [UI tree, layout and rendering](/progress/ui-tree/).
 
 ## Documentation
 
@@ -51,7 +51,7 @@ This is the API sketch from the design ([§7.3](/design/runtime/#73-public-api-s
 - [Threading and architecture](/design/threading/): who owns the main thread, and how the pieces fit.
 - [The native core](/design/native-core/) and [the TypeScript runtime](/design/runtime/).
 - [Protocols](/design/protocols/), [rendering and input](/design/rendering/), [FFI conventions](/design/ffi/).
-- [Testing](/design/testing/), [milestones and packaging](/design/roadmap/), [alternatives, risks and decisions](/design/decisions/).
+- [Testing](/design/testing/), [packaging](/design/packaging/), [alternatives, risks and decisions](/design/decisions/).
 
 ## For LLMs and agents
 

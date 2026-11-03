@@ -15,9 +15,7 @@ Calling the native loop from main-thread JS would freeze Bun's timers, promises 
 **Decision:** the bootstrap starts a `Worker` running the app, then calls the core's `mt_run()` on the main thread. That call blocks for the life of the process. All app JavaScript runs in the Worker.
 
 **Validated (Linux, Bun 1.4.4):** with the main thread blocked inside an FFI call, the Worker's timers kept their schedule and its async I/O completed. A native pthread also woke the Worker through `JSCallback({ threadsafe: true })`. The spike code is in [Appendix A](/design/decisions/#appendix-a--threading-spike-validated-on-linux-bun-144).
-**Not yet validated:** macOS, where Bun's main thread must also be AppKit's main thread, and Windows. Both are milestone M0 ([§13](/design/roadmap/#13-milestones)).
-
-**M0 spike (2026-11-03), Linux:** passes with a real winit window and wgpu, under Xvfb with Mesa lavapipe; see [M0 results](/progress/m0/).
+**Spike results (2026-11-03), Linux:** passes with a real winit window and wgpu, under Xvfb with Mesa lavapipe; see [threading test results](/progress/threading/).
 - winit's event loop runs on Bun's main thread inside `mt_run`.
 - An idle window draws 0 frames and causes 0 wake-ups.
 - `fetch` and timers in the Worker keep working through live resizes.
@@ -66,4 +64,4 @@ The **shadow tree** (nodes, styles, layout results, text layouts) sits behind a 
 3. Exactly one `mt_commit` per JS turn that changed anything. Zero FFI calls for turns that changed nothing.
 4. Scrolling, compositor-only animations (transform, opacity) and hover effects driven by native state need no JS round trip.
 5. A node is never re-inserted where it already is. A move is an `INSERT` with a new `before` anchor.
-6. The Worker reports its own failures. Once `mt_run` starts, the main thread never reads Worker messages or `error` events, so an uncaught error or rejection in the Worker logs and calls `mt_quit(70)` itself. The bootstrap waits for the Worker's `ready` message before it blocks. (Found in M0.)
+6. The Worker reports its own failures. Once `mt_run` starts, the main thread never reads Worker messages or `error` events, so an uncaught error or rejection in the Worker logs and calls `mt_quit(70)` itself. The bootstrap waits for the Worker's `ready` message before it blocks. (Found by the threading spike.)

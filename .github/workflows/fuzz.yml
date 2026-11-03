@@ -1,0 +1,38 @@
+# Coverage-guided fuzzing of the op decoder and the shadow tree (core/fuzz),
+# nightly and on demand. Crashes are uploaded as artifacts; reproduce one with
+#   cd core/fuzz && cargo +nightly fuzz run <target> <artifact>
+name: fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds per target
+        default: "300"
+
+jobs:
+  fuzz:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [decode, apply, layout]
+    name: fuzz · ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core/fuzz
+      - run: cargo install cargo-fuzz --locked
+      - name: Fuzz
+        working-directory: core/fuzz
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=${{ github.event.inputs.seconds || '300' }} -rss_limit_mb=2048
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: core/fuzz/artifacts/

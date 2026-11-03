@@ -32,7 +32,7 @@ core/
 ```
 `mantou-tree`, `mantou-text` and `mantou-scene` have no platform dependencies, so they can be tested headless ([§12](/design/testing/#12-testing)).
 
-**Status (M1):** `mantou-ffi`, `mantou-tree` and `mantou-render` exist. For now the scene types live in `mantou-tree`, and the winit code in `mantou-ffi`; `mantou-scene`, `mantou-text` and `mantou-platform` split out when text (M3) and platform services (M7) arrive.
+**Status:** `mantou-ffi`, `mantou-tree` and `mantou-render` exist. For now the scene types live in `mantou-tree`, and the winit code in `mantou-ffi`; `mantou-scene`, `mantou-text` and `mantou-platform` split out when text and platform services arrive. The C ABI is at version 3: every per-UI function takes an instance handle, and headless instances exist for tests ([§12.2](/design/testing/#122-headless-mode-core-support)).
 
 ### 6.3 C ABI
 

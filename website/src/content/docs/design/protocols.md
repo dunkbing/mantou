@@ -15,7 +15,7 @@ strings:  repeated { id u32 · byteLen u32 · utf8 bytes (padded to 4) }   // ne
 ops:      repeated { opcode u16 · wordCount u16 · words… }
 ```
 
-**Status (M1):** the op stream is implemented as above, with each op's first word `code | operandWords << 16`. The header and the string section aren't yet: `TITLE` carries its string inline, and nothing else needs strings before text (M3). The source of truth is [`schema/protocol.ts`](https://github.com/dunkbing/mantou/blob/main/schema/protocol.ts); `bun run gen` generates the TypeScript and Rust bindings from it, and CI fails when they're stale. The ops implemented so far are `CREATE` (kind `View` only), `INSERT`, `REMOVE`, `RELEASE`, `STYLE`, `STYLE_RESET`, `STYLE_DEF`, `STYLE_USE`, `LISTEN`, plus three window ops, `SET_ROOT`, `CLEAR_COLOR` and `TITLE`.
+**Status:** the op stream is implemented as above, with each op's first word `code | operandWords << 16`. The header and the string section aren't yet: `TITLE` carries its string inline, and nothing else needs strings until there is text. The source of truth is [`schema/protocol.ts`](https://github.com/dunkbing/mantou/blob/main/schema/protocol.ts); `bun run gen` generates the TypeScript and Rust bindings from it, and CI fails when they're stale. The ops implemented so far are `CREATE` (kind `View` only), `INSERT`, `REMOVE`, `RELEASE`, `STYLE`, `STYLE_RESET`, `STYLE_DEF`, `STYLE_USE`, `LISTEN`, plus three window ops, `SET_ROOT`, `CLEAR_COLOR` and `TITLE`.
 
 | Op | Operands | Meaning |
 |---|---|---|
@@ -75,7 +75,7 @@ Style and prop ids, and their types, are **generated from one schema** shared by
   - The JSX plugin hoists static style objects. The runtime sends each one once as `STYLE_DEF(styleId, props…)`, and nodes reference it with `STYLE_USE(id, styleId)`.
   - Dynamic values still go through per-property `STYLE` ops, and they override the shared style.
   - A list of 1,000 rows sharing one style therefore costs one definition plus 1,000 four-byte references.
-- **Later (after M6):** an optional build-time Tailwind subset that compiles `class="…"` into the same `STYLE_DEF`s, so the core never parses classes. It's worth adding for AI-generated UI, as NSH found, but not before theming and the base components settle.
+- **Later (once the base components settle):** an optional build-time Tailwind subset that compiles `class="…"` into the same `STYLE_DEF`s, so the core never parses classes. It's worth adding for AI-generated UI, as NSH found, but not before theming and the base components settle.
 - Units are logical pixels. The core rounds layout to device pixels at the window's scale factor.
 
 ### 8.5 Text
@@ -84,4 +84,4 @@ Style and prop ids, and their types, are **generated from one schema** shared by
 - **Decided (Q5): parley on every platform in v1, behind a `TextEngine` trait** (as NSH has).
   - **Why:** one implementation to build and debug. Layout is also identical on every OS when the fonts are the same: tests bundle a test font, so headless text and image snapshots taken on Linux CI hold everywhere.
   - **Cost:** text won't match each OS's own toolkit pixel for pixel, as MyGo's system text stacks do.
-  - **Checkpoint after M3:** compare screenshots of parley text against native labels on each OS. If the difference is noticeable, add a Core Text backend first, since Mac users notice text rendering most. The trait keeps that change local to `mantou-text`.
+  - **Checkpoint once text renders:** compare screenshots of parley text against native labels on each OS. If the difference is noticeable, add a Core Text backend first, since Mac users notice text rendering most. The trait keeps that change local to `mantou-text`.

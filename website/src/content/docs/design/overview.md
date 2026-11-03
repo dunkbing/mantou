@@ -5,9 +5,9 @@ description: "What Mantou is, its goals and non-goals, and the prior art it buil
 
 _Architecture & design_
 
-**Status:** Draft v0.6 · 2026-11-03 (v0.6: M0 on all three desktops, M1 under way · v0.2: testing design, [§12](/design/testing/#12-testing) · v0.3: named Mantou · v0.4: open questions decided, [§17](/design/decisions/#17-decisions-formerly-open-questions) · v0.5: M0 results on Linux, [§4](/design/threading/#4-the-defining-constraint-who-owns-the-main-thread))
+**Status:** Draft v0.7 · 2026-11-03 (v0.7: implementation status pages · v0.2: testing design, [§12](/design/testing/#12-testing) · v0.3: named Mantou · v0.4: open questions decided, [§16](/design/decisions/#16-decisions-formerly-open-questions) · v0.5: threading spike results, [§4](/design/threading/#4-the-defining-constraint-who-owns-the-main-thread))
 **Name:** Mantou (馒头), the plain Chinese steamed bun: Mantou provides a plain, unstyled base, and the app supplies the filling ([§7.3](/design/runtime/#73-public-api-sketch)).
-**Packages:** npm `mantou-ui` (the bare `mantou` is taken, see [Q1](/design/decisions/#17-decisions-formerly-open-questions)) · CLI `mantou` · Rust crates `mantou-*` · C ABI prefix `mt_`
+**Packages:** npm `mantou-ui` (the bare `mantou` is taken, see [Q1](/design/decisions/#16-decisions-formerly-open-questions)) · CLI `mantou` · Rust crates `mantou-*` · C ABI prefix `mt_`
 **Scope of this draft:** desktop (macOS, Windows, Linux). Mobile and web are out of scope for v1.
 
 ---
@@ -35,7 +35,7 @@ The main thread never runs app JavaScript and never waits for it. That keeps scr
 
 ### Non-goals (v1)
 - Wrapping OS widgets (NSButton, Win32 controls, GTK widgets). This is not a "native widgets" toolkit.
-- iOS and Android. Bun doesn't run there; see [§15](/design/decisions/#15-alternatives-considered) for what this rules out.
+- iOS and Android. Bun doesn't run there; see [§14](/design/decisions/#14-alternatives-considered) for what this rules out.
 - Running in a browser.
 - Pixel-identical text to each platform's own toolkit (see [§8.5](/design/protocols/#85-text) for the trade-off).
 

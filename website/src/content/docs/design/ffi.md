@@ -12,4 +12,4 @@ description: "Rules for calls, pointer lifetimes, callbacks and version checks a
   - The pointer returned by `mt_take_events` is valid until the next call.
 - **Callbacks:** only the `wake` callback crosses from native to JS, and it is `threadsafe: true`. No other native-to-JS callbacks exist.
 - **Version checks:** `mt_abi_version()` is checked at startup, and the op format carries `version`. A mismatch is a fatal error with a clear message.
-- **Experimental APIs:** Bun marks `bun:ffi` and `Worker` experimental. Pin the Bun version per release and run CI on all three OSes from M0.
+- **Experimental APIs:** Bun marks `bun:ffi` and `Worker` experimental. Pin the Bun version per release and run CI on all three OSes.

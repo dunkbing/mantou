@@ -28,13 +28,13 @@ export default defineConfig({
 						'design/rendering',
 						'design/ffi',
 						'design/testing',
-						'design/roadmap',
+						'design/packaging',
 						'design/decisions',
 					],
 				},
 				{
-					label: 'Progress',
-					items: ['progress/m0', 'progress/m1'],
+					label: 'Status',
+					items: ['progress/threading', 'progress/ui-tree'],
 				},
 			],
 			plugins: [
@@ -43,7 +43,7 @@ export default defineConfig({
 					description:
 						'Mantou is a native GUI framework for Bun + TypeScript. Apps are written in TypeScript/TSX and run in a Bun Worker; a Rust core loaded with `bun:ffi` owns the OS event loop on the main thread and draws the UI itself on the GPU with wgpu. It never shows a webview.',
 					details:
-						'Mantou is in early development: the M0 threading spike passes on Linux, macOS and Windows, and M1 (op protocol, shadow tree, layout, rectangle renderer) is under way; there is no text yet. The design pages describe the planned architecture. Every page is also available as raw Markdown by appending `.md` to its path (for example `/design/protocols.md`).',
+						'Mantou is in early development. The threading model works on Linux, macOS and Windows; the op protocol, the shadow tree, flexbox layout, a rectangle renderer and headless test instances work; there is no text yet. The design pages describe the planned architecture. Every page is also available as raw Markdown by appending `.md` to its path (for example `/design/protocols.md`).',
 					promote: ['index*', 'design/overview*'],
 					customSets: [
 						{
@@ -52,16 +52,16 @@ export default defineConfig({
 							paths: ['design/**'],
 						},
 						{
-							label: 'Progress',
-							description: 'milestone results: M0 (threading spike) and M1 (tree and ops)',
+							label: 'Status',
+							description: 'test results: the threading model, and the UI tree, layout and rendering',
 							paths: ['progress/**'],
 						},
 					],
 					optionalLinks: [
 						{
-							label: 'M0 report (Linux)',
-							url: `${site}/m0/report-linux.json`,
-							description: 'raw JSON output of the M0 self-test',
+							label: 'Threading self-test report (Linux)',
+							url: `${site}/reports/threading-linux.json`,
+							description: 'raw JSON output of the window self-test',
 						},
 						{ label: 'Source code', url: 'https://github.com/dunkbing/mantou' },
 					],
