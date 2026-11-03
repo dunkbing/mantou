@@ -15,3 +15,5 @@ export const onRequest = defineRouteMiddleware((context) => {
 		},
 	});
 });
+
+# Automated fix for issue #9: Every commit re-lays out every Text node, including clipped ones; past 4,096 texts the layout cache thrashes
