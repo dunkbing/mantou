@@ -174,7 +174,7 @@ async function main() {
     const commits = core.ui.commits;
     for (const ch of "hi") core.testKey(ch.codePointAt(0)!);
     await until("the text reaches JS", () => input.value === "hi", 5_000);
-    await until("the text is drawn", () => core.stats().glyphs - before.glyphs === 2, 5_000);
+    await until("the text is drawn", () => core.stats().glyphs - before.glyphs === 2 && core.stats().frames > before.frames, 5_000);
     const d = delta(before, core.stats());
     check("typing in an input", (core.received.keyDown ?? 0) === keys && core.ui.commits === commits && d.frames >= 1, {
       value: input.value, keyDownsInJs: (core.received.keyDown ?? 0) - keys, commits: core.ui.commits - commits, frames: d.frames, glyphs: d.glyphs,
