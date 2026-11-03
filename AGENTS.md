@@ -19,7 +19,6 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`), the winit window (`window.rs`), headless test hooks |
 | `core/fuzz` | cargo-fuzz targets (`decode`, `apply`, `layout`); nightly only, its own workspace |
 | `examples/counter` | `Counter.tsx`, a Solid component; `main.tsx` runs it; `Counter.test.tsx` tests it on the mock core |
-| `examples/mail` | Mantou Mail: `data.ts` (sample mail), `state.ts` (signals and actions), `App.tsx` (UI, keys), `Mail.test.tsx` (headless) |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
@@ -37,7 +36,6 @@ bun run test:headless       # Bun tests on the real core, no window (captures ne
 bun run test:core           # cargo tests: tree, fixtures, random batches, incremental-vs-scratch layout
 bun run selftest            # window self-test; on headless Linux: xvfb-run -a bun run selftest
 bun run counter             # the counter in a window (bun runtime/main.ts <entry.tsx> runs any app)
-bun run mail                # Mantou Mail in a window
 cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)
 ```
@@ -58,6 +56,12 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 10. **A Solid owner's nodes are released when it's disposed** (`createElement` registers the cleanup); never release a node a component still owns.
 11. **Text goes inside `<Text>`**, which holds only text (its content is its text leaves joined, sent as one `TEXT` op per change). Text elsewhere isn't drawn, and the runtime warns once.
 12. **Layout is CSS flexbox.** `flexShrink` defaults to 1 and flex items are at least as tall as their content unless they clip, so fixed-size parts need `flexShrink: 0` and scroll containers' ancestors need `minHeight: 0`. Use `node.measure()` for sizes the app needs (it commits first, then asks the core).
+
+## Apps built on Mantou
+
+Apps live in their own repos and depend on `mantou-ui` from GitHub (`bun add github:dunkbing/mantou`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
+
+Apps report what they need as issues here, through the templates in `.github/ISSUE_TEMPLATE` (bug reports with a minimal repro, ideally a failing headless test; feature requests with the app feature they unblock and an API sketch). When fixing one, turn its repro into a test in this repo, and say in the issue which commit has the fix so the app can update (`bun update mantou-ui`).
 
 ## Before you finish
 

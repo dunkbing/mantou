@@ -43,7 +43,7 @@ export default defineConfig({
 					description:
 						'Mantou is a native GUI framework for Bun + TypeScript. Apps are written in TypeScript/TSX and run in a Bun Worker; a Rust core loaded with `bun:ffi` owns the OS event loop on the main thread and draws the UI itself on the GPU with wgpu. It never shows a webview.',
 					details:
-						'Mantou is in early development. The threading model works on Linux, macOS and Windows; Solid-style JSX, flexbox layout, text, rounded corners and borders, clipping, keys, the wheel and headless test instances work; there is no text input yet. examples/mail is a three-pane mail client built with it. The design pages describe the planned architecture. Every page is also available as raw Markdown by appending `.md` to its path (for example `/design/protocols.md`).',
+						'Mantou is in early development. The threading model works on Linux, macOS and Windows; Solid-style JSX, flexbox layout, text, rounded corners and borders, clipping, keys, the wheel and headless test instances work; there is no text input yet. Mantou Mail (github.com/dunkbing/mantou-mail) is a three-pane mail client built with it. The design pages describe the planned architecture. Every page is also available as raw Markdown by appending `.md` to its path (for example `/design/protocols.md`).',
 					promote: ['index*', 'design/overview*'],
 					customSets: [
 						{

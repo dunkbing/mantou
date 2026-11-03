@@ -35,11 +35,23 @@ bun run build:core
 bun run counter
 ```
 
+For a bigger app, [Mantou Mail](https://github.com/dunkbing/mantou-mail) is a three-pane mail client built on Mantou as a package.
+
+## Use it in an app
+
 ```bash
-bun run mail
+bun add github:dunkbing/mantou
 ```
 
-`examples/mail` is a three-pane mail client (sample data) built the same way.
+```bash
+bunx mantou build-core
+```
+
+```bash
+bunx mantou run src/main.tsx
+```
+
+Set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"` in `tsconfig.json`, and preload `mantou-ui/preload` for `bun test` (`bunfig.toml`). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose).
 
 ## Docs
 

@@ -7,7 +7,7 @@ description: Text rendering, rounded corners, borders, clipping, keys and the wh
 
 ## Mantou Mail
 
-`examples/mail` (`bun run mail`) is a mail client built only with what Mantou can do today, on sample data:
+[Mantou Mail](https://github.com/dunkbing/mantou-mail) is a mail client built only with what Mantou can do today, on sample data. It started in this repo and now lives in its own, where it uses Mantou the way any app does, as the `mantou-ui` package:
 - **Sidebar:** all inboxes, each account, starred, snoozed, sent, archive and trash, plus labels, with unread counts.
 - **Message list:** Important and Other tabs, and rows with an avatar, sender, time, subject, preview, unread dot, star and chips ("Waiting for reply", "Snoozed until", labels).
 - **Reader:** the message, its labels, and quick replies (sending adds the reply to Sent).
@@ -15,7 +15,7 @@ description: Text rendering, rounded corners, borders, clipping, keys and the wh
 - **Keyboard:** `j`/`k` move, `e` archives, `#` deletes, `s` stars, `u` toggles unread, `r` opens quick replies (then `1`–`3` sends one), `z` undoes, `1`/`2` switch tabs.
 - **Scrolling:** the wheel scrolls the list and the reader; the selected row is kept in view.
 
-It runs in a window, where its first frame appears about 0.7 s after launch on Linux (mostly Babel compiling the app's JSX), and on headless instances: `examples/mail/Mail.test.tsx` covers opening, keyboard triage and undo, tabs, the wheel, quick replies, the sidebar and captured pixels.
+It runs in a window, where its first frame appears about 0.7 s after launch on Linux (mostly Babel compiling the app's JSX), and on headless instances: its tests cover opening, keyboard triage and undo, tabs, the wheel, quick replies, the sidebar and captured pixels.
 
 There's no text input yet, so there's no compose window or search.
 
