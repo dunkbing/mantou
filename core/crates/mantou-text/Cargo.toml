@@ -8,3 +8,6 @@ license.workspace = true
 [dependencies]
 parley = "0.12"
 swash = "0.2.10"
+# Load fontconfig at run time on Linux instead of linking it: no -dev package
+# to build, and machines without it still start (with only the bundled font).
+fontique = { version = "0.12", features = ["fontconfig-dlopen"] }
