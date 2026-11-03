@@ -1,0 +1,94 @@
+# CI: protocol/codegen, types, unit tests, the docs site, and the window
+# self-test on all three desktops (DESIGN: /design/testing/, §12.6).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Generated files, types, unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4   # pinned: bun:ffi and Worker are experimental
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - run: bun install --frozen-lockfile
+      - name: Generated protocol bindings and fixtures are up to date
+        run: bun run gen:check
+      - run: bun run typecheck
+      - run: bun run test
+      - name: Rust tests (tree, decoder, cross-language fixtures)
+        run: cargo test --manifest-path core/Cargo.toml -p mantou-tree
+
+  website:
+    name: Docs site (Astro on Bun)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: llms.txt and Markdown endpoints exist
+        run: test -s dist/llms.txt && test -s dist/llms-full.txt && test -s dist/design/protocols.md
+
+  selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64 (X11, Mesa lavapipe)
+            os: ubuntu-24.04
+          - name: macOS aarch64 (Metal)
+            os: macos-14
+          - name: Windows x86_64 (D3D12, WARP)
+            os: windows-2022
+    name: Window self-test · ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: (Linux) Install Xvfb, Mesa Vulkan and winit's X11 libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb mesa-vulkan-drivers libegl1 \
+            libxkbcommon-x11-0 libxcursor1 libxi6 libxrandr2
+      - run: bun install --frozen-lockfile
+      - name: Build the native core
+        run: cargo build --release --manifest-path core/Cargo.toml
+      - name: Self-test (Linux, under Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun run selftest
+      - name: Self-test
+        if: runner.os != 'Linux'
+        run: bun run selftest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selftest-report-${{ matrix.os }}
+          path: selftest-report.json
+          if-no-files-found: warn

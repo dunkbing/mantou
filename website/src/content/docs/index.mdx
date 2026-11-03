@@ -1,0 +1,60 @@
+---
+title: Mantou
+description: Mantou is a native GUI framework for Bun + TypeScript that draws its own UI on the GPU.
+template: splash
+hero:
+  tagline: Native desktop apps in TypeScript, on Bun.
+  actions:
+    - text: Read the design
+      link: /design/overview/
+      icon: right-arrow
+    - text: M0 results
+      link: /progress/m0/
+      variant: minimal
+    - text: GitHub
+      link: https://github.com/dunkbing/mantou
+      icon: external
+      variant: minimal
+---
+
+Mantou lets you write desktop apps in TypeScript and TSX, run them on Bun, and show UI that Mantou draws itself on the GPU. It never shows a webview. The main thread never runs app JavaScript and never waits for it. That keeps scrolling, resizing and animation smooth while the app's JS is busy or paused for garbage collection.
+
+```tsx
+import { run, Window, View, Text, Button, Scroll, signal } from "mantou-ui";
+
+function Counter() {
+  const n = signal(0);
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <Text style={{ fontSize: 40, fontWeight: 700 }}>{n()}</Text>
+      <Button onPress={() => n.set(n() + 1)}>Increment</Button>
+    </View>
+  );
+}
+
+run(() => (
+  <Window title="Counter" width={360} height={240}>
+    <Counter />
+  </Window>
+));
+```
+
+This is the API sketch from the design ([§7.3](/design/runtime/#73-public-api-sketch)); it doesn't run yet.
+
+## Status
+
+**Early development.** M0 proved the threading model with a real window on Linux, macOS and Windows. M1 is under way: the op protocol, the shadow tree, flexbox layout and a rectangle renderer work, and a counter example updates through ops. There's no text yet. See [M0](/progress/m0/), [M1](/progress/m1/) and the [milestones](/design/roadmap/).
+
+## Documentation
+
+- [Overview](/design/overview/): summary, goals and non-goals, prior art.
+- [Threading and architecture](/design/threading/): who owns the main thread, and how the pieces fit.
+- [The native core](/design/native-core/) and [the TypeScript runtime](/design/runtime/).
+- [Protocols](/design/protocols/), [rendering and input](/design/rendering/), [FFI conventions](/design/ffi/).
+- [Testing](/design/testing/), [milestones and packaging](/design/roadmap/), [alternatives, risks and decisions](/design/decisions/).
+
+## For LLMs and agents
+
+- [`/llms.txt`](/llms.txt): an index of the documentation, following [llmstxt.org](https://llmstxt.org/).
+- [`/llms-full.txt`](/llms-full.txt): all documentation in one file. [`/llms-small.txt`](/llms-small.txt) is a compact version.
+- Every page is also available as raw Markdown: append `.md` to its path, for example [`/design/protocols.md`](/design/protocols.md) for [`/design/protocols/`](/design/protocols/). The home page is [`/index.md`](/index.md).
