@@ -2,7 +2,7 @@
 // thread and the Worker dlopen the same library and share its state.
 import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const ABI_VERSION = 5;
 
@@ -38,18 +38,37 @@ export const symbols = {
   mt_test_focused: { args: ["u32"], returns: "u32" },
 } as const;
 
-/** MANTOU_CORE, else the release build, else the debug build. */
+/** The npm package with the prebuilt core for this machine (an optional dependency of mantou-ui). */
+export const PLATFORM_PACKAGE = `mantou-ui-${process.platform}-${process.arch}`;
+const FILE = process.platform === "win32" ? `mantou_ffi.${suffix}` : `libmantou_ffi.${suffix}`;
+
+/** The prebuilt core from PLATFORM_PACKAGE, if it's installed. */
+export function prebuiltPath(): string | null {
+  try {
+    const path = join(dirname(Bun.resolveSync(`${PLATFORM_PACKAGE}/package.json`, import.meta.dir)), FILE);
+    return existsSync(path) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+/** MANTOU_CORE, else a core built from this copy of mantou-ui (release, then debug), else the prebuilt one. */
 export function libPath(): string {
   if (process.env.MANTOU_CORE) return process.env.MANTOU_CORE;
-  const file = process.platform === "win32" ? `mantou_ffi.${suffix}` : `libmantou_ffi.${suffix}`;
   const target = join(import.meta.dir, "..", "core", "target");
-  const release = join(target, "release", file);
-  return existsSync(release) ? release : join(target, "debug", file);
+  const release = join(target, "release", FILE), debug = join(target, "debug", FILE);
+  for (const p of [release, debug]) if (existsSync(p)) return p;
+  return prebuiltPath() ?? release;
 }
 
 export function openCore() {
   const path = libPath();
-  if (!existsSync(path)) throw new Error(`mantou: native core not found at ${path} (run \`bun run build:core\`)`);
+  if (!existsSync(path)) {
+    throw new Error(
+      `mantou: no native core: ${PLATFORM_PACKAGE} (the prebuilt one) isn't installed, and none is built at ${path}; ` +
+        "reinstall mantou-ui, or build one with `mantou build-core` (needs Rust)",
+    );
+  }
   const lib = dlopen(path, symbols);
   const v = lib.symbols.mt_abi_version();
   if (v !== ABI_VERSION) {

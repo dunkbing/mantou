@@ -22,6 +22,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/todos` | A to-do list with `<Input>`s; `Todos.test.tsx` tests it headless |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
+| `scripts/` | `npm.ts` (stages the npm packages of a release), `smoke.ts` (installs them into a fresh app and tests it) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
 
 ## Commands
@@ -62,9 +63,13 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 
 ## Apps built on Mantou
 
-Apps live in their own repos and depend on `mantou-ui` from GitHub (`bun add github:dunkbing/mantou`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
+Apps live in their own repos and depend on `mantou-ui` from npm (`bun add mantou-ui`, with a prebuilt core per platform as an optional dependency, `mantou-ui-<os>-<cpu>`) or from GitHub (`bun add github:dunkbing/mantou`, then `mantou build-core`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
 
 Apps report what they need as issues here, through the templates in `.github/ISSUE_TEMPLATE` (bug reports with a minimal repro, ideally a failing headless test; feature requests with the app feature they unblock and an API sketch). When fixing one, turn its repro into a test in this repo, and say in the issue which commit has the fix so the app can update (`bun update mantou-ui`).
+
+## Releases
+
+Push a tag `vX.Y.Z` (or run the `release` workflow, a dry run by default): it builds the core on each platform, stages and packs the packages, smoke-tests them from the tarballs on Linux (x64, arm64), macOS and Windows, publishes the platform packages and then `mantou-ui` with provenance (secret `NPM_TOKEN`), and tests the published version from npm. `package.json`'s version stays `0.0.0`; the tag sets it. A prebuilt core is found through `runtime/ffi.ts`'s `libPath()`: `MANTOU_CORE`, then a core built in `core/target`, then the platform package.
 
 ## Before you finish
 

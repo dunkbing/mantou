@@ -1,0 +1,173 @@
+# Publishes mantou-ui to npm, with a prebuilt native core per platform as an
+# optional dependency (mantou-ui-<os>-<cpu>), so apps need no Rust.
+#
+#   git tag v0.1.0 && git push origin v0.1.0     build, test, publish 0.1.0
+#   Actions → release → Run workflow             the same from a version you type; a dry run by default
+#
+# Every package is smoke-tested from its tarball on each platform before
+# anything is published, and from the registry after. Needs the NPM_TOKEN secret.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.1.0)"
+        required: true
+      dry_run:
+        description: "Build and test only; publish nothing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
+
+jobs:
+  core:
+    name: Core · ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Built on the oldest Ubuntu runner, so it runs on older glibc too.
+          - { target: linux-x64, os: ubuntu-22.04, file: libmantou_ffi.so }
+          - { target: linux-arm64, os: ubuntu-22.04-arm, file: libmantou_ffi.so }
+          - { target: darwin-arm64, os: macos-14, file: libmantou_ffi.dylib }
+          - { target: darwin-x64, os: macos-14, file: libmantou_ffi.dylib, rust: x86_64-apple-darwin }
+          - { target: win32-x64, os: windows-2022, file: mantou_ffi.dll }
+    env:
+      # Small binaries for the packages: no debug info, symbols stripped.
+      CARGO_PROFILE_RELEASE_DEBUG: "false"
+      CARGO_PROFILE_RELEASE_STRIP: "symbols"
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+      - name: Build
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.rust }}" ]; then
+            cargo build --release --manifest-path core/Cargo.toml -p mantou-ffi --target ${{ matrix.rust }}
+            out=core/target/${{ matrix.rust }}/release
+          else
+            cargo build --release --manifest-path core/Cargo.toml -p mantou-ffi
+            out=core/target/release
+          fi
+          mkdir -p dist/${{ matrix.target }}
+          cp "$out/${{ matrix.file }}" dist/${{ matrix.target }}/
+          ls -l dist/${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-${{ matrix.target }}
+          path: dist/${{ matrix.target }}
+          if-no-files-found: error
+
+  stage:
+    name: Stage the packages
+    needs: core
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the version
+        run: |
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if npm view "mantou-ui@$VERSION" version 2>/dev/null | grep -q .; then
+            echo "::error::mantou-ui@$VERSION is already on npm"; exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-*
+          path: cores
+      - name: Stage and pack
+        run: |
+          for d in cores/core-*; do mv "$d" "cores/${d#cores/core-}"; done
+          bun scripts/npm.ts "$VERSION" cores staged
+          mkdir packages
+          while read -r name; do npm pack "./staged/$name" --pack-destination packages; done < staged/order.txt
+          cp staged/order.txt packages/
+          ls -l packages
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: packages
+          if-no-files-found: error
+
+  smoke:
+    name: Smoke test · ${{ matrix.os }}
+    needs: stage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: Install from the tarballs and test
+        shell: bash
+        run: bun scripts/smoke.ts tarballs packages "${VERSION#v}"
+
+  publish:
+    name: Publish to npm
+    needs: smoke
+    if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write # provenance
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: Publish (platform packages first, then mantou-ui)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION="${VERSION#v}"
+          while read -r name; do
+            npm publish "packages/$name-$VERSION.tgz" --access public --provenance
+          done < packages/order.txt
+
+  verify:
+    name: From npm · ${{ matrix.os }}
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - name: Install from npm and test
+        shell: bash
+        run: bun scripts/smoke.ts registry "${VERSION#v}"

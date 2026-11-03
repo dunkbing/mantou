@@ -3,6 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "description": "Mantou: a native GUI framework for Bun + TypeScript",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dunkbing/mantou.git"
+  },
+  "homepage": "https://mantou.dunkbing.dev",
+  "keywords": [
+    "gui",
+    "native",
+    "desktop",
+    "bun",
+    "solid",
+    "wgpu"
+  ],
+  "engines": {
+    "bun": ">=1.4.4"
+  },
   "type": "module",
   "bin": {
     "mantou": "./runtime/cli.ts"
@@ -17,6 +34,16 @@
     "./preload": "./runtime/solid/preload.ts",
     "./package.json": "./package.json"
   },
+  "files": [
+    "runtime",
+    "!runtime/**/*.test.ts",
+    "!runtime/**/*.test.tsx",
+    "core/Cargo.toml",
+    "core/Cargo.lock",
+    "core/crates",
+    "!core/crates/*/tests",
+    "README.md"
+  ],
   "scripts": {
     "build:core": "cargo build --release --manifest-path core/Cargo.toml",
     "gen": "bun schema/gen.ts",

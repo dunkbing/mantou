@@ -1,14 +1,15 @@
 #!/usr/bin/env bun
 // The `mantou` command, for apps that depend on mantou-ui:
 //
-//   mantou build-core                 build the native core (once, and after updating mantou-ui)
+//   mantou build-core                 build the native core from source (only without a prebuilt one, or to change it)
 //   mantou run <entry> [options]      run an app: --width N --height N --title T
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { libPath } from "./ffi";
 
 const USAGE = `usage:
-  mantou build-core                       build the native core (needs Rust: https://rustup.rs)
+  mantou build-core                       build the native core from source (needs Rust: https://rustup.rs);
+                                          not needed where mantou-ui ships a prebuilt one
   mantou run <entry.tsx> [--width N] [--height N] [--title T]`;
 
 const [command, ...rest] = Bun.argv.slice(2);
@@ -20,7 +21,7 @@ switch (command) {
       process.exit(2);
     }
     if (!existsSync(libPath())) {
-      console.error("mantou: the native core isn't built yet; run `mantou build-core` first");
+      console.error("mantou: no native core for this platform; build one with `mantou build-core` (needs Rust)");
       process.exit(2);
     }
     const { start } = await import("./main");

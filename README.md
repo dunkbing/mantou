@@ -40,16 +40,14 @@ For a bigger app, [Mantou Mail](https://github.com/dunkbing/mantou-mail) is a th
 ## Use it in an app
 
 ```bash
-bun add github:dunkbing/mantou
-```
-
-```bash
-bunx mantou build-core
+bun add mantou-ui
 ```
 
 ```bash
 bunx mantou run src/main.tsx
 ```
+
+The native core comes prebuilt for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64). Elsewhere, or with mantou-ui from GitHub (`bun add github:dunkbing/mantou`), build it once with `bunx mantou build-core` (needs Rust).
 
 Set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"` in `tsconfig.json`, and preload `mantou-ui/preload` for `bun test` (`bunfig.toml`). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose).
 
