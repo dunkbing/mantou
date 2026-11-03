@@ -160,6 +160,10 @@ jobs:
           VERSION="${VERSION#v}"
           if [ "$REAL" = "true" ]; then flags="--provenance"; else flags="--dry-run"; fi
           while read -r name; do
+            # Already published (a re-run after a partial publish): skip it.
+            if [ "$REAL" = "true" ] && npm view "$name@$VERSION" version 2>/dev/null | grep -q .; then
+              echo "$name@$VERSION is already on npm"; continue
+            fi
             # "./": without it, npm reads "packages/x.tgz" as a GitHub repo.
             npm publish "./packages/$name-$VERSION.tgz" --access public $flags
           done < packages/order.txt

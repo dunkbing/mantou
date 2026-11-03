@@ -63,7 +63,7 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 
 ## Apps built on Mantou
 
-Apps live in their own repos and depend on `mantou-ui` from npm (`bun add mantou-ui`, with a prebuilt core per platform as an optional dependency, `mantou-ui-<os>-<cpu>`) or from GitHub (`bun add github:dunkbing/mantou`, then `mantou build-core`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
+Apps live in their own repos and depend on `mantou-ui` from npm (`bun add mantou-ui`, with a prebuilt core per platform as an optional dependency: `mantou-ui-linux-x64`, `-linux-arm64`, `-darwin-arm64`, `-darwin-x64`, `-windows-x64`) or from GitHub (`bun add github:dunkbing/mantou`, then `mantou build-core`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
 
 Apps report what they need as issues here, through the templates in `.github/ISSUE_TEMPLATE` (bug reports with a minimal repro, ideally a failing headless test; feature requests with the app feature they unblock and an API sketch). When fixing one, turn its repro into a test in this repo, and say in the issue which commit has the fix so the app can update (`bun update mantou-ui`).
 

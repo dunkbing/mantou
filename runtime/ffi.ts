@@ -38,8 +38,8 @@ export const symbols = {
   mt_test_focused: { args: ["u32"], returns: "u32" },
 } as const;
 
-/** The npm package with the prebuilt core for this machine (an optional dependency of mantou-ui). */
-export const PLATFORM_PACKAGE = `mantou-ui-${process.platform}-${process.arch}`;
+/** The npm package with the prebuilt core for this machine (an optional dependency of mantou-ui), e.g. mantou-ui-linux-x64. */
+export const PLATFORM_PACKAGE = `mantou-ui-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`;
 const FILE = process.platform === "win32" ? `mantou_ffi.${suffix}` : `libmantou_ffi.${suffix}`;
 
 /** The prebuilt core from PLATFORM_PACKAGE, if it's installed. */

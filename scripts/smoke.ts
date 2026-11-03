@@ -9,9 +9,9 @@
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { PLATFORM_PACKAGE as platformPackage } from "../runtime/ffi";
 
 const [mode, a, b] = Bun.argv.slice(2);
-const platformPackage = `mantou-ui-${process.platform}-${process.arch}`;
 const app = mkdtempSync(join(tmpdir(), "mantou-smoke-"));
 
 let deps: Record<string, unknown>;

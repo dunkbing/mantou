@@ -15,7 +15,7 @@ Apps get Mantou from npm: `bun add mantou-ui`. The package holds the runtime as 
 | `mantou-ui-linux-arm64` | Ubuntu 22.04 on arm64 |
 | `mantou-ui-darwin-arm64` | macOS 14, for macOS 11 and newer |
 | `mantou-ui-darwin-x64` | macOS 14, cross-compiled |
-| `mantou-ui-win32-x64` | Windows Server 2022 |
+| `mantou-ui-windows-x64` | Windows Server 2022 |
 
 The runtime loads `MANTOU_CORE` if it's set, else a core built from the package's own sources (`mantou build-core`, which needs Rust), else the prebuilt one. So a platform without a prebuilt core, or an app that depends on mantou-ui from GitHub, still works after one build. Release builds are stripped: about 14 MB on Linux, 6 MB compressed.
 

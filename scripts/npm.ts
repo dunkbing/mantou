@@ -11,12 +11,14 @@
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+// `name` is the package's: Windows' is "windows" (npm refused "win32" as spam),
+// matching runtime/ffi.ts's PLATFORM_PACKAGE.
 export const PLATFORMS = [
-  { os: "linux", cpu: "x64", file: "libmantou_ffi.so" },
-  { os: "linux", cpu: "arm64", file: "libmantou_ffi.so" },
-  { os: "darwin", cpu: "arm64", file: "libmantou_ffi.dylib" },
-  { os: "darwin", cpu: "x64", file: "libmantou_ffi.dylib" },
-  { os: "win32", cpu: "x64", file: "mantou_ffi.dll" },
+  { os: "linux", cpu: "x64", name: "linux-x64", file: "libmantou_ffi.so" },
+  { os: "linux", cpu: "arm64", name: "linux-arm64", file: "libmantou_ffi.so" },
+  { os: "darwin", cpu: "arm64", name: "darwin-arm64", file: "libmantou_ffi.dylib" },
+  { os: "darwin", cpu: "x64", name: "darwin-x64", file: "libmantou_ffi.dylib" },
+  { os: "win32", cpu: "x64", name: "windows-x64", file: "mantou_ffi.dll" },
 ] as const;
 
 const root = join(import.meta.dir, "..");
@@ -33,7 +35,7 @@ rmSync(outDir, { recursive: true, force: true });
 const order: string[] = [];
 
 for (const p of PLATFORMS) {
-  const name = `mantou-ui-${p.os}-${p.cpu}`;
+  const name = `mantou-ui-${p.name}`;
   const lib = join(coresDir, `${p.os}-${p.cpu}`, p.file);
   if (!existsSync(lib)) throw new Error(`missing core for ${p.os}-${p.cpu}: ${lib}`);
   const dir = join(outDir, name);
