@@ -1,0 +1,73 @@
+{
+  "bun": "1.4.4",
+  "platform": "linux-x64",
+  "gpu": "llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan, Cpu); linux",
+  "rssMB": 146.5,
+  "stats": {
+    "frames": 34,
+    "commits": 1,
+    "wakes": 32,
+    "events": 49,
+    "resizes": 32,
+    "redrawRequests": 1
+  },
+  "checks": [
+    {
+      "name": "window + first frame on the main thread",
+      "pass": true,
+      "detail": {
+        "type": "windowReady",
+        "width": 640,
+        "height": 400,
+        "scale": 1,
+        "gpu": "llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan, Cpu); linux",
+        "msSinceLaunch": 84
+      }
+    },
+    {
+      "name": "commit → frame",
+      "pass": true,
+      "detail": {
+        "commits": 1,
+        "frames": 1,
+        "msToFrame": 5.1
+      }
+    },
+    {
+      "name": "idle: no frames, no wake-ups",
+      "pass": true,
+      "detail": {
+        "seconds": 3,
+        "frames": 0,
+        "wakes": 0,
+        "commits": 0,
+        "cpuPercentOfOneCore": 0.16
+      }
+    },
+    {
+      "name": "live resize + fetch + timers",
+      "pass": true,
+      "detail": {
+        "resizes": 20,
+        "frames": 20,
+        "resizeEventsInJs": 20,
+        "fetched": 7811,
+        "failed": 0,
+        "timerTicks": 119,
+        "expectedTicks": 120,
+        "ms": 1200
+      }
+    },
+    {
+      "name": "Worker blocked: frames continue, one wake-up",
+      "pass": true,
+      "detail": {
+        "framesWhileBlocked": 12,
+        "resizesWhileBlocked": 12,
+        "wakesWhileBlocked": 1,
+        "resizeEventsDeliveredAfter": 12
+      }
+    }
+  ],
+  "result": "pass"
+}

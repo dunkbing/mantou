@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/mantou-ffi"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[profile.release]
+# Panics are caught at the C ABI (catch_unwind), so keep unwinding.
+panic = "unwind"
+debug = "line-tables-only"

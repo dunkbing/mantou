@@ -1,0 +1,14 @@
+[package]
+name = "mantou-ffi"
+description = "Mantou native core: C ABI loaded by Bun through bun:ffi (M0 spike)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+winit = "0.30.13"
+wgpu = "30"
+pollster = "1"
