@@ -15,7 +15,8 @@
     "counter": "bun runtime/main.ts examples/counter/main.tsx --title Mantou",
     "app": "bun runtime/main.ts spike/app.ts --title \"Mantou demo\"",
     "docs": "bun --cwd website run dev",
-    "test:headless": "bun test tests examples/toggle.test.tsx"
+    "test:headless": "bun test tests examples/toggle.test.tsx examples/mail",
+    "mail": "bun runtime/main.ts examples/mail/main.tsx --width 1200 --height 760 --title \"Mantou Mail\""
   },
   "devDependencies": {
     "@types/babel__core": "7.20.5",
