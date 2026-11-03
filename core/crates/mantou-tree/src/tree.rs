@@ -145,6 +145,8 @@ struct Node {
     input: Option<Box<Input>>,
     /// The box last sent in a LAYOUT event (x, y, width, height), for Layout listeners.
     reported: Option<[f32; 4]>,
+    /// FOCUS_SCOPE flags (0 = not a focus scope).
+    scope: u32,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -181,6 +183,12 @@ pub struct Tree {
     mac: bool,
     /// A Layout listener was added since the last layout.
     reports_pending: bool,
+    /// Focus scopes on screen, in the order they appeared, with the input to
+    /// give the focus back to when each leaves the screen.
+    scopes: Vec<(u32, Option<u32>)>,
+    /// The focus when the current batch began: where a scope that appears in
+    /// it (and takes the focus with an autoFocus input) gives it back.
+    focus_at_batch: Option<u32>,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -223,6 +231,8 @@ impl Tree {
             events: Vec::new(),
             mac: cfg!(target_os = "macos"),
             reports_pending: false,
+            scopes: Vec::new(),
+            focus_at_batch: None,
         }
     }
 
@@ -242,6 +252,7 @@ impl Tree {
     /// Decodes and applies a batch. A malformed batch is rejected whole.
     pub fn apply(&mut self, bytes: &[u8]) -> Result<ApplyReport, DecodeError> {
         let ops = decode(bytes)?;
+        self.focus_at_batch = self.focus;
         let mut report = ApplyReport { ops: ops.len(), errors: Vec::new() };
         for o in ops {
             if let Err(e) = self.apply_op(o) {
@@ -290,6 +301,7 @@ impl Tree {
                     v: Visual::default(),
                     input,
                     reported: None,
+                    scope: 0,
                 });
                 self.restyle(id);
             }
@@ -415,6 +427,10 @@ impl Tree {
                     let _ = self.taffy.mark_dirty(node.taffy);
                     self.layout_dirty = true;
                 }
+            }
+            Op::FocusScope { id, flags } => {
+                self.node(id)?.scope = flags;
+                self.layout_dirty = true; // scopes open and close at layout
             }
             Op::Focus { id } => {
                 if id != 0 && self.node(id)?.input.is_none() {
@@ -579,6 +595,7 @@ impl Tree {
             }
         }
         self.report_layouts();
+        self.update_scopes();
         true
     }
 

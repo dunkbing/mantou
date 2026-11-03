@@ -47,6 +47,7 @@ The core does all of it, on the main thread for the window, without a round trip
 - **Shortcuts:** select all, copy, cut, paste, undo and redo, with ⌘ on macOS and Ctrl elsewhere (also Ctrl+Y to redo). Typing is grouped into one undo step per word. The window uses the system clipboard (X11 on Linux, so XWayland on Wayland); each headless instance has its own.
 - **IME:** compositions are drawn in place, underlined, and only become the value when the IME commits them. The IME's candidate window is placed at the caret.
 - **Focus:** Tab and Shift+Tab move through the inputs in tree order, selecting the new one's text. A press outside any input blurs.
+- **Focus scopes**, for dialogs: `<View focusScope>`. While a scope is on screen, Tab and Shift+Tab stay among the inputs inside the topmost one, wherever the focus is. When it leaves the screen (released, removed or hidden), the focus goes back to the input that had it before it opened, unless the user has put it somewhere else since. The core does both at layout, in the window and headless.
 - **Scrolling:** a single-line input scrolls sideways to keep the caret in view, and so does a multiline input with a fixed height, vertically.
 
 **Keys the focused input uses don't reach `onKey`** (typing, arrows, Backspace, Enter, Tab, its shortcuts), so an app's single-letter shortcuts don't fire while the user types. Escape, Up and Down in a single-line input, PageUp and PageDown, and shortcuts the input doesn't know (⌘+K, say) still reach the app.

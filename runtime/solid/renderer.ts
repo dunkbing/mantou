@@ -101,6 +101,9 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "onLayout":
       setHandler(node, name, value, (f: (rect: Rect) => void) => node.onLayout(f));
       return;
+    case "focusScope":
+      node.focusScope(!!value);
+      return;
   }
   if (node.isInput && setInputProperty(node, name, value, prev)) return;
   throw new Error(`mantou: <${node.kindName}> has no property "${name}"`);

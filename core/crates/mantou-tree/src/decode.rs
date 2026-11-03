@@ -40,6 +40,7 @@ pub enum Op {
     Placeholder { id: u32, text: String },
     InputOptions { id: u32, flags: u32, max_length: u32 },
     Focus { id: u32 },
+    FocusScope { id: u32, flags: u32 },
     /// An op from a newer protocol: skipped, so old cores tolerate new runtimes.
     Unknown { code: u32 },
 }
@@ -215,6 +216,10 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUS => {
                 fixed(1)?;
                 Op::Focus { id: a[0] }
+            }
+            op::FOCUS_SCOPE => {
+                fixed(2)?;
+                Op::FocusScope { id: a[0], flags: a[1] }
             }
             _ => Op::Unknown { code },
         };

@@ -65,6 +65,7 @@ export class OpEncoder {
   placeholder(id: number, s: string) { this.op(Op.PLACEHOLDER, [id, ...stringWords(s)]); }
   inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
   focus(id: number) { this.op(Op.FOCUS, [id]); }
+  focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
 
   get empty() { return this.len === 0; }
 

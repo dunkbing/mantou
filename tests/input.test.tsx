@@ -1,7 +1,7 @@
 // <Input> on the real core, headless: focus, typing, controlled values,
 // submit, shortcuts and the clipboard, the IME, and which keys reach the app.
 import { afterEach, expect, test } from "bun:test";
-import { Input, View, createSignal, mount, onKey, type JSX, type Node } from "mantou-ui";
+import { Input, Show, View, createSignal, mount, onKey, type JSX, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -215,4 +215,32 @@ test("a secure input shows bullets, refuses copy and cut, and still pastes (#7)"
   expect(h.value(pw)).toBe("s3crt!x");
   h.key("a", { primary: true }).key("c", { primary: true });
   expect(h.clipboard).toBe("s3crt!x");
+});
+
+test("a dialog's focus scope keeps Tab inside, then gives the focus back (#6)", () => {
+  let search!: Node, to!: Node, subject!: Node, body!: Node;
+  const [open, setOpen] = createSignal(false);
+  const h = app(() => (
+    <View style={{ flexGrow: 1 }}>
+      <Input ref={search} style={field} placeholder="Search" />
+      <Show when={open()}>
+        <View focusScope style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, gap: 8 }}>
+          <Input ref={to} style={field} autoFocus />
+          <Input ref={subject} style={field} />
+          <Input ref={body} style={field} multiline />
+        </View>
+      </Show>
+    </View>
+  ));
+  h.press(search);
+  expect(h.focused()).toBe(search);
+  setOpen(true);
+  h.step();
+  expect(h.focused()).toBe(to);
+  const order: (Node | null)[] = [];
+  for (let i = 0; i < 4; i++) order.push(h.key("Tab").focused());
+  expect(order).toEqual([subject, body, to, subject]); // never the search field behind it
+  setOpen(false);
+  h.step();
+  expect(h.focused()).toBe(search);
 });

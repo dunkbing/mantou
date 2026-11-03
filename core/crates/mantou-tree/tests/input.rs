@@ -284,3 +284,68 @@ fn inputs_take_no_children_and_value_ops_need_an_input() {
     assert_eq!(r.errors.len(), 3, "{:?}", r.errors);
     t.check().unwrap();
 }
+
+#[test]
+fn a_focus_scope_keeps_tab_inside_and_gives_the_focus_back() {
+    // dunkbing/mantou#6: a search field behind a dialog with three inputs.
+    use mantou_tree::protocol::focus_scope_flag as fs;
+    let mut t = tree();
+    let mut cb = MemoryClipboard::default();
+    click(&mut t, 2); // the search field has the focus
+    let mut o = Ops::new();
+    o.create(10)
+        .style(10, Prop::Position, Value::Enum(1))
+        .style(10, Prop::Left, px(0.0))
+        .style(10, Prop::Top, px(0.0))
+        .style(10, Prop::Right, px(0.0))
+        .style(10, Prop::Bottom, px(0.0))
+        .focus_scope(10, fs::TRAP | fs::RESTORE);
+    for id in [11, 12, 13] {
+        o.create_input(id).style(id, Prop::Height, px(24.0)).insert(10, id, 0);
+    }
+    o.insert(1, 10, 0).focus(11); // opens with its first field focused (autoFocus)
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    assert_eq!(t.focused(), Some(11));
+    let mut seen = vec![];
+    for _ in 0..4 {
+        t.key(k::TAB, None, 0, &mut cb);
+        seen.push(t.focused().unwrap());
+    }
+    assert_eq!(seen, vec![12, 13, 11, 12], "never the search field behind it");
+    t.key(k::TAB, None, m::SHIFT, &mut cb);
+    assert_eq!(t.focused(), Some(11));
+    // Closing the dialog (its nodes released) gives the focus back to the search field.
+    o.remove(1, 10).release(11).release(12).release(13).release(10);
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    assert_eq!(t.focused(), Some(2));
+    t.take_events();
+    // Tab goes through every input again.
+    t.key(k::TAB, None, 0, &mut cb);
+    assert_eq!(t.focused(), Some(3));
+}
+
+#[test]
+fn a_closing_scope_leaves_the_focus_alone_if_the_user_moved_it() {
+    use mantou_tree::protocol::focus_scope_flag as fs;
+    let mut t = tree();
+    click(&mut t, 2);
+    let mut o = Ops::new();
+    o.create(10).focus_scope(10, fs::TRAP | fs::RESTORE).create_input(11).insert(10, 11, 0).insert(1, 10, 0).focus(11);
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    click(&mut t, 3); // the user picks the multiline input outside the dialog
+    o.focus_scope(10, 0); // the dialog stops being a scope
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    assert_eq!(t.focused(), Some(3));
+    // Hidden instead of released also counts as leaving the screen.
+    o.focus_scope(10, fs::TRAP | fs::RESTORE).focus(11);
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    o.style(10, Prop::Display, Value::Enum(1));
+    t.apply(&o.take()).unwrap();
+    t.layout();
+    assert_eq!(t.focused(), Some(3), "focus was in the scope's input, now hidden: back to where it was before");
+}

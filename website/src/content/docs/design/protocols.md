@@ -17,7 +17,7 @@ ops:      repeated { opcode u16 · wordCount u16 · words… }
 
 **Status:** the op stream is implemented as above, with each op's first word `code | operandWords << 16`. The header and the string section aren't yet: strings travel inline, as a byte length and then the UTF-8 bytes padded to words. The source of truth is [`schema/protocol.ts`](https://github.com/dunkbing/mantou/blob/main/schema/protocol.ts); `bun run gen` generates the TypeScript and Rust bindings from it, and CI fails when they're stale. The ops implemented so far:
 - **Tree:** `CREATE` (kinds `View`, `Text` and `Input`), `INSERT`, `REMOVE`, `RELEASE`, `STYLE`, `STYLE_RESET`, `STYLE_DEF`, `STYLE_USE`, `LISTEN`.
-- **Content:** `TEXT` (a Text node's content), and for inputs `VALUE` (id, rev, text), `PLACEHOLDER`, `INPUT_OPTIONS` (flags: multiline, read-only; the maximum length) and `FOCUS` (0 blurs), in place of the `PROP` and `COMMAND` ops below.
+- **Content:** `TEXT` (a Text node's content), and for inputs `VALUE` (id, rev, text), `PLACEHOLDER`, `INPUT_OPTIONS` (flags: multiline, secure, read-only; the maximum length), `FOCUS` (0 blurs) and `FOCUS_SCOPE` (trap Tab inside a view, restore the focus when it goes), in place of the `PROP` and `COMMAND` ops below.
 - **Window:** `SET_ROOT`, `CLEAR_COLOR`, `TITLE`.
 
 | Op | Operands | Meaning |

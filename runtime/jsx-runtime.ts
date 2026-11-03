@@ -8,6 +8,12 @@ export type { StyleProp } from "./solid/renderer";
 
 export interface ViewProps {
   style?: StyleProp;
+  /**
+   * A focus scope, for dialogs: while it's on screen, Tab and Shift+Tab stay
+   * among the inputs inside the topmost scope, and when it leaves the screen
+   * the focus goes back to the input that had it before it opened.
+   */
+  focusScope?: boolean;
   onPress?: (e: PressEvent) => void;
   /** Wheel and trackpad scrolling over this view (it bubbles, like presses). */
   onWheel?: (e: WheelEvent) => void;

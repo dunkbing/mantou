@@ -107,6 +107,9 @@ impl Ops {
     pub fn focus(&mut self, id: u32) -> &mut Self {
         self.op(op::FOCUS, &[id])
     }
+    pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
+        self.op(op::FOCUS_SCOPE, &[id, flags])
+    }
     pub fn set_root(&mut self, id: u32) -> &mut Self {
         self.op(op::SET_ROOT, &[id])
     }

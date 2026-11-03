@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, InputFlag, NodeKind, type StylePropName } from "./gen/protocol";
+import { EventMask, FocusScopeFlag, InputFlag, NodeKind, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { expandStyle, type Style } from "./style";
@@ -218,6 +218,22 @@ export class Node {
     this.ui.schedule();
     return this;
   }
+
+  /**
+   * Makes this node a focus scope (or stops it being one): while it's on
+   * screen, Tab stays among the inputs inside the topmost scope, and when it
+   * leaves the screen the focus goes back to the input that had it before.
+   */
+  focusScope(on: boolean): this {
+    this.alive();
+    const flags = on ? FocusScopeFlag.Trap | FocusScopeFlag.Restore : 0;
+    if (flags === this.scopeFlags) return this;
+    this.scopeFlags = flags;
+    this.ui.enc.focusScope(this.id, flags);
+    this.ui.schedule();
+    return this;
+  }
+  private scopeFlags = 0;
 
   /** Takes the keyboard focus away from this Input, if it has it. */
   blur(): this {

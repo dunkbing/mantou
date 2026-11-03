@@ -39,6 +39,8 @@ pub mod op {
     pub const INPUT_OPTIONS: u32 = 16;
     /// Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow.
     pub const FOCUS: u32 = 17;
+    /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
+    pub const FOCUS_SCOPE: u32 = 18;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -60,6 +62,7 @@ pub fn op_name(code: u32) -> &'static str {
         15 => "PLACEHOLDER",
         16 => "INPUT_OPTIONS",
         17 => "FOCUS",
+        18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
 }
@@ -73,6 +76,11 @@ pub mod node_kind {
 pub mod event_mask {
     pub const PRESS: u32 = 1;
     pub const LAYOUT: u32 = 2;
+}
+
+pub mod focus_scope_flag {
+    pub const TRAP: u32 = 1;
+    pub const RESTORE: u32 = 2;
 }
 
 pub mod input_flag {

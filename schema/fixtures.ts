@@ -42,6 +42,7 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.focus(5);
   e.value(5, 3, "");
   e.focus(0);
+  e.focusScope(1, 3);
   const basic = e.take();
   return { basic };
 }

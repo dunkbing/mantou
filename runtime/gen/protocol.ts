@@ -37,13 +37,16 @@ export const Op = {
   INPUT_OPTIONS: 16,
   /** Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow. */
   FOCUS: 17,
+  /** Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen. */
+  FOCUS_SCOPE: 18,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 18: "FOCUS_SCOPE" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3} as const;
 export const EventMask = {"Press":1,"Layout":2} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
+export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
 export const Unit = { px: 0, percent: 1, auto: 2 } as const;
 export const KeyModifier = {"Shift":1,"Control":2,"Alt":4,"Meta":8} as const;
 export const NamedKey = {"Escape":1114112,"Enter":1114113,"ArrowUp":1114114,"ArrowDown":1114115,"ArrowLeft":1114116,"ArrowRight":1114117,"Backspace":1114118,"Delete":1114119,"Tab":1114120,"Home":1114121,"End":1114122,"PageUp":1114123,"PageDown":1114124,"Unidentified":1179647} as const;

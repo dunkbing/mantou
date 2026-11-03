@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use mantou_text::{Editor, TextEngine, TextStyle};
 
 use super::{Tree, TreeEvent};
-use crate::protocol::{input_flag, key_modifier as m, named_key as k};
+use crate::protocol::{focus_scope_flag, input_flag, key_modifier as m, named_key as k};
 
 /// Width of an input that nothing sizes (logical px), like a browser's.
 pub(super) const DEFAULT_WIDTH: f32 = 200.0;
@@ -177,9 +177,59 @@ impl Tree {
         self.drag = None;
     }
 
-    /// The inputs Tab moves through, in tree order (laid out and visible).
+    /// Whether `id` is `ancestor` or inside it.
+    fn is_inside(&self, mut id: u32, ancestor: u32) -> bool {
+        loop {
+            if id == ancestor {
+                return true;
+            }
+            match self.nodes.get(&id).and_then(|n| n.parent) {
+                Some(p) => id = p,
+                None => return false,
+            }
+        }
+    }
+
+    fn laid_out(&self, id: u32) -> bool {
+        self.boxes.iter().any(|b| b.id == id)
+    }
+
+    /// The inputs Tab moves through, in tree order (laid out and visible):
+    /// those inside the topmost trapping focus scope on screen, if there is one.
     fn tab_order(&self) -> Vec<u32> {
-        self.boxes.iter().filter(|b| self.nodes[&b.id].input.is_some()).map(|b| b.id).collect()
+        let trap = self.boxes.iter().rev().map(|b| b.id).find(|id| self.nodes[id].scope & focus_scope_flag::TRAP != 0);
+        self.boxes
+            .iter()
+            .filter(|b| self.nodes[&b.id].input.is_some() && trap.is_none_or(|s| self.is_inside(b.id, s)))
+            .map(|b| b.id)
+            .collect()
+    }
+
+    /// After a layout: scopes that appeared remember where the focus was;
+    /// scopes that left the screen (released, detached, hidden, or no longer
+    /// scopes) give it back, unless the user has put it somewhere else since.
+    pub(super) fn update_scopes(&mut self) {
+        let on_screen: Vec<u32> = self.boxes.iter().map(|b| b.id).filter(|id| self.nodes[id].scope != 0).collect();
+        let gone: Vec<(u32, Option<u32>)> = self.scopes.iter().filter(|(s, _)| !on_screen.contains(s)).copied().collect();
+        self.scopes.retain(|(s, _)| on_screen.contains(s));
+        for (_, restore) in gone.into_iter().rev() {
+            let lost = self.focus.is_none_or(|f| !self.laid_out(f));
+            let target = restore.filter(|r| self.nodes.get(r).is_some_and(|n| n.input.is_some()) && self.laid_out(*r));
+            if lost && target.is_some() {
+                self.set_focus(target);
+            }
+        }
+        for s in on_screen {
+            if self.scopes.iter().any(|(id, _)| *id == s) {
+                continue;
+            }
+            let wants_restore = self.nodes[&s].scope & focus_scope_flag::RESTORE != 0;
+            let before = match self.focus {
+                Some(f) if self.is_inside(f, s) => self.focus_at_batch,
+                f => f,
+            };
+            self.scopes.push((s, if wants_restore { before.filter(|b| !self.is_inside(*b, s)) } else { None }));
+        }
     }
 
     fn tab(&mut self, back: bool) {

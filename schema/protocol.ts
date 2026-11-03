@@ -37,9 +37,13 @@ export const ops: OpDef[] = [
   { name: "PLACEHOLDER", code: 15, operands: [["id", "id"], ["text", "string"]], doc: "What an empty Input shows." },
   { name: "INPUT_OPTIONS", code: 16, operands: [["id", "id"], ["flags", "u32"], ["maxLength", "u32"]], doc: "An Input's options: InputFlag bits, and its maximum length in characters (0 = none)." },
   { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow." },
+  { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
+
+/** FOCUS_SCOPE flags. */
+export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 
 /** INPUT_OPTIONS flags. Secure: a bullet per character, no copying, the IME off. */
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;

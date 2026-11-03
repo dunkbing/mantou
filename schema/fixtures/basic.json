@@ -219,5 +219,10 @@
   {
     "op": "FOCUS",
     "id": 0
+  },
+  {
+    "op": "FOCUS_SCOPE",
+    "id": 1,
+    "flags": 3
   }
 ]
