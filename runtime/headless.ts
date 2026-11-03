@@ -73,6 +73,7 @@ export class HeadlessCore {
         return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
       },
     });
+    this.ui.dispatchResize(width, height, scale);
   }
 
   /**

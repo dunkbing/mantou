@@ -302,7 +302,7 @@ impl App {
                 // Lay out at the new size before drawing, without waiting for JS.
                 inst.relayout(size.width, size.height, self.scale());
                 bump(&inst.stats.resizes);
-                inst.push_event([ev::RESIZED, size.width, size.height, 0]);
+                inst.push_event([ev::RESIZED, size.width, size.height, self.scale().to_bits()]);
                 if let Some(w) = &self.window {
                     w.request_redraw();
                 }

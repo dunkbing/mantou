@@ -16,7 +16,18 @@ use crate::protocol::{self as p, Prop, event_mask};
 mod input;
 
 use input::Input;
-pub use input::{Clipboard, InputEvent, MemoryClipboard};
+pub use input::{Clipboard, MemoryClipboard};
+
+/// What the tree tells JS: about inputs, and boxes that listeners asked for.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TreeEvent {
+    Focus(u32),
+    Blur(u32),
+    Changed { id: u32, rev: u32, text: String },
+    Submit(u32),
+    /// A node with a Layout listener got a new box: x, y, width, height (logical px).
+    Layout { id: u32, rect: [f32; 4] },
+}
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
 const SELECTION: u32 = 0x66f6823b;
@@ -132,6 +143,8 @@ struct Node {
     listen: u32,
     v: Visual,
     input: Option<Box<Input>>,
+    /// The box last sent in a LAYOUT event (x, y, width, height), for Layout listeners.
+    reported: Option<[f32; 4]>,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -163,9 +176,11 @@ pub struct Tree {
     focus: Option<u32>,
     /// The input a press started in, while the button is down.
     drag: Option<u32>,
-    input_events: Vec<InputEvent>,
+    events: Vec<TreeEvent>,
     /// macOS key bindings (see `set_mac_keys`).
     mac: bool,
+    /// A Layout listener was added since the last layout.
+    reports_pending: bool,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -205,8 +220,9 @@ impl Tree {
             stats: TreeStats::default(),
             focus: None,
             drag: None,
-            input_events: Vec::new(),
+            events: Vec::new(),
             mac: cfg!(target_os = "macos"),
+            reports_pending: false,
         }
     }
 
@@ -273,6 +289,7 @@ impl Tree {
                     listen: 0,
                     v: Visual::default(),
                     input,
+                    reported: None,
                 });
                 self.restyle(id);
             }
@@ -329,7 +346,16 @@ impl Tree {
                 self.node(id)?.shared = style_id;
                 self.restyle(id);
             }
-            Op::Listen { id, mask } => self.node(id)?.listen = mask,
+            Op::Listen { id, mask } => {
+                let node = self.node(id)?;
+                let new_layout = mask & event_mask::LAYOUT != 0 && node.listen & event_mask::LAYOUT == 0;
+                node.listen = mask;
+                if new_layout {
+                    // A new listener hears the current box at the next layout, even if it's unchanged.
+                    node.reported = None;
+                    self.reports_pending = true;
+                }
+            }
             Op::SetRoot { id } => {
                 if id != 0 {
                     self.node(id)?;
@@ -456,7 +482,11 @@ impl Tree {
         let is_root = self.root == Some(id);
         let (vw, vh) = self.viewport_logical();
         let Some(node) = self.nodes.get(&id) else { return };
-        let mut style = Style { flex_direction: FlexDirection::Column, ..Style::default() };
+        // The schema's defaults, where they differ from Taffy's: a column, and
+        // `position: relative`, so every view is a containing block for its
+        // absolutely positioned children (Taffy defaults to `static`, whose
+        // boxes aren't; dunkbing/mantou#1).
+        let mut style = Style { flex_direction: FlexDirection::Column, position: Position::Relative, ..Style::default() };
         let mut v = Visual { opacity: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
         let shared = self.styles.get(&node.shared).map(|v| v.as_slice()).unwrap_or(&[]);
         for (prop, value) in shared.iter().copied().chain(node.own.iter().map(|(k, v)| (*k, *v))) {
@@ -499,6 +529,9 @@ impl Tree {
     /// Lays out the tree if anything changed since the last layout.
     pub fn layout(&mut self) -> bool {
         if !self.layout_dirty {
+            if self.reports_pending {
+                self.report_layouts();
+            }
             return false;
         }
         self.layout_dirty = false;
@@ -544,7 +577,39 @@ impl Tree {
                 inp.editor.borrow_mut().set_size(c[2] - c[0], c[3] - c[1]);
             }
         }
+        self.report_layouts();
         true
+    }
+
+    /// Queues a Layout event for each listening node whose box changed since
+    /// it was last reported. A node that isn't laid out (detached, hidden)
+    /// reports nothing, and is reported again once it is.
+    fn report_layouts(&mut self) {
+        self.reports_pending = false;
+        let mut laid_out = std::collections::HashSet::new();
+        for b in &self.boxes {
+            let node = self.nodes.get_mut(&b.id).expect("laid-out nodes exist");
+            if node.listen & event_mask::LAYOUT == 0 {
+                continue;
+            }
+            laid_out.insert(b.id);
+            let r = b.rect;
+            let rect = [r[0], r[1], r[2] - r[0], r[3] - r[1]];
+            if node.reported != Some(rect) {
+                node.reported = Some(rect);
+                self.events.push(TreeEvent::Layout { id: b.id, rect });
+            }
+        }
+        for (id, node) in self.nodes.iter_mut() {
+            if node.listen & event_mask::LAYOUT != 0 && !laid_out.contains(id) {
+                node.reported = None;
+            }
+        }
+    }
+
+    /// Events for JS since the last call.
+    pub fn take_events(&mut self) -> Vec<TreeEvent> {
+        std::mem::take(&mut self.events)
     }
 
     fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4]) {

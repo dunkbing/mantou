@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
@@ -44,7 +44,8 @@ export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
 /** INPUT_OPTIONS flags. */
 export const inputFlags = { Multiline: 1, ReadOnly: 4 } as const;
 
-export const eventMask = { Press: 1 } as const;
+/** LISTEN bits: which events a node has handlers for. */
+export const eventMask = { Press: 1, Layout: 2 } as const;
 
 /** Style value types: how many words each takes after the property code. */
 export type ValueType =
@@ -117,7 +118,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
  */
 export const events: { name: string; code: number; fields: string; doc: string }[] = [
   { name: "WINDOW_READY", code: 1, fields: "a = width px, b = height px, c = scale (f32)", doc: "The window opened." },
-  { name: "RESIZED", code: 2, fields: "a = width px, b = height px", doc: "The window's size changed." },
+  { name: "RESIZED", code: 2, fields: "a = width px, b = height px, c = scale (f32)", doc: "The window's size changed." },
   { name: "POINTER_MOVE", code: 3, fields: "b = x, c = y (f32, logical px)", doc: "The pointer moved." },
   { name: "POINTER_DOWN", code: 4, fields: "a = button, b = x, c = y", doc: "A button was pressed." },
   { name: "POINTER_UP", code: 5, fields: "a = button, b = x, c = y", doc: "A button was released." },
@@ -131,6 +132,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "BLUR", code: 13, fields: "a = input", doc: "An Input lost the keyboard focus." },
   { name: "TEXT_CHANGED", code: 14, fields: "a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words", doc: "The user changed an Input's text." },
   { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
+  { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
 ];
 
 /** Bits of a key event's modifiers. */

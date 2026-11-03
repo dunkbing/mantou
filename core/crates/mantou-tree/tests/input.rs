@@ -1,5 +1,5 @@
 use mantou_tree::protocol::{Prop, input_flag, key_modifier as m, named_key as k};
-use mantou_tree::{InputEvent, Length, MemoryClipboard, Ops, Tree, Value};
+use mantou_tree::{TreeEvent, Length, MemoryClipboard, Ops, Tree, Value};
 
 fn px(v: f32) -> Value {
     Value::Length(Length::Px(v))
@@ -53,8 +53,8 @@ fn type_str(t: &mut Tree, s: &str) {
     }
 }
 
-fn changes(events: &[InputEvent]) -> Vec<(u32, String)> {
-    events.iter().filter_map(|e| if let InputEvent::Changed { rev, text, .. } = e { Some((*rev, text.clone())) } else { None }).collect()
+fn changes(events: &[TreeEvent]) -> Vec<(u32, String)> {
+    events.iter().filter_map(|e| if let TreeEvent::Changed { rev, text, .. } = e { Some((*rev, text.clone())) } else { None }).collect()
 }
 
 #[test]
@@ -74,13 +74,13 @@ fn clicking_focuses_typing_edits_and_clicking_away_blurs() {
     let mut t = tree();
     click(&mut t, 2);
     assert_eq!(t.focused(), Some(2));
-    assert_eq!(t.take_input_events(), vec![InputEvent::Focus(2)]);
+    assert_eq!(t.take_events(), vec![TreeEvent::Focus(2)]);
     type_str(&mut t, "hi");
     assert_eq!(t.value_of(2).as_deref(), Some("hi"));
-    assert_eq!(changes(&t.take_input_events()), vec![(1, "h".into()), (2, "hi".into())]);
+    assert_eq!(changes(&t.take_events()), vec![(1, "h".into()), (2, "hi".into())]);
     click(&mut t, 4);
     assert_eq!(t.focused(), None);
-    assert_eq!(t.take_input_events(), vec![InputEvent::Blur(2)]);
+    assert_eq!(t.take_events(), vec![TreeEvent::Blur(2)]);
     type_str(&mut t, "x");
     assert_eq!(t.value_of(2).as_deref(), Some("hi"), "keys go nowhere without focus");
 }
@@ -97,7 +97,7 @@ fn keys_the_input_uses_are_consumed_and_others_are_not() {
     assert!(!t.key(k::ARROW_DOWN, None, 0, &mut cb), "single-line inputs leave Up and Down to the app");
     assert!(!t.key('k' as u32, Some("k"), m::CONTROL, &mut cb), "unknown shortcuts are the app's");
     assert!(t.key(k::ENTER, None, 0, &mut cb));
-    assert!(t.take_input_events().contains(&InputEvent::Submit(2)));
+    assert!(t.take_events().contains(&TreeEvent::Submit(2)));
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn enter_adds_a_line_to_a_multiline_input_which_grows() {
     let after = t.rect(3).unwrap();
     assert!(after[3] - after[1] > 1.5 * (before[3] - before[1]), "{before:?} -> {after:?}");
     t.key(k::ENTER, None, m::CONTROL, &mut cb);
-    assert!(t.take_input_events().contains(&InputEvent::Submit(3)), "Ctrl+Enter submits");
+    assert!(t.take_events().contains(&TreeEvent::Submit(3)), "Ctrl+Enter submits");
     assert!(t.key(k::ARROW_UP, None, 0, &mut cb), "multiline inputs use Up");
 }
 
@@ -149,15 +149,15 @@ fn tab_moves_the_focus_through_inputs_in_order() {
     let mut cb = MemoryClipboard::default();
     assert!(!t.key(k::TAB, None, 0, &mut cb), "nothing focused: Tab is the app's");
     click(&mut t, 2);
-    t.take_input_events();
+    t.take_events();
     assert!(t.key(k::TAB, None, 0, &mut cb));
     assert_eq!(t.focused(), Some(3));
     t.key(k::TAB, None, 0, &mut cb);
     assert_eq!(t.focused(), Some(2), "wraps around");
     t.key(k::TAB, None, m::SHIFT, &mut cb);
     assert_eq!(t.focused(), Some(3));
-    assert_eq!(t.take_input_events(), vec![
-        InputEvent::Blur(2), InputEvent::Focus(3), InputEvent::Blur(3), InputEvent::Focus(2), InputEvent::Blur(2), InputEvent::Focus(3)
+    assert_eq!(t.take_events(), vec![
+        TreeEvent::Blur(2), TreeEvent::Focus(3), TreeEvent::Blur(3), TreeEvent::Focus(2), TreeEvent::Blur(2), TreeEvent::Focus(3)
     ]);
 }
 
@@ -170,9 +170,9 @@ fn values_from_the_app_apply_unless_the_user_typed_since() {
     assert_eq!(t.value_of(2).as_deref(), Some("draft"));
     assert_eq!(t.focused(), Some(2));
     assert_eq!(t.selection_of(2), Some((5, 5)), "the caret goes to the end");
-    t.take_input_events();
+    t.take_events();
     type_str(&mut t, "!");
-    assert_eq!(changes(&t.take_input_events()), vec![(1, "draft!".into())]);
+    assert_eq!(changes(&t.take_events()), vec![(1, "draft!".into())]);
     // The app transforms what it saw (rev 1): applied.
     o.value(2, 1, "DRAFT!");
     t.apply(&o.take()).unwrap();
@@ -249,17 +249,17 @@ fn the_scene_draws_the_placeholder_the_caret_and_the_selection() {
 fn ime_composition_is_drawn_underlined_then_committed() {
     let mut t = tree();
     click(&mut t, 2);
-    t.take_input_events();
+    t.take_events();
     t.ime_preedit("にほ", Some((6, 6)));
     assert_eq!(t.value_of(2).as_deref(), Some(""), "a composition isn't the value yet");
-    assert!(t.take_input_events().is_empty());
+    assert!(t.take_events().is_empty());
     let mut cb = MemoryClipboard::default();
     assert!(t.key(k::BACKSPACE, None, 0, &mut cb), "the IME has the keys");
     assert!(t.ime_area().is_some());
     t.ime_preedit("", None);
     t.insert_text("日本");
     assert_eq!(t.value_of(2).as_deref(), Some("日本"));
-    assert_eq!(changes(&t.take_input_events()), vec![(1, "日本".into())]);
+    assert_eq!(changes(&t.take_events()), vec![(1, "日本".into())]);
 }
 
 #[test]

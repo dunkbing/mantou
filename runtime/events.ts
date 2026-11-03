@@ -4,7 +4,7 @@ import { Event, KeyModifier, NamedKey } from "./gen/protocol";
 
 export type CoreEvent =
   | { type: "windowReady"; width: number; height: number; scale: number }
-  | { type: "resized"; width: number; height: number }
+  | { type: "resized"; width: number; height: number; scale: number }
   | { type: "pointerMove"; x: number; y: number }
   | { type: "pointerDown" | "pointerUp"; button: number; x: number; y: number }
   | ({ type: "keyDown"; repeat: boolean } & KeyInfo)
@@ -13,6 +13,7 @@ export type CoreEvent =
   | { type: "scaleChanged"; scale: number }
   | { type: "press"; target: number; x: number; y: number }
   | { type: "wheel"; target: number; dx: number; dy: number }
+  | { type: "layout"; target: number; x: number; y: number; width: number; height: number }
   | InputCoreEvent;
 
 /** What the core says about Input nodes. */
@@ -63,7 +64,7 @@ const utf8 = new TextDecoder();
 export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEvent | null {
   switch (w[i] & 0xffff) {
     case Event.WINDOW_READY: return { type: "windowReady", width: w[i + 1], height: w[i + 2], scale: f[i + 3] };
-    case Event.RESIZED: return { type: "resized", width: w[i + 1], height: w[i + 2] };
+    case Event.RESIZED: return { type: "resized", width: w[i + 1], height: w[i + 2], scale: f[i + 3] };
     case Event.POINTER_MOVE: return { type: "pointerMove", x: f[i + 2], y: f[i + 3] };
     case Event.POINTER_DOWN: return { type: "pointerDown", button: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.POINTER_UP: return { type: "pointerUp", button: w[i + 1], x: f[i + 2], y: f[i + 3] };
@@ -73,6 +74,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.SCALE_CHANGED: return { type: "scaleChanged", scale: f[i + 3] };
     case Event.PRESS: return { type: "press", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.WHEEL: return { type: "wheel", target: w[i + 1], dx: f[i + 2], dy: f[i + 3] };
+    case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
     case Event.BLUR: return { type: "blur", target: w[i + 1] };
     case Event.SUBMIT: return { type: "submit", target: w[i + 1] };
@@ -116,10 +118,20 @@ export function route(
     dispatchWheel(t: number, dx: number, dy: number): void;
     dispatchKey(e: KeyInfo & { type: "keyDown" | "keyUp"; repeat?: boolean }): void;
     dispatchInput(e: InputCoreEvent): void;
+    dispatchLayout(t: number, rect: { x: number; y: number; width: number; height: number }): void;
+    dispatchResize(width: number, height: number, scale: number): void;
+    readonly windowSize: { scale: number } | null;
   },
   e: CoreEvent,
 ) {
   if (e.type === "press") ui.dispatchPress(e.target, e.x, e.y);
+  else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });
+  // Sizes arrive in device px; the app works in logical px.
+  else if (e.type === "windowReady") ui.dispatchResize(e.width / e.scale, e.height / e.scale, e.scale);
+  else if (e.type === "resized") {
+    const scale = e.scale || ui.windowSize?.scale || 1;
+    ui.dispatchResize(e.width / scale, e.height / scale, scale);
+  }
   else if (e.type === "focus" || e.type === "blur" || e.type === "submit" || e.type === "textChanged") ui.dispatchInput(e);
   else if (e.type === "wheel") ui.dispatchWheel(e.target, e.dx, e.dy);
   else if (e.type === "keyDown" || e.type === "keyUp") ui.dispatchKey(e);

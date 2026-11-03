@@ -64,7 +64,7 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
             _ => {}
         }
         let _ = tree.ime_area();
-        let _ = tree.take_input_events();
+        let _ = tree.take_events();
         tree.layout();
         let _ = tree.scene();
         if let Err(e) = tree.check() {

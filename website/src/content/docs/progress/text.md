@@ -27,7 +27,7 @@ It was built before Mantou had [text input](/progress/text-input/), so it has no
 | **Boxes** | `borderRadius`, `borderWidth`, `borderColor`: an SDF in the quad shader. Borders inset the content, as CSS's `border-box` |
 | **Clipping** | `overflow: "hidden"` clips descendants, intersected down the tree; hit-testing ignores what's clipped away |
 | **Input** | Keys with modifiers and named keys (`onKey`), the wheel (`onWheel`, bubbling like presses) |
-| **Measuring** | `node.measure()`: where the core laid a node out, after committing the changes made so far |
+| **Measuring** | `node.measure()`: where the core laid a node out, after committing the changes made so far. Since then also `onLayout` on any element (its box after the first layout and whenever it changes, window resizes included) and `useWindowSize()` |
 | **Headless** | `HeadlessCore.key()` and `.wheel()`, and a `glyphs` counter |
 
 ![The counter, with labels and the count as text](../../../assets/counter.png)

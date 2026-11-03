@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { Node, PressEvent, TextLeaf, WheelEvent } from "./ui";
+import type { Node, PressEvent, Rect, TextLeaf, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -11,6 +11,8 @@ export interface ViewProps {
   onPress?: (e: PressEvent) => void;
   /** Wheel and trackpad scrolling over this view (it bubbles, like presses). */
   onWheel?: (e: WheelEvent) => void;
+  /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
+  onLayout?: (rect: Rect) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
 }
@@ -20,6 +22,8 @@ export interface TextProps {
   style?: StyleProp;
   onPress?: (e: PressEvent) => void;
   onWheel?: (e: WheelEvent) => void;
+  /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
+  onLayout?: (rect: Rect) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
 }
@@ -47,6 +51,8 @@ export interface InputProps {
   onBlur?: () => void;
   onPress?: (e: PressEvent) => void;
   onWheel?: (e: WheelEvent) => void;
+  /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
+  onLayout?: (rect: Rect) => void;
   style?: StyleProp;
   ref?: Node | ((node: Node) => void);
 }

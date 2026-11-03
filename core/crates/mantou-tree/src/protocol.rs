@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 4;
+pub const PROTOCOL_VERSION: u32 = 5;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -72,6 +72,7 @@ pub mod node_kind {
 
 pub mod event_mask {
     pub const PRESS: u32 = 1;
+    pub const LAYOUT: u32 = 2;
 }
 
 pub mod input_flag {
@@ -112,7 +113,7 @@ pub mod unit {
 pub mod event {
     /// The window opened. a = width px, b = height px, c = scale (f32).
     pub const WINDOW_READY: u32 = 1;
-    /// The window's size changed. a = width px, b = height px.
+    /// The window's size changed. a = width px, b = height px, c = scale (f32).
     pub const RESIZED: u32 = 2;
     /// The pointer moved. b = x, c = y (f32, logical px).
     pub const POINTER_MOVE: u32 = 3;
@@ -140,6 +141,8 @@ pub mod event {
     pub const TEXT_CHANGED: u32 = 14;
     /// Enter in a single-line Input. a = input.
     pub const SUBMIT: u32 = 15;
+    /// A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left).
+    pub const LAYOUT: u32 = 16;
 }
 
 pub mod display {

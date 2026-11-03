@@ -1,9 +1,9 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
 import type { InputProps, JSX, TextProps, ViewProps } from "../jsx-runtime";
-import type { KeyEvent, Node, Ui } from "../ui";
+import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
 import { createElement, currentUi, spread } from "./renderer";
-import { onCleanup } from "./solid";
+import { createSignal, onCleanup } from "./solid";
 
 /** A box: flexbox layout, a background, press handling. */
 export function View(props: ViewProps): JSX.Element {
@@ -33,6 +33,17 @@ export function Input(props: InputProps): JSX.Element {
 /** Listens for keys anywhere in the window while the component is mounted. */
 export function onKey(handler: (e: KeyEvent) => void) {
   onCleanup(currentUi().onKey(handler));
+}
+
+/**
+ * The window's size in logical px, and its scale, as a signal that follows
+ * resizes. Before the window has opened it reads 0 × 0.
+ */
+export function useWindowSize(): () => WindowSize {
+  const ui = currentUi();
+  const [size, setSize] = createSignal<WindowSize>(ui.windowSize ?? { width: 0, height: 0, scale: 1 });
+  onCleanup(ui.onResize(setSize));
+  return size;
 }
 
 /** The Ui the component is rendered in (to set the title, for example). */

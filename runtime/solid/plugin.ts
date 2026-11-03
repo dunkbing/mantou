@@ -32,6 +32,11 @@ export const mantouJsx: BunPlugin = {
         babelrc: false,
         configFile: false,
         sourceMaps: "inline",
+        // Bun doesn't apply an inline source map returned from onLoad, so keep
+        // the compiled code on its source lines: stack traces and test
+        // failures then name the right line (columns are the compiled ones).
+        // dunkbing/mantou#2.
+        retainLines: true,
         presets: [
           [solid, { generate: "universal", moduleName: "mantou-ui/solid" }],
           [typescript, { isTSX: true, allExtensions: true }],

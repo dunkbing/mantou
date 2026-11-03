@@ -473,7 +473,7 @@ pub extern "C" fn mt_test_viewport(inst: u32, width_px: u32, height_px: u32, sca
         if i.headless {
             i.relayout(width_px.max(1), height_px.max(1), scale);
             bump(&i.stats.resizes);
-            i.push_event([ev::RESIZED, width_px, height_px, 0]);
+            i.push_event([ev::RESIZED, width_px, height_px, lock(&i.tree).scale().to_bits()]);
         } else {
             send(UserEvent::Resize(width_px, height_px));
         }

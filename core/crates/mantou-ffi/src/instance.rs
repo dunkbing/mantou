@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use mantou_tree::protocol::{event as ev, key_modifier};
-use mantou_tree::{Clipboard, InputEvent, MemoryClipboard, Scene, Tree};
+use mantou_tree::{Clipboard, TreeEvent, MemoryClipboard, Scene, Tree};
 
 /// A poisoned lock only means another entry point panicked; the data is still usable.
 pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -154,16 +154,19 @@ impl Instance {
         self.wake_js();
     }
 
-    /// Queues the tree's input events (focus, text changes…) for JS.
-    fn flush_input(&self, tree: &mut Tree) {
-        for e in tree.take_input_events() {
+    /// Queues the tree's events (inputs' focus and text, layout changes) for JS.
+    fn flush_events(&self, tree: &mut Tree) {
+        for e in tree.take_events() {
             match e {
-                InputEvent::Focus(id) => self.push_event([ev::FOCUS, id, 0, 0]),
-                InputEvent::Blur(id) => self.push_event([ev::BLUR, id, 0, 0]),
-                InputEvent::Submit(id) => self.push_event([ev::SUBMIT, id, 0, 0]),
-                InputEvent::Changed { id, rev, text } => {
+                TreeEvent::Focus(id) => self.push_event([ev::FOCUS, id, 0, 0]),
+                TreeEvent::Blur(id) => self.push_event([ev::BLUR, id, 0, 0]),
+                TreeEvent::Submit(id) => self.push_event([ev::SUBMIT, id, 0, 0]),
+                TreeEvent::Changed { id, rev, text } => {
                     let words = mantou_tree::encode::string_words(&text);
                     self.push_record(&[ev::TEXT_CHANGED, id, rev, words[0]], &words[1..]);
+                }
+                TreeEvent::Layout { id, rect: [x, y, w, h] } => {
+                    self.push_record(&[ev::LAYOUT, id, x.to_bits(), y.to_bits()], &[w.to_bits(), h.to_bits()]);
                 }
             }
         }
@@ -228,10 +231,12 @@ impl Instance {
         (n * 4) as u32
     }
 
-    /// Lays out if needed and publishes a new scene. Call with the tree locked.
+    /// Lays out if needed, publishes a new scene, and queues the tree's
+    /// events (layout changes among them). Call with the tree locked.
     fn publish(&self, tree: &mut Tree) -> bool {
         let ran = tree.layout();
         *lock(&self.scene) = Arc::new(tree.scene());
+        self.flush_events(tree);
         ran
     }
 
@@ -250,7 +255,6 @@ impl Instance {
                 return -1;
             }
         }
-        self.flush_input(&mut tree);
         self.publish(&mut tree);
         bump(&self.stats.commits);
         0
@@ -274,9 +278,10 @@ impl Instance {
     fn edit(&self, f: impl FnOnce(&mut Tree) -> bool) -> bool {
         let mut tree = lock(&self.tree);
         let changed = f(&mut tree);
-        self.flush_input(&mut tree);
         if changed {
             self.publish(&mut tree);
+        } else {
+            self.flush_events(&mut tree);
         }
         changed
     }

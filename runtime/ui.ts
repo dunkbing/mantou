@@ -24,6 +24,13 @@ export interface Rect {
   height: number;
 }
 
+/** The window's size in logical px, and its scale factor (device px per logical px). */
+export interface WindowSize {
+  width: number;
+  height: number;
+  scale: number;
+}
+
 export interface WheelEvent {
   target: Node;
   currentTarget: Node;
@@ -113,6 +120,9 @@ export class Node {
   private shared: SharedStyle | null = null;
   private pressHandlers: ((e: PressEvent) => void)[] = [];
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
+  private layoutHandlers: ((rect: Rect) => void)[] = [];
+  /** The box the core last reported to this node's layout handlers. */
+  layout: Rect | null = null;
   /** The content last sent for a Text node. */
   sentText = "";
   /**
@@ -396,6 +406,7 @@ export class Node {
     this.children.length = 0;
     this.pressHandlers.length = 0;
     this.wheelHandlers.length = 0;
+    this.layoutHandlers.length = 0;
     this.inputHandlers = null;
     this.released = true;
     this.ui.free(this);
@@ -425,8 +436,32 @@ export class Node {
   }
 
   private listen() {
-    this.ui.enc.listen(this.id, this.pressHandlers.length ? EventMask.Press : 0);
+    const mask = (this.pressHandlers.length ? EventMask.Press : 0) | (this.layoutHandlers.length ? EventMask.Layout : 0);
+    this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
+  }
+
+  /**
+   * Adds a layout handler: it hears this node's box after the next layout,
+   * then whenever the box changes (window resizes included). Returns a
+   * function that removes it.
+   */
+  onLayout(handler: (rect: Rect) => void): () => void {
+    this.alive();
+    this.layoutHandlers.push(handler);
+    if (this.layoutHandlers.length === 1) this.listen();
+    return () => {
+      const i = this.layoutHandlers.indexOf(handler);
+      if (i < 0) return;
+      this.layoutHandlers.splice(i, 1);
+      if (this.layoutHandlers.length === 0 && !this.released) this.listen();
+    };
+  }
+
+  /** @internal */
+  handleLayout(rect: Rect) {
+    this.layout = rect;
+    for (const h of [...this.layoutHandlers]) h(rect);
   }
 
   /** Adds a wheel handler; returns a function that removes it. Wheel events bubble like presses. */
@@ -478,6 +513,9 @@ export class Ui {
   private warnedText = false;
   /** The Input with the keyboard focus, as the core last reported. */
   focused: Node | null = null;
+  /** The window's size, once the core has reported it (a headless instance knows it from the start). */
+  windowSize: WindowSize | null = null;
+  private resizeHandlers = new Set<(size: WindowSize) => void>();
 
   constructor(private sink: Sink) {}
 
@@ -490,6 +528,26 @@ export class Ui {
     for (const s of styles) s instanceof SharedStyle ? node.use(s) : node.style(s);
     this.schedule();
     return node;
+  }
+
+  /** Listens for the window's size changing; returns a function that stops. */
+  onResize(handler: (size: WindowSize) => void): () => void {
+    this.resizeHandlers.add(handler);
+    return () => this.resizeHandlers.delete(handler);
+  }
+
+  /** Records the window's size (logical px) and tells resize listeners if it changed. */
+  dispatchResize(width: number, height: number, scale: number) {
+    const s = this.windowSize;
+    if (s && s.width === width && s.height === height && s.scale === scale) return;
+    const size = { width, height, scale };
+    this.windowSize = size;
+    for (const h of [...this.resizeHandlers]) h(size);
+  }
+
+  /** Delivers a node's new box to its layout handlers. */
+  dispatchLayout(targetId: number, rect: Rect) {
+    this.nodes.get(targetId)?.handleLayout(rect);
   }
 
   /** Delivers an Input event (focus, blur, a text change, submit) to its node. */

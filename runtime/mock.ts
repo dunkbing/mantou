@@ -32,6 +32,16 @@ export class MockCore {
     this.ui.dispatchInput({ type: focused ? "focus" : "blur", target: nodeId });
   }
 
+  /** The core laid a node out at a new box. */
+  layout(nodeId: number, rect: { x: number; y: number; width: number; height: number }) {
+    this.ui.dispatchLayout(nodeId, rect);
+  }
+
+  /** The window resized (logical px). */
+  resize(width: number, height: number, scale = 1) {
+    this.ui.dispatchResize(width, height, scale);
+  }
+
   /** Delivers a press as the core would (target, then bubbling). */
   press(nodeId: number, x = 0, y = 0) {
     this.ui.dispatchPress(nodeId, x, y);

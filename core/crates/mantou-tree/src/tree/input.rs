@@ -8,7 +8,7 @@ use std::cell::RefCell;
 
 use mantou_text::{Editor, TextEngine, TextStyle};
 
-use super::Tree;
+use super::{Tree, TreeEvent};
 use crate::protocol::{input_flag, key_modifier as m, named_key as k};
 
 /// Width of an input that nothing sizes (logical px), like a browser's.
@@ -38,15 +38,6 @@ impl Input {
         ed.max_len = max_length as usize;
         changed
     }
-}
-
-/// What the tree tells JS about inputs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum InputEvent {
-    Focus(u32),
-    Blur(u32),
-    Changed { id: u32, rev: u32, text: String },
-    Submit(u32),
 }
 
 /// The system clipboard, or a stand-in for tests.
@@ -89,11 +80,6 @@ impl Tree {
         self.focus
     }
 
-    /// Events for JS since the last call.
-    pub fn take_input_events(&mut self) -> Vec<InputEvent> {
-        std::mem::take(&mut self.input_events)
-    }
-
     /// An input's text (for tests and debugging).
     pub fn value_of(&self, id: u32) -> Option<String> {
         self.nodes.get(&id)?.input.as_ref().map(|i| i.editor.borrow().text())
@@ -110,11 +96,11 @@ impl Tree {
                 let mut ed = n.input.as_ref().expect("an input").editor.borrow_mut();
                 ed.set_compose(text, "", None);
             }
-            self.input_events.push(InputEvent::Blur(old));
+            self.events.push(TreeEvent::Blur(old));
         }
         if let Some(new) = id {
             self.focus = Some(new);
-            self.input_events.push(InputEvent::Focus(new));
+            self.events.push(TreeEvent::Focus(new));
         }
     }
 
@@ -136,7 +122,7 @@ impl Tree {
             }
             if after != before {
                 inp.rev += 1;
-                self.input_events.push(InputEvent::Changed { id, rev: inp.rev, text: after });
+                self.events.push(TreeEvent::Changed { id, rev: inp.rev, text: after });
             }
         }
         true
@@ -291,7 +277,7 @@ impl Tree {
                         ed.insert(t, "\n");
                     })
                 } else {
-                    self.input_events.push(crate::tree::InputEvent::Submit(id));
+                    self.events.push(crate::tree::TreeEvent::Submit(id));
                     true
                 }
             }

@@ -183,3 +183,65 @@ fn a_huge_style_def_count_is_an_error_not_an_abort() {
     let e = t.apply(&bytes).unwrap_err();
     assert!(e.message.contains("claims"), "{e}");
 }
+
+#[test]
+fn right_and_bottom_resolve_against_the_parent_not_the_window() {
+    // dunkbing/mantou#1: views default to `position: relative`, so each is the
+    // containing block of its absolutely positioned children.
+    const POSITION: u32 = 26;
+    const ABSOLUTE: u32 = 1;
+    const RIGHT: u32 = 28;
+    const BOTTOM: u32 = 29;
+    let mut o = Ops::default();
+    o.create(1).enum_(1, FLEX_DIRECTION, ROW)
+        .create(2).px(2, WIDTH, 100.0)
+        .create(3).px(3, WIDTH, 200.0).px(3, HEIGHT, 100.0)
+        .create(4).enum_(4, POSITION, ABSOLUTE).px(4, RIGHT, 0.0).px(4, BOTTOM, 0.0).px(4, WIDTH, 10.0).px(4, HEIGHT, 10.0)
+        .insert(3, 4, 0).insert(1, 2, 0).insert(1, 3, 0).root(1);
+    let mut t = Tree::new();
+    t.set_viewport(640, 400, 1.0);
+    t.apply(&o.bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.rect(4), Some([290.0, 90.0, 300.0, 100.0]));
+}
+
+#[test]
+fn layout_listeners_hear_their_box_when_it_changes() {
+    use mantou_tree::TreeEvent;
+    let layout_listen = |o: &mut Ops, id: u32| {
+        o.op(9, &[id, 2]);
+    };
+    let mut o = Ops::default();
+    o.create(1).create(2).px(2, HEIGHT, 50.0).create(3).px(3, HEIGHT, 20.0).insert(1, 2, 0).insert(1, 3, 0).root(1);
+    layout_listen(&mut o, 2);
+    let mut t = tree_with(&o);
+    assert_eq!(t.take_events(), vec![TreeEvent::Layout { id: 2, rect: [0.0, 0.0, 400.0, 50.0] }], "first layout");
+    // A change elsewhere that leaves its box alone: nothing.
+    let mut m = Ops::default();
+    m.px(3, HEIGHT, 30.0);
+    t.apply(&m.bytes()).unwrap();
+    t.layout();
+    assert!(t.take_events().is_empty());
+    // The window resizes: its box changes.
+    t.set_viewport(300, 300, 1.0);
+    t.layout();
+    assert_eq!(t.take_events(), vec![TreeEvent::Layout { id: 2, rect: [0.0, 0.0, 300.0, 50.0] }]);
+    // A new listener hears the current box at the next layout, though nothing changed.
+    let mut m = Ops::default();
+    layout_listen(&mut m, 3);
+    t.apply(&m.bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.take_events(), vec![TreeEvent::Layout { id: 3, rect: [0.0, 50.0, 300.0, 30.0] }]);
+    // Hidden, then shown again with the same box: reported again.
+    const DISPLAY: u32 = 1;
+    let mut m = Ops::default();
+    m.enum_(3, DISPLAY, 1);
+    t.apply(&m.bytes()).unwrap();
+    t.layout();
+    assert!(t.take_events().is_empty());
+    let mut m = Ops::default();
+    m.enum_(3, DISPLAY, 0);
+    t.apply(&m.bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.take_events(), vec![TreeEvent::Layout { id: 3, rect: [0.0, 50.0, 300.0, 30.0] }]);
+}
