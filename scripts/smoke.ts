@@ -6,7 +6,7 @@
 //
 // The test types into an <Input> on a headless instance: it needs the
 // prebuilt core for this machine, JSX through the preload, and Solid.
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PLATFORM_PACKAGE as platformPackage } from "../runtime/ffi";
@@ -56,15 +56,22 @@ test("mantou-ui runs on its prebuilt core", () => {
 const run = (cmd: string[]) => Bun.spawnSync(cmd, { cwd: app, stdio: ["inherit", "inherit", "inherit"] }).exitCode;
 
 // npm checks new uploads before serving them: a version can take several
-// minutes to appear (9 for one package of 0.1.1). Keep trying for 30.
+// minutes to appear (9 for one package of 0.1.1). Keep trying for 30. An
+// install counts only with this machine's core: a platform package npm isn't
+// serving yet is an optional dependency, which bun skips without an error.
+const version = mode === "registry" ? a : b;
+const core = join(app, "node_modules", platformPackage, "package.json");
+const hasCore = () => existsSync(core) && JSON.parse(readFileSync(core, "utf8")).version === version;
 let installed = false;
 for (let attempt = 1; attempt <= (mode === "registry" ? 60 : 1); attempt++) {
-  if (run(["bun", "install"]) === 0) {
+  if (run(["bun", "install"]) === 0 && hasCore()) {
     installed = true;
     break;
   }
-  console.log(`install failed (attempt ${attempt}); retrying in 30 s`);
-  await Bun.sleep(30_000);
+  console.log(`no ${platformPackage}@${version} installed (attempt ${attempt}); retrying in 30 s`);
+  rmSync(join(app, "node_modules"), { recursive: true, force: true });
+  rmSync(join(app, "bun.lock"), { force: true });
+  if (mode === "registry") await Bun.sleep(30_000);
 }
 if (!installed) process.exit(1);
 console.log(`smoke app at ${app}, with ${platformPackage}`);

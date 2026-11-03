@@ -136,6 +136,7 @@ jobs:
     name: Publish to npm
     needs: smoke
     runs-on: ubuntu-24.04
+    timeout-minutes: 45 # waits for npm to serve the platform packages
     outputs:
       published: ${{ steps.publish.outputs.published }}
     permissions:
@@ -159,14 +160,29 @@ jobs:
         run: |
           VERSION="${VERSION#v}"
           if [ "$REAL" = "true" ]; then flags="--provenance"; else flags="--dry-run"; fi
-          while read -r name; do
+          served() { npm view "$1@$VERSION" version --prefer-online 2>/dev/null | grep -q .; }
+          publish() {
             # Already published (a re-run after a partial publish): skip it.
-            if [ "$REAL" = "true" ] && npm view "$name@$VERSION" version 2>/dev/null | grep -q .; then
-              echo "$name@$VERSION is already on npm"; continue
-            fi
+            if [ "$REAL" = "true" ] && served "$1"; then echo "$1@$VERSION is already on npm"; return; fi
             # "./": without it, npm reads "packages/x.tgz" as a GitHub repo.
-            npm publish "./packages/$name-$VERSION.tgz" --access public $flags
-          done < packages/order.txt
+            npm publish "./packages/$1-$VERSION.tgz" --access public $flags
+          }
+          platforms=$(grep -v '^mantou-ui$' packages/order.txt)
+          for name in $platforms; do publish "$name"; done
+          # npm checks new uploads before serving them, sometimes for minutes.
+          # mantou-ui goes out only once every platform package is served:
+          # before that, installing it would silently skip a missing optional
+          # dependency and leave the app without a core.
+          if [ "$REAL" = "true" ]; then
+            for name in $platforms; do
+              for attempt in $(seq 1 60); do
+                served "$name" && break
+                [ "$attempt" = 60 ] && { echo "::error::$name@$VERSION isn't served after 30 minutes"; exit 1; }
+                echo "waiting for npm to serve $name@$VERSION ($attempt)"; sleep 30
+              done
+            done
+          fi
+          publish mantou-ui
           echo "published=$REAL" >> "$GITHUB_OUTPUT"
 
   verify:
