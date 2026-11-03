@@ -97,6 +97,7 @@ impl Tree {
         if id == self.focus {
             return;
         }
+        self.scene_dirty = true;
         if let Some(old) = self.focus.take() {
             if let (Some(n), Some(text)) = (self.nodes.get(&old), self.text.as_mut()) {
                 let mut ed = n.input.as_ref().expect("an input").editor.borrow_mut();
@@ -115,6 +116,7 @@ impl Tree {
     /// out again). Returns false when nothing is focused.
     fn with_focused(&mut self, edit: bool, f: impl FnOnce(&mut Editor, &mut TextEngine)) -> bool {
         let Some(id) = self.focus else { return false };
+        self.scene_dirty = true; // the caret or selection may move, if not the text
         let (Some(node), Some(text)) = (self.nodes.get_mut(&id), self.text.as_mut()) else { return false };
         let Some(inp) = node.input.as_mut() else { return false };
         let ed = inp.editor.get_mut();

@@ -47,3 +47,17 @@ It was built before Mantou had [text input](/progress/text-input/), so it has no
 - **Fonts once per process.** Building a font context per tree (system font scan plus Inter) made the layout property test 35× slower. The context is now built once and cloned, and each tree creates its text engine only when its first text node appears.
 - **Comparing scenes:** atlas positions depend on the order glyphs were first drawn, so trees are compared on everything else (a glyph's size, place, colour and clip).
 - **fontconfig keeps memory from its one-time setup**, which LeakSanitizer reports when fuzzing. `core/fuzz/lsan.supp` suppresses it.
+
+## Text cost in big trees
+
+Reported from Mantou Mail with 2,000 messages ([#9](https://github.com/dunkbing/mantou/issues/9)): every scene laid out every Text node, visible or not, and past 4,096 distinct texts the layout cache was cleared on every frame. Now text entirely outside its clip isn't laid out, each Text node reuses the layout it was last drawn with, the cache keeps two generations, and an unchanged tree builds no scene. `tests/text-cost.test.tsx` counts it (`textLayouts`, `scenes`): ten 40 px scrolls of a 4,200-row list lay out at most 20 texts, a label change outside it at most 2, and an idle step builds no scene.
+
+For information (Linux, headless, this machine; not part of the tests), per commit:
+
+| rows | scroll 40 px (negative margin) | change one label | step, nothing pending |
+|---:|---:|---:|---:|
+| 3,000 | 6.3 ms | 3.1 ms | 0 ms |
+| 4,200 | 10.4 ms | 5.6 ms | 0 ms |
+| 8,000 | 22.6 ms | 11.6 ms | 0 ms |
+
+The issue measured 208 ms, 212 ms and 98 ms at 4,200 rows before. What remains grows with the list because a negative margin re-lays it out; a `<Scroll>` ([Scrolling and dialogs](/progress/scrolling/)) scrolls without a relayout.

@@ -2,10 +2,11 @@
 //! laid out with Taffy (text measured by mantou-text), turned into a scene of
 //! quads (rectangles and glyphs), and hit-tested.
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use mantou_text::{Align, AtlasImage, PlacedGlyph, TextEngine, TextStyle};
+use mantou_text::{Align, AtlasImage, PlacedGlyph, TextEngine, TextLayout, TextStyle};
 
 use taffy::prelude::*;
 use taffy::style::{AlignContent, AlignItems, Dimension, LengthPercentage, LengthPercentageAuto};
@@ -118,6 +119,10 @@ pub struct TreeStats {
     pub layouts: u64,
     /// Ops applied.
     pub ops: u64,
+    /// Scenes built.
+    pub scenes: u64,
+    /// Text layouts computed (not reused from a node or the cache).
+    pub text_layouts: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -157,6 +162,9 @@ struct Node {
     scope: u32,
     /// A scroll view's offset and limits (overflow: "scroll").
     scroll: Option<ScrollState>,
+    /// A Text node's layout at the width it was drawn at (its bits), reused
+    /// while its text, style and width stay the same.
+    drawn: RefCell<Option<(u32, Arc<TextLayout>)>>,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -206,6 +214,8 @@ pub struct Tree {
     thumb_drag: Option<Drag>,
     /// SCROLL_TO and SCROLL_INTO_VIEW requests, applied after the batch's layout.
     requests: Vec<Request>,
+    /// Something drawn may have changed since the last scene.
+    scene_dirty: bool,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -254,11 +264,18 @@ impl Tree {
             thumbs: Vec::new(),
             thumb_drag: None,
             requests: Vec::new(),
+            scene_dirty: true,
         }
     }
 
     pub fn stats(&self) -> TreeStats {
-        self.stats
+        TreeStats { text_layouts: self.text.as_ref().map_or(0, TextEngine::uncached_layouts), ..self.stats }
+    }
+
+    /// Whether something drawn may have changed since the last scene (a
+    /// scene of an unchanged tree would be the same, so it needn't be built).
+    pub fn scene_stale(&self) -> bool {
+        self.scene_dirty
     }
 
     pub fn node_count(&self) -> usize {
@@ -274,6 +291,9 @@ impl Tree {
     pub fn apply(&mut self, bytes: &[u8]) -> Result<ApplyReport, DecodeError> {
         let ops = decode(bytes)?;
         self.focus_at_batch = self.focus;
+        if !ops.is_empty() {
+            self.scene_dirty = true;
+        }
         let mut report = ApplyReport { ops: ops.len(), errors: Vec::new() };
         for o in ops {
             if let Err(e) = self.apply_op(o) {
@@ -324,6 +344,7 @@ impl Tree {
                     reported: None,
                     scope: 0,
                     scroll: None,
+                    drawn: RefCell::new(None),
                 });
                 self.restyle(id);
             }
@@ -412,6 +433,7 @@ impl Tree {
                 }
                 if node.text != text {
                     node.text = text;
+                    *node.drawn.get_mut() = None;
                     let t = node.taffy;
                     let _ = self.taffy.mark_dirty(t);
                     self.layout_dirty = true;
@@ -553,6 +575,7 @@ impl Tree {
         if let Some(inp) = node.input.as_mut() {
             inp.editor.get_mut().set_style(&v.text);
         }
+        *node.drawn.get_mut() = None; // the text style may have changed
         if v.scrolls != node.scroll.is_some() {
             node.scroll = v.scrolls.then(ScrollState::default);
         }
@@ -572,6 +595,7 @@ impl Tree {
         }
         self.viewport_px = (width_px, height_px);
         self.scale = scale;
+        self.scene_dirty = true;
         if let Some(root) = self.root {
             self.restyle(root);
         }
@@ -631,6 +655,7 @@ impl Tree {
     /// Places the boxes from the last layout and scroll offsets, applies the
     /// app's scroll requests, and queues what listeners asked to hear.
     fn place(&mut self) {
+        self.scene_dirty = true;
         self.place_boxes();
         self.apply_requests();
         for b in &self.boxes {
@@ -741,6 +766,8 @@ impl Tree {
     /// Builds the scene from the last layout (call `layout` first). Text is
     /// laid out at its final width and its glyphs rasterized into the atlas.
     pub fn scene(&mut self) -> Scene {
+        self.scene_dirty = false;
+        self.stats.scenes += 1;
         let s = self.scale;
         let snap = |v: f32| (v * s).round();
         let mut quads = Vec::new();
@@ -802,8 +829,24 @@ impl Tree {
                     continue;
                 }
                 let c = b.content;
+                // Entirely clipped away: not laid out at all. (A font size of
+                // slack covers glyphs that reach past the box, like italics.)
+                let slack = node.v.text.size;
+                let reach = [snap(b.rect[0] - slack), snap(b.rect[1] - slack), snap(b.rect[2] + slack), snap(b.rect[3] + slack)];
+                if !overlaps(reach, clip) {
+                    continue;
+                }
                 let Some(text) = self.text.as_mut() else { continue };
-                let layout = text.layout(&node.text, &node.v.text, Some((c[2] - c[0]).max(0.0)));
+                let width = (c[2] - c[0]).max(0.0);
+                let mut drawn = node.drawn.borrow_mut();
+                let layout = match drawn.as_ref() {
+                    Some((w, l)) if *w == width.to_bits() => l.clone(),
+                    _ => {
+                        let l = text.layout(&node.text, &node.v.text, Some(width));
+                        *drawn = Some((width.to_bits(), l.clone()));
+                        l
+                    }
+                };
                 glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), s, color, clip);
             }
             if let (Some(inp), Some(text)) = (&node.input, self.text.as_mut()) {

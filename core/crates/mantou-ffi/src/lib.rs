@@ -284,7 +284,8 @@ pub unsafe extern "C" fn mt_take_events(inst: u32, dst: *mut u8, cap: u32) -> u3
 
 /// Writes up to `cap` counters into `dst` and returns how many it wrote:
 /// frames, commits, wakes, events, resizes, redraw requests, layouts, ops,
-/// op errors, rectangles (last scene), nodes, presses, glyphs (last scene).
+/// op errors, rectangles (last scene), nodes, presses, glyphs (last scene),
+/// scenes built, text layouts computed.
 ///
 /// # Safety
 /// `dst` must be valid for writes of `cap` u64 values.

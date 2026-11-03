@@ -32,7 +32,7 @@ pub struct Stats {
 }
 
 /// Counter order of `mt_stats`.
-pub const STAT_COUNT: usize = 13;
+pub const STAT_COUNT: usize = 15;
 
 /// Presses this close in time (ms) and space (logical px) count as a double (triple…) click.
 const MULTI_CLICK_MS: f64 = 500.0;
@@ -236,7 +236,10 @@ impl Instance {
     /// events (layout changes among them). Call with the tree locked.
     fn publish(&self, tree: &mut Tree) -> bool {
         let ran = tree.layout();
-        *lock(&self.scene) = Arc::new(tree.scene());
+        // An unchanged tree would draw the same scene: keep the one published.
+        if ran || tree.scene_stale() {
+            *lock(&self.scene) = Arc::new(tree.scene());
+        }
         self.flush_events(tree);
         ran
     }
@@ -383,10 +386,11 @@ impl Instance {
     /// See `mt_stats` for the order.
     pub fn stats_array(&self) -> [u64; STAT_COUNT] {
         let st = &self.stats;
-        let (layouts, ops, nodes) = {
+        let (tree_stats, nodes) = {
             let t = lock(&self.tree);
-            (t.stats().layouts, t.stats().ops, t.node_count() as u64)
+            (t.stats(), t.node_count() as u64)
         };
+        let (layouts, ops) = (tree_stats.layouts, tree_stats.ops);
         let (quads, glyphs) = {
             let scene = lock(&self.scene);
             let glyphs = scene.quads.iter().filter(|q| q.is_glyph()).count() as u64;
@@ -407,6 +411,8 @@ impl Instance {
             nodes,
             load(&st.presses),
             glyphs,
+            tree_stats.scenes,
+            tree_stats.text_layouts,
         ]
     }
 }

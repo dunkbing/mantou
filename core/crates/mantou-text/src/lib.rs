@@ -204,8 +204,14 @@ pub struct TextEngine {
     font_ids: HashMap<(u64, u32), u32>,
     fonts: Vec<FontData>,
     atlas: Atlas,
+    /// Layouts by text, style and width, in two generations: when the newer
+    /// one fills up it becomes the older, so a working set a little larger
+    /// than the limit keeps most of its hits instead of losing them all.
     cache: HashMap<LayoutKey, Arc<TextLayout>>,
+    older: HashMap<LayoutKey, Arc<TextLayout>>,
     ellipses: HashMap<[u32; 6], Vec<PlacedGlyph>>,
+    /// Layouts computed (cache misses), for tests and stats.
+    uncached: u64,
 }
 
 impl Default for TextEngine {
@@ -236,8 +242,15 @@ impl TextEngine {
             fonts: Vec::new(),
             atlas: Atlas::new(),
             cache: HashMap::new(),
+            older: HashMap::new(),
             ellipses: HashMap::new(),
+            uncached: 0,
         }
+    }
+
+    /// How many layouts were computed rather than found in the cache.
+    pub fn uncached_layouts(&self) -> u64 {
+        self.uncached
     }
 
     fn font_id(&mut self, font: &FontData) -> u32 {
@@ -305,9 +318,15 @@ impl TextEngine {
         if let Some(l) = self.cache.get(&key) {
             return l.clone();
         }
-        let result = Arc::new(self.layout_uncached(text, style, max_width));
+        let result = match self.older.remove(&key) {
+            Some(l) => l, // still in use: back to the newer generation
+            None => {
+                self.uncached += 1;
+                Arc::new(self.layout_uncached(text, style, max_width))
+            }
+        };
         if self.cache.len() >= CACHE_LIMIT {
-            self.cache.clear();
+            self.older = std::mem::take(&mut self.cache);
         }
         self.cache.insert(key, result.clone());
         result

@@ -45,8 +45,12 @@ export interface Stats {
   nodes: number;
   presses: number;
   glyphs: number;
+  /** Scenes built (an unchanged tree builds none). */
+  scenes: number;
+  /** Text layouts computed, not reused from a node or the cache. */
+  textLayouts: number;
 }
-export const STAT_NAMES: (keyof Stats)[] = ["frames", "commits", "wakes", "events", "resizes", "redrawRequests", "layouts", "ops", "opErrors", "quads", "nodes", "presses", "glyphs"];
+export const STAT_NAMES: (keyof Stats)[] = ["frames", "commits", "wakes", "events", "resizes", "redrawRequests", "layouts", "ops", "opErrors", "quads", "nodes", "presses", "glyphs", "scenes", "textLayouts"];
 
 export function statsFrom(a: BigUint64Array): Stats {
   return Object.fromEntries(STAT_NAMES.map((k, i) => [k, Number(a[i])])) as unknown as Stats;
