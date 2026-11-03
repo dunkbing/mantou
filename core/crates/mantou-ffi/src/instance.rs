@@ -30,7 +30,7 @@ pub struct Stats {
 }
 
 /// Counter order of `mt_stats`.
-pub const STAT_COUNT: usize = 12;
+pub const STAT_COUNT: usize = 13;
 
 #[derive(Default)]
 struct Pointer {
@@ -189,6 +189,21 @@ impl Instance {
         }
     }
 
+    /// A wheel or trackpad scroll at (x, y) logical px; positive dy scrolls content up.
+    pub fn wheel(&self, x: f32, y: f32, dx: f32, dy: f32) {
+        let target = lock(&self.tree).hit(x, y).unwrap_or(0);
+        self.push_event([ev::WHEEL, target, dx.to_bits(), dy.to_bits()]);
+    }
+
+    /// A key event: `key` is a Unicode scalar or a named key code.
+    pub fn key(&self, key: u32, down: bool, repeat: bool, modifiers: u32) {
+        if down {
+            self.push_event([ev::KEY_DOWN, key, repeat as u32, modifiers]);
+        } else {
+            self.push_event([ev::KEY_UP, key, 0, modifiers]);
+        }
+    }
+
     pub fn pointer_position(&self) -> (f32, f32) {
         lock(&self.pointer).position
     }
@@ -200,7 +215,11 @@ impl Instance {
             let t = lock(&self.tree);
             (t.stats().layouts, t.stats().ops, t.node_count() as u64)
         };
-        let quads = lock(&self.scene).quads.len() as u64;
+        let (quads, glyphs) = {
+            let scene = lock(&self.scene);
+            let glyphs = scene.quads.iter().filter(|q| q.is_glyph()).count() as u64;
+            (scene.quads.len() as u64 - glyphs, glyphs)
+        };
         let load = |c: &AtomicU64| c.load(Ordering::Relaxed);
         [
             load(&st.frames),
@@ -215,6 +234,7 @@ impl Instance {
             quads,
             nodes,
             load(&st.presses),
+            glyphs,
         ]
     }
 }

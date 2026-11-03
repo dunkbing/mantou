@@ -1,0 +1,4 @@
+# fontconfig and expat keep allocations from their one-time setup (loading the
+# system font configuration) for the life of the process.
+leak:libfontconfig
+leak:libexpat

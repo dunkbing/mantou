@@ -42,6 +42,7 @@ fn op_json(o: &Op) -> J {
         Op::SetRoot { id } => json!({"op": "SET_ROOT", "id": id}),
         Op::ClearColor(c) => json!({"op": "CLEAR_COLOR", "r": c[0] as f64, "g": c[1] as f64, "b": c[2] as f64, "a": c[3] as f64}),
         Op::Title(t) => json!({"op": "TITLE", "title": t}),
+        Op::Text { id, text } => json!({"op": "TEXT", "id": id, "text": text}),
         Op::Unknown { code } => json!({"op": format!("UNKNOWN_{code}")}),
     }
 }
@@ -75,7 +76,7 @@ fn every_op_code_is_covered_by_the_fixture() {
     let mut seen: Vec<&str> = ops.iter().map(|o| op_json(o)["op"].as_str().unwrap().to_string().leak() as &str).collect();
     seen.sort();
     seen.dedup();
-    for code in 1..=12 {
+    for code in 1..=13 {
         let name = mantou_tree::protocol::op_name(code);
         assert!(seen.contains(&name), "fixture has no {name}");
     }

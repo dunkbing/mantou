@@ -3,7 +3,8 @@
 // call runs synchronously on the caller's thread, and time only moves when the
 // test says so, so tests are deterministic.
 import { openCore, type CoreLib } from "./ffi";
-import { EventReader, STAT_NAMES, statsFrom, type CoreEvent, type Stats } from "./events";
+import { EventReader, route, STAT_NAMES, statsFrom, type CoreEvent, type Stats } from "./events";
+import { KeyModifier, NamedKey } from "./gen/protocol";
 import { Ui, type Node } from "./ui";
 
 export type { CoreEvent, Stats } from "./events";
@@ -50,6 +51,10 @@ export class HeadlessCore {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
+      rect: (id) => {
+        const r = new Float32Array(4);
+        return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
+      },
     });
   }
 
@@ -67,7 +72,7 @@ export class HeadlessCore {
         (buf) => this.lib.symbols.mt_take_events(this.handle, buf, buf.byteLength),
         (e) => {
           this.received[e.type] = (this.received[e.type] ?? 0) + 1;
-          if (e.type === "press") this.ui.dispatchPress(e.target, e.x, e.y);
+          route(this.ui, e);
           this.onEvent(e);
         },
       );
@@ -87,6 +92,24 @@ export class HeadlessCore {
     const [x, y] = Array.isArray(target) ? target : this.center(target);
     this.pointer("down", x, y);
     return this.pointer("up", x, y);
+  }
+
+  /** Presses and releases a key. `key` is a character or a named key ("ArrowDown"…). */
+  key(key: string, mods: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}): this {
+    const code = key.length === 1 || [...key].length === 1 ? key.codePointAt(0)! : (NamedKey as Record<string, number>)[key];
+    if (code === undefined) throw new Error(`mantou: unknown key "${key}"`);
+    const bits = (mods.shift ? KeyModifier.Shift : 0) | (mods.ctrl ? KeyModifier.Control : 0) | (mods.alt ? KeyModifier.Alt : 0) | (mods.meta ? KeyModifier.Meta : 0);
+    this.ui.flush();
+    this.lib.symbols.mt_test_key(this.handle, code, 1, bits);
+    this.lib.symbols.mt_test_key(this.handle, code, 0, bits);
+    return this.step();
+  }
+
+  /** Scrolls the wheel at logical (x, y); positive dy scrolls content up. */
+  wheel(x: number, y: number, dy: number, dx = 0): this {
+    this.ui.flush();
+    this.lib.symbols.mt_test_wheel(this.handle, x, y, dx, dy);
+    return this.step();
   }
 
   /** The node's laid-out box [x0, y0, x1, y1] in logical px, or null. */

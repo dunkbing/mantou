@@ -18,12 +18,12 @@ use winit::window::{Window, WindowId};
 use crate::instance::{Instance, bump, lock};
 use crate::{G, UserEvent, app};
 
-/// Named keys travel above the Unicode range.
-mod key {
-    pub const ESCAPE: u32 = 0x11_0000;
-    pub const ENTER: u32 = 0x11_0001;
-    pub const OTHER: u32 = 0x11_FFFF;
-}
+use mantou_tree::protocol::{key_modifier, named_key as key};
+use winit::event::MouseScrollDelta;
+use winit::keyboard::ModifiersState;
+
+/// Pixels per wheel line.
+const LINE: f32 = 40.0;
 
 pub struct Config {
     pub width: u32,
@@ -113,11 +113,12 @@ pub struct App {
     inst: Arc<Instance>,
     window: Option<Arc<Window>>,
     gpu: Option<Gpu>,
+    modifiers: u32,
 }
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0 }
     }
 
     fn draw(&mut self) {
@@ -153,11 +154,33 @@ fn button_code(b: MouseButton) -> u32 {
 
 fn key_code(k: &Key) -> u32 {
     match k {
-        Key::Named(NamedKey::Escape) => key::ESCAPE,
-        Key::Named(NamedKey::Enter) => key::ENTER,
-        Key::Character(s) => s.chars().next().map_or(key::OTHER, |c| c as u32),
-        _ => key::OTHER,
+        Key::Named(n) => match n {
+            NamedKey::Escape => key::ESCAPE,
+            NamedKey::Enter => key::ENTER,
+            NamedKey::ArrowUp => key::ARROW_UP,
+            NamedKey::ArrowDown => key::ARROW_DOWN,
+            NamedKey::ArrowLeft => key::ARROW_LEFT,
+            NamedKey::ArrowRight => key::ARROW_RIGHT,
+            NamedKey::Backspace => key::BACKSPACE,
+            NamedKey::Delete => key::DELETE,
+            NamedKey::Tab => key::TAB,
+            NamedKey::Home => key::HOME,
+            NamedKey::End => key::END,
+            NamedKey::PageUp => key::PAGE_UP,
+            NamedKey::PageDown => key::PAGE_DOWN,
+            NamedKey::Space => ' ' as u32,
+            _ => key::UNIDENTIFIED,
+        },
+        Key::Character(s) => s.chars().next().map_or(key::UNIDENTIFIED, |c| c as u32),
+        _ => key::UNIDENTIFIED,
     }
+}
+
+fn modifier_bits(m: ModifiersState) -> u32 {
+    (if m.shift_key() { key_modifier::SHIFT } else { 0 })
+        | (if m.control_key() { key_modifier::CONTROL } else { 0 })
+        | (if m.alt_key() { key_modifier::ALT } else { 0 })
+        | (if m.super_key() { key_modifier::META } else { 0 })
 }
 
 impl ApplicationHandler<UserEvent> for App {
@@ -209,6 +232,8 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             UserEvent::TestPointer(kind, x, y) => self.inst.pointer(kind, x, y),
+            UserEvent::TestKey(k, down, mods) => self.inst.key(k, down, false, mods),
+            UserEvent::TestWheel(x, y, dx, dy) => self.inst.wheel(x, y, dx, dy),
         }
     }
 
@@ -248,9 +273,21 @@ impl ApplicationHandler<UserEvent> for App {
                     inst.push_event([kind, button_code(button), x.to_bits(), y.to_bits()]);
                 }
             }
+            WindowEvent::ModifiersChanged(m) => self.modifiers = modifier_bits(m.state()),
             WindowEvent::KeyboardInput { event, .. } => {
-                let kind = if event.state == ElementState::Pressed { ev::KEY_DOWN } else { ev::KEY_UP };
-                inst.push_event([kind, key_code(&event.logical_key), event.repeat as u32, 0]);
+                let down = event.state == ElementState::Pressed;
+                inst.key(key_code(&event.logical_key), down, event.repeat, self.modifiers);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let (dx, dy) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => (-x * LINE, -y * LINE),
+                    MouseScrollDelta::PixelDelta(p) => {
+                        let s = self.scale() as f64;
+                        ((-p.x / s) as f32, (-p.y / s) as f32)
+                    }
+                };
+                let (x, y) = inst.pointer_position();
+                inst.wheel(x, y, dx, dy);
             }
             WindowEvent::RedrawRequested => self.draw(),
             _ => {}

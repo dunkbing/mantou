@@ -1,11 +1,16 @@
-//! Draws a [`Scene`] with wgpu (design §9.3). For now it draws solid rectangles as
-//! instanced quads in one pass; rounded corners, borders, shadows, clips and
-//! glyphs come next, on the same instanced-quad design.
+//! Draws a [`Scene`] with wgpu (design §9.3): every quad (filled rectangles
+//! and glyphs) is one instance of one pipeline, drawn in paint order in a
+//! single pass. Glyph coverage comes from the scene's atlas, uploaded to a
+//! texture whenever its version changes. Rounded corners, borders and shadows
+//! come next, on the same instanced-quad design.
+
+use std::sync::Arc;
 
 use mantou_tree::Scene;
+use mantou_text::AtlasImage;
 
-/// Bytes per instance: rect (4 × f32) + colour (4 × f32).
-const INSTANCE_BYTES: u64 = 32;
+/// Bytes per instance: rect (NDC), colour, uv, clip, rect (px), border colour, params (7 × vec4<f32>).
+const INSTANCE_BYTES: u64 = 112;
 
 pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
@@ -14,6 +19,10 @@ pub struct Renderer {
     /// The target stores sRGB-encoded values: colours are converted to linear.
     srgb_target: bool,
     scratch: Vec<f32>,
+    atlas: wgpu::Texture,
+    atlas_bind: wgpu::BindGroup,
+    /// Size and version of the atlas the texture holds.
+    atlas_state: (u32, u32, u64),
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -23,12 +32,12 @@ fn srgb_to_linear(c: f32) -> f32 {
 impl Renderer {
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Renderer {
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("mantou rect"),
+            label: Some("mantou quads"),
             source: wgpu::ShaderSource::Wgsl(include_str!("rect.wgsl").into()),
         });
-        let attributes = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4];
+        let attributes = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("mantou rect"),
+            label: Some("mantou quads"),
             layout: None,
             vertex: wgpu::VertexState {
                 module: &module,
@@ -57,30 +66,75 @@ impl Renderer {
             cache: None,
         });
         let capacity = 256;
+        let (atlas, atlas_bind) = Self::atlas_texture(device, &pipeline, 1, 1);
         Renderer {
             pipeline,
             instances: Self::buffer(device, capacity),
             capacity,
             srgb_target: format.is_srgb(),
             scratch: Vec::new(),
+            atlas,
+            atlas_bind,
+            atlas_state: (1, 1, 0),
         }
     }
 
     fn buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
         device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("mantou rect instances"),
+            label: Some("mantou quad instances"),
             size: capacity * INSTANCE_BYTES,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         })
     }
 
+    fn atlas_texture(device: &wgpu::Device, pipeline: &wgpu::RenderPipeline, w: u32, h: u32) -> (wgpu::Texture, wgpu::BindGroup) {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("mantou glyph atlas"),
+            size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("mantou glyph atlas"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&view) }],
+        });
+        (texture, bind)
+    }
+
+    /// Uploads the scene's atlas if the texture doesn't hold that version yet.
+    fn sync_atlas(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, atlas: &Arc<AtlasImage>) {
+        let (w, h, version) = self.atlas_state;
+        if version == atlas.version && w == atlas.width && h == atlas.height {
+            return;
+        }
+        if w != atlas.width || h != atlas.height {
+            (self.atlas, self.atlas_bind) = Self::atlas_texture(device, &self.pipeline, atlas.width, atlas.height);
+        }
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo { texture: &self.atlas, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+            &atlas.pixels,
+            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(atlas.width), rows_per_image: Some(atlas.height) },
+            wgpu::Extent3d { width: atlas.width, height: atlas.height, depth_or_array_layers: 1 },
+        );
+        self.atlas_state = (atlas.width, atlas.height, atlas.version);
+    }
+
     fn color(&self, c: [f32; 4]) -> [f32; 4] {
         if self.srgb_target { [srgb_to_linear(c[0]), srgb_to_linear(c[1]), srgb_to_linear(c[2]), c[3]] } else { c }
     }
 
-    /// Encodes one pass that clears `view` and draws the scene's rectangles.
+    /// Encodes one pass that clears `view` and draws the scene's quads.
     pub fn draw(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, view: &wgpu::TextureView, size_px: (u32, u32), scene: &Scene) -> wgpu::CommandBuffer {
+        if let Some(atlas) = &scene.atlas {
+            self.sync_atlas(device, queue, atlas);
+        }
         let (w, h) = (size_px.0.max(1) as f32, size_px.1.max(1) as f32);
         self.scratch.clear();
         for q in &scene.quads {
@@ -88,6 +142,12 @@ impl Renderer {
             let c = self.color(q.color);
             self.scratch.extend_from_slice(&[x0 / w * 2.0 - 1.0, 1.0 - y0 / h * 2.0, x1 / w * 2.0 - 1.0, 1.0 - y1 / h * 2.0]);
             self.scratch.extend_from_slice(&c);
+            self.scratch.extend_from_slice(&q.uv);
+            self.scratch.extend_from_slice(&q.clip);
+            self.scratch.extend_from_slice(&q.rect);
+            let bc = self.color(q.border_color);
+            self.scratch.extend_from_slice(&bc);
+            self.scratch.extend_from_slice(&[q.radius, q.border, 0.0, 0.0]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {
@@ -116,6 +176,7 @@ impl Renderer {
             });
             if count > 0 {
                 pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &self.atlas_bind, &[]);
                 pass.set_vertex_buffer(0, self.instances.slice(..count * INSTANCE_BYTES));
                 pass.draw(0..6, 0..count as u32);
             }

@@ -17,9 +17,16 @@ fn from_scratch(model: &Model) -> Tree {
     t
 }
 
+/// A scene without what depends on the order glyphs were rasterized in: the
+/// atlas, and where in it each glyph sits (its size stays).
+type Comparable = ([f32; 4], [f32; 4], [f32; 2], [f32; 4], [f32; 2], [f32; 4]);
+fn comparable(s: &mantou_tree::Scene) -> Vec<Comparable> {
+    s.quads.iter().map(|q| (q.rect, q.color, [q.uv[2] - q.uv[0], q.uv[3] - q.uv[1]], q.clip, [q.radius, q.border], q.border_color)).collect()
+}
+
 fn compare(seed: u64, frame: usize, incremental: &mut Tree, model: &Model, batch: &[u8]) {
     incremental.layout();
-    let scratch = from_scratch(model);
+    let mut scratch = from_scratch(model);
     for &id in model.nodes.keys() {
         let (a, b) = (incremental.rect(id), scratch.rect(id));
         let same = match (a, b) {
@@ -33,7 +40,7 @@ fn compare(seed: u64, frame: usize, incremental: &mut Tree, model: &Model, batch
             mantou_tree::decode(batch)
         );
     }
-    assert_eq!(incremental.scene(), scratch.scene(), "seed {seed}, frame {frame}: scenes differ");
+    assert_eq!(comparable(&incremental.scene()), comparable(&scratch.scene()), "seed {seed}, frame {frame}: scenes differ");
 }
 
 fn run(seeds: std::ops::Range<u64>, frames: usize) {

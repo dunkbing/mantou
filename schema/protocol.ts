@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
@@ -32,9 +32,10 @@ export const ops: OpDef[] = [
   { name: "SET_ROOT", code: 10, operands: [["id", "id"]], doc: "Make the node the window's root (0 = none)." },
   { name: "CLEAR_COLOR", code: 11, operands: [["r", "f32"], ["g", "f32"], ["b", "f32"], ["a", "f32"]], doc: "The window's background colour (sRGB, 0–1)." },
   { name: "TITLE", code: 12, operands: [["title", "string"]], doc: "The window's title." },
+  { name: "TEXT", code: 13, operands: [["id", "id"], ["text", "string"]], doc: "The content of a Text node." },
 ];
 
-export const nodeKinds = { View: 1 } as const;
+export const nodeKinds = { View: 1, Text: 2 } as const;
 
 export const eventMask = { Press: 1 } as const;
 
@@ -82,6 +83,20 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "backgroundColor", code: 31, type: "color", default: "transparent" },
   { name: "opacity", code: 32, type: "f32", default: "1" },
   { name: "alignContent", code: 33, type: { enum: ["stretch", "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly"] }, default: "stretch" },
+  // Text (Text nodes; not inherited yet).
+  { name: "color", code: 34, type: "color", default: "#000000ff" },
+  { name: "fontSize", code: 35, type: "f32", default: "14" },
+  { name: "fontWeight", code: 36, type: "f32", default: "400" },
+  { name: "lineHeight", code: 37, type: "f32", default: "0 (the font's own)" },
+  { name: "textAlign", code: 38, type: { enum: ["start", "center", "end"] }, default: "start" },
+  { name: "maxLines", code: 39, type: "f32", default: "0 (no limit); a cut-off last line ends in an ellipsis" },
+  { name: "fontStyle", code: 40, type: { enum: ["normal", "italic"] }, default: "normal" },
+  // Clips the node's children to its box.
+  { name: "overflow", code: 41, type: { enum: ["visible", "hidden"] }, default: "visible" },
+  // Box decoration. The border is drawn inside the box and insets its content, as CSS's border-box.
+  { name: "borderRadius", code: 42, type: "f32", default: "0" },
+  { name: "borderWidth", code: 43, type: "f32", default: "0" },
+  { name: "borderColor", code: 44, type: "color", default: "transparent" },
 ];
 
 /** Events: fixed 16-byte records `[type, a, b, c]` (u32 words; floats as bits). */
@@ -91,9 +106,20 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "POINTER_MOVE", code: 3, fields: "b = x, c = y (f32, logical px)", doc: "The pointer moved." },
   { name: "POINTER_DOWN", code: 4, fields: "a = button, b = x, c = y", doc: "A button was pressed." },
   { name: "POINTER_UP", code: 5, fields: "a = button, b = x, c = y", doc: "A button was released." },
-  { name: "KEY_DOWN", code: 6, fields: "a = key, b = repeat", doc: "A key was pressed." },
-  { name: "KEY_UP", code: 7, fields: "a = key", doc: "A key was released." },
+  { name: "KEY_DOWN", code: 6, fields: "a = key, b = repeat, c = modifiers (KeyModifier bits)", doc: "A key was pressed." },
+  { name: "KEY_UP", code: 7, fields: "a = key, c = modifiers", doc: "A key was released." },
   { name: "CLOSE_REQUESTED", code: 8, fields: "", doc: "The user asked to close the window." },
   { name: "SCALE_CHANGED", code: 9, fields: "c = scale (f32)", doc: "The window's scale factor changed." },
   { name: "PRESS", code: 10, fields: "a = target node, b = x, c = y (f32, logical px)", doc: "A press (down and up on the same node) on a node with a Press listener on its path." },
+  { name: "WHEEL", code: 11, fields: "a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up)", doc: "The wheel or trackpad scrolled." },
 ];
+
+/** Bits of a key event's modifiers. */
+export const keyModifiers = { Shift: 1, Control: 2, Alt: 4, Meta: 8 } as const;
+
+/** Keys travel as Unicode scalars, or these codes above the Unicode range. */
+export const namedKeys = {
+  Escape: 0x110000, Enter: 0x110001, ArrowUp: 0x110002, ArrowDown: 0x110003, ArrowLeft: 0x110004, ArrowRight: 0x110005,
+  Backspace: 0x110006, Delete: 0x110007, Tab: 0x110008, Home: 0x110009, End: 0x11000a, PageUp: 0x11000b, PageDown: 0x11000c,
+  Unidentified: 0x11ffff,
+} as const;

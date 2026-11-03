@@ -35,6 +35,7 @@ pub enum Op {
     SetRoot { id: u32 },
     ClearColor([f32; 4]),
     Title(String),
+    Text { id: u32, text: String },
     /// An op from a newer protocol: skipped, so old cores tolerate new runtimes.
     Unknown { code: u32 },
 }
@@ -183,6 +184,20 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                 match std::str::from_utf8(&bytes[start..start + len]) {
                     Ok(s) => Op::Title(s.to_owned()),
                     Err(_) => return err(i, "TITLE is not UTF-8"),
+                }
+            }
+            op::TEXT => {
+                if n < 2 {
+                    return err(i, "TEXT needs an id and a length");
+                }
+                let len = a[1] as usize;
+                if len.div_ceil(4) != n - 2 {
+                    return err(i, "TEXT length does not match its words");
+                }
+                let start = (i + 3) * 4;
+                match std::str::from_utf8(&bytes[start..start + len]) {
+                    Ok(s) => Op::Text { id: a[0], text: s.to_owned() },
+                    Err(_) => return err(i, "TEXT is not UTF-8"),
                 }
             }
             _ => Op::Unknown { code },

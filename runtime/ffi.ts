@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-export const ABI_VERSION = 3;
+export const ABI_VERSION = 4;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -22,6 +22,8 @@ export const symbols = {
   mt_headless_free: { args: ["u32"], returns: "void" },
   mt_test_input: { args: ["u32", "u32", "f32", "f32"], returns: "void" },
   mt_test_viewport: { args: ["u32", "u32", "u32", "f32"], returns: "void" },
+  mt_test_key: { args: ["u32", "u32", "u32", "u32"], returns: "void" },
+  mt_test_wheel: { args: ["u32", "f32", "f32", "f32", "f32"], returns: "void" },
   mt_test_step: { args: ["u32", "f64"], returns: "u32" },
   mt_test_hit: { args: ["u32", "f32", "f32"], returns: "u32" },
   mt_test_node_rect: { args: ["u32", "u32", "ptr"], returns: "i32" },

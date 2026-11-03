@@ -24,10 +24,14 @@ const BOARD: [number, number] = [300, 200];
 
 test("the counter lays out as designed", () => {
   const h = counter();
-  expect(h.rect(h.hit(...PLUS)!)).toEqual([24, 24, 112, 68]);
-  expect(h.rect(h.hit(...MINUS)!)).toEqual([124, 24, 212, 68]);
+  // The point hits each button's label; the button is its parent.
+  const plus = h.hit(...PLUS)!, minus = h.hit(...MINUS)!;
+  expect(plus.isText && plus.textContent).toBe("+1");
+  expect(h.rect(plus.parent!)).toEqual([24, 24, 112, 68]);
+  expect(h.rect(minus.parent!)).toEqual([124, 24, 212, 68]);
   expect(h.rect(h.hit(...BOARD)!)).toEqual([24, 84, 496, 296]);
-  expect(h.stats()).toMatchObject({ commits: 1, opErrors: 0, quads: 5, nodes: 7 });
+  expect(h.stats()).toMatchObject({ commits: 1, opErrors: 0, quads: 5, nodes: 11 });
+  expect(h.stats().glyphs).toBe(2 + 2 + 5 + 1); // "+1", "−1", "Reset", "0"
 });
 
 test("a press is hit-tested by the core, reaches the handler, and its commit is drawn", () => {
@@ -39,7 +43,7 @@ test("a press is hit-tested by the core, reaches the handler, and its commit is 
   // Squares are 28 px, inside the board's 12 px padding.
   expect(h.rect(board.elements[0])).toEqual([36, 96, 64, 124]);
   h.press(PLUS);
-  expect(h.ui.lastCommitOps).toBe(4); // CREATE, STYLE_USE, INSERT, TITLE
+  expect(h.ui.lastCommitOps).toBe(5); // CREATE, STYLE_USE, INSERT, TEXT, TITLE
 });
 
 test("a press away from any listener does nothing; a drag off the button is not a press", () => {
@@ -59,7 +63,7 @@ test("the squares wrap onto new rows; − and ⟲ release them", () => {
   h.press(MINUS);
   expect(board.elements.length).toBe(13);
   h.press(RESET);
-  expect(h.stats()).toMatchObject({ nodes: 7, quads: 5 });
+  expect(h.stats()).toMatchObject({ nodes: 11, quads: 5 });
 });
 
 test("resizing relayouts without the app; layout is in device pixels at the scale", () => {
@@ -91,14 +95,29 @@ test("conditional children come and go with their nodes", () => {
   expect(h.step().stats()).toMatchObject({ nodes: 2, quads: 1 });
 });
 
+test("the count is drawn as text, right-aligned, and follows presses and keys", () => {
+  const h = counter();
+  const count = h.hit(480, 46)!;
+  expect(count.textContent).toBe("0");
+  h.press(PLUS).press(PLUS).key("ArrowUp");
+  expect(count.textContent).toBe("3");
+  h.key("-");
+  expect(count.textContent).toBe("2");
+  const shot = h.capture();
+  // The digit is near the right edge (textAlign: "end"), light on the dark background.
+  let lit = 0;
+  for (let x = 440; x < 496; x++) for (let y = 30; y < 62; y++) if (shot.at(x, y)[0] > 200) lit++;
+  expect(lit).toBeGreaterThan(40);
+}, 30_000);
+
 test("captured pixels show what the scene says", () => {
   const h = counter();
   h.press(PLUS);
   const shot = h.capture();
   expect([shot.width, shot.height]).toEqual([520, 320]);
   expect(shot.at(5, 5)).toEqual([0x11, 0x13, 0x18, 255]); // background
-  expect(shot.at(60, 40)).toEqual([0x16, 0xa3, 0x4a, 255]); // +
-  expect(shot.at(160, 40)).toEqual([0xdc, 0x26, 0x26, 255]); // −
+  expect(shot.at(30, 30)).toEqual([0x16, 0xa3, 0x4a, 255]); // + (away from its label)
+  expect(shot.at(130, 30)).toEqual([0xdc, 0x26, 0x26, 255]); // −
   expect(shot.at(50, 110)).toEqual([0xf5, 0x9e, 0x0b, 255]); // the first square
   expect(shot.at(300, 200)).toEqual([0x1f, 0x24, 0x30, 255]); // the board
 }, 30_000); // the first capture opens a GPU device and compiles its shaders
@@ -107,5 +126,5 @@ test("instances are independent", () => {
   const a = counter(), b = counter();
   a.press(PLUS).press(PLUS);
   b.press(PLUS);
-  expect([a.stats().nodes, b.stats().nodes]).toEqual([9, 8]);
+  expect([a.stats().nodes, b.stats().nodes]).toEqual([13, 12]);
 });

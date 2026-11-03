@@ -59,6 +59,11 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
         o = { op: name, title: new TextDecoder().decode(new Uint8Array(w.buffer, (a + 1) * 4, len)) };
         break;
       }
+      case "TEXT": {
+        const len = w[a + 1];
+        o = { op: name, id: w[a], text: new TextDecoder().decode(new Uint8Array(w.buffer, (a + 2) * 4, len)) };
+        break;
+      }
       default: o = { op: name, words: Array.from(w.subarray(a, a + n)) };
     }
     out.push(o);

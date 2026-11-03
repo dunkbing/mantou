@@ -55,6 +55,13 @@ export class OpEncoder {
     this.op(Op.TITLE, [bytes.length, ...words]);
   }
 
+  text(id: number, s: string) {
+    const bytes = new TextEncoder().encode(s);
+    const words = new Uint32Array(Math.ceil(bytes.length / 4));
+    new Uint8Array(words.buffer).set(bytes);
+    this.op(Op.TEXT, [id, bytes.length, ...words]);
+  }
+
   get empty() { return this.len === 0; }
 
   /** Returns the batch (a copy) and starts a new one. */

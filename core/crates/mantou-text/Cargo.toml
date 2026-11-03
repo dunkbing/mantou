@@ -1,0 +1,10 @@
+[package]
+name = "mantou-text"
+description = "Mantou's text: parley layout, swash rasterization, a glyph atlas, and the bundled Inter font. No platform dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+parley = "0.12"
+swash = "0.2.10"

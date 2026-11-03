@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 2;
+pub const PROTOCOL_VERSION: u32 = 3;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -29,6 +29,8 @@ pub mod op {
     pub const CLEAR_COLOR: u32 = 11;
     /// The window's title.
     pub const TITLE: u32 = 12;
+    /// The content of a Text node.
+    pub const TEXT: u32 = 13;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -45,16 +47,42 @@ pub fn op_name(code: u32) -> &'static str {
         10 => "SET_ROOT",
         11 => "CLEAR_COLOR",
         12 => "TITLE",
+        13 => "TEXT",
         _ => "UNKNOWN",
     }
 }
 
 pub mod node_kind {
     pub const VIEW: u32 = 1;
+    pub const TEXT: u32 = 2;
 }
 
 pub mod event_mask {
     pub const PRESS: u32 = 1;
+}
+
+pub mod key_modifier {
+    pub const SHIFT: u32 = 1;
+    pub const CONTROL: u32 = 2;
+    pub const ALT: u32 = 4;
+    pub const META: u32 = 8;
+}
+
+pub mod named_key {
+    pub const ESCAPE: u32 = 0x110000;
+    pub const ENTER: u32 = 0x110001;
+    pub const ARROW_UP: u32 = 0x110002;
+    pub const ARROW_DOWN: u32 = 0x110003;
+    pub const ARROW_LEFT: u32 = 0x110004;
+    pub const ARROW_RIGHT: u32 = 0x110005;
+    pub const BACKSPACE: u32 = 0x110006;
+    pub const DELETE: u32 = 0x110007;
+    pub const TAB: u32 = 0x110008;
+    pub const HOME: u32 = 0x110009;
+    pub const END: u32 = 0x11000a;
+    pub const PAGE_UP: u32 = 0x11000b;
+    pub const PAGE_DOWN: u32 = 0x11000c;
+    pub const UNIDENTIFIED: u32 = 0x11ffff;
 }
 
 pub mod unit {
@@ -74,9 +102,9 @@ pub mod event {
     pub const POINTER_DOWN: u32 = 4;
     /// A button was released. a = button, b = x, c = y.
     pub const POINTER_UP: u32 = 5;
-    /// A key was pressed. a = key, b = repeat.
+    /// A key was pressed. a = key, b = repeat, c = modifiers (KeyModifier bits).
     pub const KEY_DOWN: u32 = 6;
-    /// A key was released. a = key.
+    /// A key was released. a = key, c = modifiers.
     pub const KEY_UP: u32 = 7;
     /// The user asked to close the window.
     pub const CLOSE_REQUESTED: u32 = 8;
@@ -84,6 +112,8 @@ pub mod event {
     pub const SCALE_CHANGED: u32 = 9;
     /// A press (down and up on the same node) on a node with a Press listener on its path. a = target node, b = x, c = y (f32, logical px).
     pub const PRESS: u32 = 10;
+    /// The wheel or trackpad scrolled. a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up).
+    pub const WHEEL: u32 = 11;
 }
 
 pub mod display {
@@ -144,6 +174,22 @@ pub mod align_content {
     pub const SPACE_EVENLY: u32 = 6;
 }
 
+pub mod text_align {
+    pub const START: u32 = 0;
+    pub const CENTER: u32 = 1;
+    pub const END: u32 = 2;
+}
+
+pub mod font_style {
+    pub const NORMAL: u32 = 0;
+    pub const ITALIC: u32 = 1;
+}
+
+pub mod overflow {
+    pub const VISIBLE: u32 = 0;
+    pub const HIDDEN: u32 = 1;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -189,10 +235,21 @@ pub enum Prop {
     BackgroundColor = 31,
     Opacity = 32,
     AlignContent = 33,
+    Color = 34,
+    FontSize = 35,
+    FontWeight = 36,
+    LineHeight = 37,
+    TextAlign = 38,
+    MaxLines = 39,
+    FontStyle = 40,
+    Overflow = 41,
+    BorderRadius = 42,
+    BorderWidth = 43,
+    BorderColor = 44,
 }
 
 impl Prop {
-    pub const COUNT: usize = 33;
+    pub const COUNT: usize = 44;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -229,6 +286,17 @@ impl Prop {
             31 => Prop::BackgroundColor,
             32 => Prop::Opacity,
             33 => Prop::AlignContent,
+            34 => Prop::Color,
+            35 => Prop::FontSize,
+            36 => Prop::FontWeight,
+            37 => Prop::LineHeight,
+            38 => Prop::TextAlign,
+            39 => Prop::MaxLines,
+            40 => Prop::FontStyle,
+            41 => Prop::Overflow,
+            42 => Prop::BorderRadius,
+            43 => Prop::BorderWidth,
+            44 => Prop::BorderColor,
             _ => return None,
         })
     }
@@ -268,6 +336,17 @@ impl Prop {
             Prop::BackgroundColor => "backgroundColor",
             Prop::Opacity => "opacity",
             Prop::AlignContent => "alignContent",
+            Prop::Color => "color",
+            Prop::FontSize => "fontSize",
+            Prop::FontWeight => "fontWeight",
+            Prop::LineHeight => "lineHeight",
+            Prop::TextAlign => "textAlign",
+            Prop::MaxLines => "maxLines",
+            Prop::FontStyle => "fontStyle",
+            Prop::Overflow => "overflow",
+            Prop::BorderRadius => "borderRadius",
+            Prop::BorderWidth => "borderWidth",
+            Prop::BorderColor => "borderColor",
         }
     }
 
@@ -306,6 +385,17 @@ impl Prop {
             Prop::BackgroundColor => ValueKind::Color,
             Prop::Opacity => ValueKind::F32,
             Prop::AlignContent => ValueKind::Enum(7),
+            Prop::Color => ValueKind::Color,
+            Prop::FontSize => ValueKind::F32,
+            Prop::FontWeight => ValueKind::F32,
+            Prop::LineHeight => ValueKind::F32,
+            Prop::TextAlign => ValueKind::Enum(3),
+            Prop::MaxLines => ValueKind::F32,
+            Prop::FontStyle => ValueKind::Enum(2),
+            Prop::Overflow => ValueKind::Enum(2),
+            Prop::BorderRadius => ValueKind::F32,
+            Prop::BorderWidth => ValueKind::F32,
+            Prop::BorderColor => ValueKind::Color,
         }
     }
 
@@ -335,6 +425,9 @@ impl Prop {
                 "spaceAround",
                 "spaceEvenly",
             ],
+            Prop::TextAlign => &["start", "center", "end"],
+            Prop::FontStyle => &["normal", "italic"],
+            Prop::Overflow => &["visible", "hidden"],
             _ => &[],
         }
     }

@@ -125,5 +125,51 @@
   {
     "op": "RELEASE",
     "id": 2
+  },
+  {
+    "op": "CREATE",
+    "id": 4,
+    "kind": 2
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "fontSize",
+    "value": 15
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "color",
+    "value": "#111827ff"
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "textAlign",
+    "value": "center"
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "maxLines",
+    "value": 1
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "overflow",
+    "value": "hidden"
+  },
+  {
+    "op": "TEXT",
+    "id": 4,
+    "text": "Héllo, wörld ✉"
+  },
+  {
+    "op": "INSERT",
+    "parent": 1,
+    "child": 4,
+    "before": 0
   }
 ]

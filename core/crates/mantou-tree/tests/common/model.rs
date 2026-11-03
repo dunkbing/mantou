@@ -57,14 +57,18 @@ impl Bytes<'_> {
     }
 }
 
-pub const PROPS: [Prop; 33] = [
+pub const PROPS: [Prop; 44] = [
     Prop::Display, Prop::FlexDirection, Prop::FlexWrap, Prop::JustifyContent, Prop::AlignItems,
     Prop::AlignSelf, Prop::FlexGrow, Prop::FlexShrink, Prop::FlexBasis, Prop::Width, Prop::Height,
     Prop::MinWidth, Prop::MinHeight, Prop::MaxWidth, Prop::MaxHeight, Prop::PaddingTop,
     Prop::PaddingRight, Prop::PaddingBottom, Prop::PaddingLeft, Prop::MarginTop, Prop::MarginRight,
     Prop::MarginBottom, Prop::MarginLeft, Prop::RowGap, Prop::ColumnGap, Prop::Position, Prop::Top,
     Prop::Right, Prop::Bottom, Prop::Left, Prop::BackgroundColor, Prop::Opacity, Prop::AlignContent,
+    Prop::Color, Prop::FontSize, Prop::FontWeight, Prop::LineHeight, Prop::TextAlign, Prop::MaxLines, Prop::FontStyle, Prop::Overflow,
+    Prop::BorderRadius, Prop::BorderWidth, Prop::BorderColor,
 ];
+
+const WORDS: [&str; 8] = ["mail", "Mantou", "a much longer subject line", "", "wraps\nlines", "✓", "Inbox (3)", "the quick brown fox jumps"];
 
 pub const VIEWPORTS: [(u32, u32, f32); 4] = [(400, 300, 1.0), (800, 600, 1.0), (600, 450, 1.5), (1000, 700, 2.0)];
 
@@ -82,6 +86,11 @@ pub fn value(p: Prop, src: &mut impl Source) -> Value {
     use mantou_tree::protocol::ValueKind;
     match p.kind() {
         ValueKind::F32 if p == Prop::Opacity => Value::F32(src.below(5) as f32 * 0.25),
+        ValueKind::F32 if p == Prop::FontSize => Value::F32(8.0 + src.below(6) as f32 * 4.0),
+        ValueKind::F32 if p == Prop::FontWeight => Value::F32(100.0 * (1 + src.below(9)) as f32),
+        ValueKind::F32 if p == Prop::MaxLines => Value::F32(src.below(4) as f32),
+        ValueKind::F32 if p == Prop::LineHeight => Value::F32(src.below(4) as f32 * 0.5),
+        ValueKind::F32 if p == Prop::BorderRadius || p == Prop::BorderWidth => Value::F32(src.below(5) as f32 * 2.0),
         ValueKind::F32 => Value::F32(src.below(7) as f32 * 0.5),
         ValueKind::Color => {
             const PALETTE: [u32; 5] = [0, 0xff_00_00_ff, 0xff_ff_80_00, 0x80_20_40_60, 0xff_ff_ff_ff];
@@ -98,6 +107,7 @@ pub fn value(p: Prop, src: &mut impl Source) -> Value {
 
 #[derive(Clone, Debug, Default)]
 pub struct MNode {
+    pub text: Option<String>,
     pub parent: Option<u32>,
     pub children: Vec<u32>,
     pub own: BTreeMap<Prop, Value>,
@@ -175,21 +185,37 @@ impl Model {
         id
     }
 
+    fn create_text(&mut self, ops: &mut Ops, src: &mut impl Source) -> u32 {
+        let id = self.freed.pop().unwrap_or_else(|| {
+            self.next_id += 1;
+            self.next_id - 1
+        });
+        let text = WORDS[src.below(WORDS.len() as u32) as usize].to_owned();
+        ops.create_text(id).text(id, &text);
+        self.nodes.insert(id, MNode { text: Some(text), ..MNode::default() });
+        id
+    }
+
+    /// A node that can hold children (text nodes can't).
+    fn pick_parent(&self, src: &mut impl Source) -> Option<u32> {
+        self.pick(src).filter(|id| self.nodes[id].text.is_none())
+    }
+
     /// One random valid mutation, applied to the model and recorded in `ops`.
     /// Returns a new viewport when the mutation is a resize instead of an op.
     pub fn mutate(&mut self, ops: &mut Ops, src: &mut impl Source) -> Option<(u32, u32, f32)> {
         match src.below(100) {
             0..=17 => {
                 // Create, often inserting it at once, as UIs do.
-                let id = self.create(ops);
-                if let Some(parent) = self.pick(src).filter(|&p| p != id)
+                let id = if src.chance(35) { self.create_text(ops, src) } else { self.create(ops) };
+                if let Some(parent) = self.pick_parent(src).filter(|&p| p != id)
                     && src.chance(80)
                 {
                     self.insert(ops, parent, id, src);
                 }
             }
             18..=32 => {
-                if let (Some(parent), Some(child)) = (self.pick(src), self.pick(src))
+                if let (Some(parent), Some(child)) = (self.pick_parent(src), self.pick(src))
                     && parent != child
                     && !self.is_ancestor(child, parent)
                 {
@@ -242,13 +268,20 @@ impl Model {
                 ops.style_def(sid, &props);
                 self.styles.insert(sid, props);
             }
-            85..=90 => {
+            85..=89 => {
                 if let Some(id) = self.pick(src) {
                     let sid = src.below(5);
                     if sid == 0 || self.styles.contains_key(&sid) {
                         self.nodes.get_mut(&id).unwrap().shared = sid;
                         ops.style_use(id, sid);
                     }
+                }
+            }
+            90 => {
+                if let Some(id) = self.pick(src).filter(|id| self.nodes[id].text.is_some()) {
+                    let text = WORDS[src.below(WORDS.len() as u32) as usize].to_owned();
+                    ops.text(id, &text);
+                    self.nodes.get_mut(&id).unwrap().text = Some(text);
                 }
             }
             91..=93 => {
@@ -285,8 +318,15 @@ impl Model {
     /// A batch that builds the model's state from nothing.
     pub fn rebuild(&self) -> Vec<u8> {
         let mut ops = Ops::new();
-        for &id in self.nodes.keys() {
-            ops.create(id);
+        for (&id, n) in &self.nodes {
+            match &n.text {
+                Some(t) => {
+                    ops.create_text(id).text(id, t);
+                }
+                None => {
+                    ops.create(id);
+                }
+            }
         }
         for (&sid, props) in &self.styles {
             ops.style_def(sid, props);

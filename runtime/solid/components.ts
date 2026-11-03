@@ -1,14 +1,27 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { JSX, ViewProps } from "../jsx-runtime";
-import type { Node, Ui } from "../ui";
+import type { JSX, TextProps, ViewProps } from "../jsx-runtime";
+import type { KeyEvent, Node, Ui } from "../ui";
 import { createElement, currentUi, spread } from "./renderer";
+import { onCleanup } from "./solid";
 
 /** A box: flexbox layout, a background, press handling. */
 export function View(props: ViewProps): JSX.Element {
   const node = createElement("view") as Node;
   spread(node, props, false);
   return node;
+}
+
+/** Text, laid out and drawn by the core. Style it with color, fontSize, fontWeight, lineHeight, textAlign, maxLines… */
+export function Text(props: TextProps): JSX.Element {
+  const node = createElement("text") as Node;
+  spread(node, props, false);
+  return node;
+}
+
+/** Listens for keys anywhere in the window while the component is mounted. */
+export function onKey(handler: (e: KeyEvent) => void) {
+  onCleanup(currentUi().onKey(handler));
 }
 
 /** The Ui the component is rendered in (to set the title, for example). */

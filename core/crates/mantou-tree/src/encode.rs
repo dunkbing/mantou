@@ -70,6 +70,17 @@ impl Ops {
     pub fn listen(&mut self, id: u32, mask: u32) -> &mut Self {
         self.op(op::LISTEN, &[id, mask])
     }
+    pub fn create_text(&mut self, id: u32) -> &mut Self {
+        self.op(op::CREATE, &[id, crate::protocol::node_kind::TEXT])
+    }
+    pub fn text(&mut self, id: u32, text: &str) -> &mut Self {
+        let bytes = text.as_bytes();
+        let mut w = vec![id, bytes.len() as u32];
+        let mut padded = bytes.to_vec();
+        padded.resize(bytes.len().div_ceil(4) * 4, 0);
+        w.extend(padded.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+        self.op(op::TEXT, &w)
+    }
     pub fn set_root(&mut self, id: u32) -> &mut Self {
         self.op(op::SET_ROOT, &[id])
     }

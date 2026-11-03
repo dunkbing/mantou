@@ -25,6 +25,14 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.styleReset(1, "width");
   e.remove(1, 2);
   e.release(2);
+  e.create(4, 2);
+  e.style(4, "fontSize", 15);
+  e.style(4, "color", "#111827");
+  e.style(4, "textAlign", "center");
+  e.style(4, "maxLines", 1);
+  e.style(4, "overflow", "hidden");
+  e.text(4, "Héllo, wörld ✉");
+  e.insert(1, 4, 0);
   const basic = e.take();
   return { basic };
 }

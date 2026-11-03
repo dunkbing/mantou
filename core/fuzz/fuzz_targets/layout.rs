@@ -38,6 +38,10 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
             };
             assert!(same, "node {id}: incremental {a:?}, from scratch {b:?}");
         }
-        assert_eq!(tree.scene(), scratch.scene());
+        // Atlas positions depend on rasterization order; compare everything else.
+        let comparable = |s: &mantou_tree::Scene| -> Vec<_> {
+            s.quads.iter().map(|q| (q.rect, q.color, [q.uv[2] - q.uv[0], q.uv[3] - q.uv[1]], q.clip)).collect()
+        };
+        assert_eq!(comparable(&tree.scene()), comparable(&scratch.scene()));
     }
 });

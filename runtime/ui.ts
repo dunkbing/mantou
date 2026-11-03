@@ -11,6 +11,36 @@ export type { Style } from "./style";
 /** Where committed batches go: the native core, or a mock in tests. */
 export interface Sink {
   commit(bytes: Uint8Array): void;
+  /** The node's laid-out box [x0, y0, x1, y1] in logical px, if the sink lays out. */
+  rect?(id: number): [number, number, number, number] | null;
+}
+
+/** A laid-out box, in logical px from the window's top left. */
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface WheelEvent {
+  target: Node;
+  currentTarget: Node;
+  /** Logical px; positive dy scrolls content up (towards later content). */
+  dx: number;
+  dy: number;
+  stopPropagation(): void;
+}
+
+export interface KeyEvent {
+  type: "keyDown" | "keyUp";
+  /** A character ("j", "J", " ") or a named key ("ArrowDown", "Enter", "Escape"…). */
+  key: string;
+  repeat?: boolean;
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+  meta: boolean;
 }
 
 export interface PressEvent {
@@ -36,13 +66,24 @@ export function defineStyle(style: Style): SharedStyle {
 }
 
 /**
- * Text in the tree. It lives only in the Worker's mirror for now: the core has
- * no text nodes yet, so text sends no ops (and isn't drawn). Solid also uses
- * empty text leaves as placeholders.
+ * A piece of text in the mirror tree. Inside a Text node, the node's content
+ * is its leaves' text joined (sent as one TEXT op per change, at the end of
+ * the turn). Elsewhere a leaf sends nothing: Solid uses empty leaves as
+ * placeholders, and text outside <Text> isn't drawn.
  */
 export class TextLeaf {
   parent: Node | null = null;
-  constructor(public text: string) {}
+  constructor(private value: string) {}
+
+  get text(): string {
+    return this.value;
+  }
+
+  set text(value: string) {
+    if (value === this.value) return;
+    this.value = value;
+    this.parent?.textChanged();
+  }
 }
 
 export type Child = Node | TextLeaf;
@@ -55,8 +96,27 @@ export class Node {
   private own = new Map<StylePropName, unknown>();
   private shared: SharedStyle | null = null;
   private pressHandlers: ((e: PressEvent) => void)[] = [];
+  private wheelHandlers: ((e: WheelEvent) => void)[] = [];
+  /** The content last sent for a Text node. */
+  sentText = "";
 
   constructor(readonly ui: Ui, readonly id: number, readonly kind: number) {}
+
+  get isText(): boolean {
+    return this.kind === NodeKind.Text;
+  }
+
+  /** A Text node's content: its text leaves joined. */
+  get textContent(): string {
+    let s = "";
+    for (const c of this.children) if (c instanceof TextLeaf) s += c.text;
+    return s;
+  }
+
+  /** @internal */
+  textChanged() {
+    if (this.isText && !this.released) this.ui.textDirty(this);
+  }
 
   /** Child nodes, without text leaves. */
   get elements(): Node[] {
@@ -102,7 +162,12 @@ export class Node {
    */
   insertBefore(child: Child, before: Child | null): this {
     this.alive();
-    if (child instanceof Node) child.alive();
+    if (child instanceof Node) {
+      child.alive();
+      if (this.isText) throw new Error("mantou: <Text> holds only text; put views next to it, not inside it");
+    } else if (!this.isText && child.text.trim()) {
+      this.ui.warnText(child.text);
+    }
     if (before && before.parent !== this) throw new Error("mantou: `before` is not a child of this node");
     if (child === before) return this;
     const wasHere = child.parent === this;
@@ -112,6 +177,7 @@ export class Node {
     const at = before ? this.children.indexOf(before) : this.children.length;
     this.children.splice(at, 0, child);
     child.parent = this;
+    if (child instanceof TextLeaf) this.textChanged();
     if (child instanceof Node) {
       const next = this.nextNode(child);
       if (wasHere && next === oldNext) return this;
@@ -138,6 +204,7 @@ export class Node {
   remove(child: Child): this {
     if (child.parent !== this) return this;
     this.detach(child);
+    if (child instanceof TextLeaf) this.textChanged();
     if (child instanceof Node && !this.released && !child.released) {
       this.ui.enc.remove(this.id, child.id);
       this.ui.schedule();
@@ -157,8 +224,19 @@ export class Node {
     for (const c of this.children) c.parent = null;
     this.children.length = 0;
     this.pressHandlers.length = 0;
+    this.wheelHandlers.length = 0;
     this.released = true;
     this.ui.free(this);
+  }
+
+  /**
+   * Where the core laid this node out, after the changes made so far (they're
+   * committed first). Null if it isn't laid out (detached, hidden) or there's
+   * no core (the mock).
+   */
+  measure(): Rect | null {
+    this.alive();
+    return this.ui.measure(this);
   }
 
   /** Adds a press handler; returns a function that removes it. */
@@ -177,6 +255,23 @@ export class Node {
   private listen() {
     this.ui.enc.listen(this.id, this.pressHandlers.length ? EventMask.Press : 0);
     this.ui.schedule();
+  }
+
+  /** Adds a wheel handler; returns a function that removes it. Wheel events bubble like presses. */
+  onWheel(handler: (e: WheelEvent) => void): () => void {
+    this.alive();
+    this.wheelHandlers.push(handler);
+    return () => {
+      const i = this.wheelHandlers.indexOf(handler);
+      if (i >= 0) this.wheelHandlers.splice(i, 1);
+    };
+  }
+
+  /** @internal */
+  handleWheel(e: WheelEvent): boolean {
+    let stopped = false;
+    for (const h of [...this.wheelHandlers]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+    return stopped;
   }
 
   /** @internal */
@@ -206,8 +301,54 @@ export class Ui {
   private nextStyleId = 1;
   private styleIds = new WeakMap<SharedStyle, number>();
   private root: Node | null = null;
+  private dirtyText = new Set<Node>();
+  private keyHandlers = new Set<(e: KeyEvent) => void>();
+  private warnedText = false;
 
   constructor(private sink: Sink) {}
+
+  /** Creates a Text node; its content is the text leaves put inside it. */
+  textNode(...styles: (Style | SharedStyle)[]): Node {
+    const id = this.freeIds.pop() ?? this.nextId++;
+    const node = new Node(this, id, NodeKind.Text);
+    this.nodes.set(id, node);
+    this.enc.create(id, NodeKind.Text);
+    for (const s of styles) s instanceof SharedStyle ? node.use(s) : node.style(s);
+    this.schedule();
+    return node;
+  }
+
+  /** @internal */
+  textDirty(node: Node) {
+    this.dirtyText.add(node);
+    this.schedule();
+  }
+
+  /** @internal */
+  warnText(text: string) {
+    if (this.warnedText) return;
+    this.warnedText = true;
+    console.warn(`mantou: text outside <Text> isn't drawn ("${text.trim().slice(0, 40)}"); wrap it in <Text>`);
+  }
+
+  /** Listens for keys anywhere in the window; returns a function that stops. */
+  onKey(handler: (e: KeyEvent) => void): () => void {
+    this.keyHandlers.add(handler);
+    return () => this.keyHandlers.delete(handler);
+  }
+
+  /** Delivers a key event to every key listener. */
+  dispatchKey(e: KeyEvent) {
+    for (const h of [...this.keyHandlers]) h(e);
+  }
+
+  /** Delivers a wheel event to its target and bubbles it up the tree. */
+  dispatchWheel(targetId: number, dx: number, dy: number) {
+    const target = this.nodes.get(targetId);
+    if (!target) return;
+    const e = { target, currentTarget: target, dx, dy, stopPropagation() {} };
+    for (let n: Node | null = target; n; n = n.parent) if (n.handleWheel(e)) break;
+  }
 
   /** Creates a view, optionally with a shared style and/or its own style. */
   view(...styles: (Style | SharedStyle)[]): Node {
@@ -270,6 +411,14 @@ export class Ui {
     this.schedule();
   }
 
+  /** @internal */
+  measure(node: Node): Rect | null {
+    if (!this.sink.rect) return null;
+    this.flush();
+    const r = this.sink.rect(node.id);
+    return r ? { x: r[0], y: r[1], width: r[2] - r[0], height: r[3] - r[1] } : null;
+  }
+
   /** One commit per JS turn (design §5.2 invariant 3). */
   schedule() {
     if (this.scheduled) return;
@@ -279,6 +428,15 @@ export class Ui {
 
   flush() {
     this.scheduled = false;
+    for (const node of this.dirtyText) {
+      if (node.released) continue;
+      const text = node.textContent;
+      if (text !== node.sentText) {
+        node.sentText = text;
+        this.enc.text(node.id, text);
+      }
+    }
+    this.dirtyText.clear();
     if (this.enc.empty) return;
     this.lastCommitOps = this.enc.ops;
     const bytes = this.enc.take();

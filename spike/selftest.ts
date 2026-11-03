@@ -147,8 +147,8 @@ async function main() {
     await until("the new square is drawn", () => core.stats().quads === 6 && core.stats().frames > before.frames, 5_000);
     const ms = performance.now() - sent;
     const d = delta(before, core.stats());
-    // The first square also sends the `dot` style's definition: 5 ops.
-    check("press → handler → one commit → frame", d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 5, {
+    // The first square also sends the `dot` style's definition, and the count's text: 6 ops.
+    check("press → handler → one commit → frame", d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 6, {
       presses: d.presses, commits: d.commits, opsInCommit: core.ui.lastCommitOps, msPressToFrame: +ms.toFixed(1),
     });
     const missBefore = core.stats().presses;

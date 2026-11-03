@@ -3,7 +3,7 @@
 // (design §8).
 import { JSCallback } from "bun:ffi";
 import { openCore, type CoreLib } from "./ffi";
-import { EventReader, statsFrom, STAT_NAMES, type CoreEvent, type Stats } from "./events";
+import { EventReader, route, statsFrom, STAT_NAMES, type CoreEvent, type Stats } from "./events";
 import { Ui } from "./ui";
 
 export type { CoreEvent, Stats } from "./events";
@@ -29,6 +29,10 @@ export class MantouCore {
       commit: (bytes) => {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
+      },
+      rect: (id) => {
+        const r = new Float32Array(4);
+        return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
       },
     });
     this.wake = new JSCallback(() => this.drain(), { args: [], returns: "void", threadsafe: true });
@@ -61,7 +65,7 @@ export class MantouCore {
       (buf) => this.lib.symbols.mt_take_events(this.handle, buf, buf.byteLength),
       (e) => {
         this.received[e.type] = (this.received[e.type] ?? 0) + 1;
-        if (e.type === "press") this.ui.dispatchPress(e.target, e.x, e.y);
+        route(this.ui, e);
         this.onEvent(e);
       },
     );
@@ -92,6 +96,17 @@ export class MantouCore {
   /** Test hook: the id of the topmost node at logical (x, y), or 0. */
   hit(x: number, y: number): number {
     return this.lib.symbols.mt_test_hit(this.handle, x, y);
+  }
+
+  /** Test hook: a key press (down and up), handled like the window's own. */
+  testKey(code: number, mods = 0) {
+    this.lib.symbols.mt_test_key(this.handle, code, 1, mods);
+    this.lib.symbols.mt_test_key(this.handle, code, 0, mods);
+  }
+
+  /** Test hook: a wheel scroll at logical (x, y). */
+  testWheel(x: number, y: number, dy: number, dx = 0) {
+    this.lib.symbols.mt_test_wheel(this.handle, x, y, dx, dy);
   }
 
   /** Test hook: a node's laid-out box [x0, y0, x1, y1] in logical px, or null. */

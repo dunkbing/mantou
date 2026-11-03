@@ -6,7 +6,7 @@
 //   bun run gen            write them
 //   bun run gen --check    exit 1 if any is stale (CI)
 import { join } from "node:path";
-import { events, eventMask, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
+import { events, eventMask, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
 
 const root = join(import.meta.dir, "..");
 const check = Bun.argv.includes("--check");
@@ -26,7 +26,9 @@ function ts(): string {
   L.push(`export const OpName: Record<number, string> = { ${ops.map((o) => `${o.code}: "${o.name}"`).join(", ")} };`, "");
   L.push(`export const NodeKind = ${JSON.stringify(nodeKinds)} as const;`);
   L.push(`export const EventMask = ${JSON.stringify(eventMask)} as const;`);
-  L.push(`export const Unit = { ${units.map((u, i) => `${u}: ${i}`).join(", ")} } as const;`, "");
+  L.push(`export const Unit = { ${units.map((u, i) => `${u}: ${i}`).join(", ")} } as const;`);
+  L.push(`export const KeyModifier = ${JSON.stringify(keyModifiers)} as const;`);
+  L.push(`export const NamedKey = ${JSON.stringify(namedKeys)} as const;`, "");
   L.push("export const Event = {");
   for (const e of events) L.push(`  /** ${e.doc}${e.fields ? ` ${e.fields}.` : ""} */\n  ${e.name}: ${e.code},`);
   L.push("} as const;", "");
@@ -66,6 +68,10 @@ function rs(): string {
   for (const [k, v] of Object.entries(nodeKinds)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod event_mask {");
   for (const [k, v] of Object.entries(eventMask)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod key_modifier {");
+  for (const [k, v] of Object.entries(keyModifiers)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod named_key {");
+  for (const [k, v] of Object.entries(namedKeys)) L.push(`    pub const ${screaming(k)}: u32 = 0x${v.toString(16)};`);
   L.push("}", "", "pub mod unit {");
   units.forEach((u, i) => L.push(`    pub const ${screaming(u)}: u32 = ${i};`));
   L.push("}", "", "pub mod event {");

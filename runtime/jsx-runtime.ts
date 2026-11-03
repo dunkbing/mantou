@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { Node, PressEvent, TextLeaf } from "./ui";
+import type { Node, PressEvent, TextLeaf, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -9,6 +9,17 @@ export type { StyleProp } from "./solid/renderer";
 export interface ViewProps {
   style?: StyleProp;
   onPress?: (e: PressEvent) => void;
+  /** Wheel and trackpad scrolling over this view (it bubbles, like presses). */
+  onWheel?: (e: WheelEvent) => void;
+  ref?: Node | ((node: Node) => void);
+  children?: JSX.Element;
+}
+
+/** Text: its children are strings and numbers (no views inside). */
+export interface TextProps {
+  style?: StyleProp;
+  onPress?: (e: PressEvent) => void;
+  onWheel?: (e: WheelEvent) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
 }
@@ -21,6 +32,7 @@ export namespace JSX {
   }
   export interface IntrinsicElements {
     view: ViewProps;
+    text: TextProps;
   }
   export interface IntrinsicAttributes {}
 }

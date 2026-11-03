@@ -36,7 +36,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 
 /// Bumped on any change to an exported signature or the op/event formats.
 /// 2: the shadow-tree protocol. 3: instance handles on every per-UI function; headless instances.
-pub const ABI_VERSION: u32 = 3;
+/// 4: text, wheel events, key modifiers; mt_test_key, mt_test_wheel; a glyphs counter.
+pub const ABI_VERSION: u32 = 4;
 
 /// The window's instance.
 const APP: u32 = 1;
@@ -48,6 +49,8 @@ pub(crate) enum UserEvent {
     Resize(u32, u32),
     /// Test input, handled exactly as the window's own: kind 0 = down, 1 = up, 2 = move.
     TestPointer(u32, f32, f32),
+    TestKey(u32, bool, u32),
+    TestWheel(f32, f32, f32, f32),
 }
 
 /// Process-wide state: the instances and the window's event loop.
@@ -265,7 +268,7 @@ pub unsafe extern "C" fn mt_take_events(inst: u32, dst: *mut u8, cap: u32) -> u3
 
 /// Writes up to `cap` counters into `dst` and returns how many it wrote:
 /// frames, commits, wakes, events, resizes, redraw requests, layouts, ops,
-/// op errors, quads (last scene), nodes, presses.
+/// op errors, rectangles (last scene), nodes, presses, glyphs (last scene).
 ///
 /// # Safety
 /// `dst` must be valid for writes of `cap` u64 values.
@@ -320,6 +323,31 @@ pub extern "C" fn mt_test_input(inst: u32, kind: u32, x: f32, y: f32) {
             i.pointer(kind, x, y);
         } else {
             send(UserEvent::TestPointer(kind, x, y));
+        }
+    })
+}
+
+/// Test hook: a key event. `key` is a Unicode scalar or a named key code
+/// (protocol `named_key`), `modifiers` the `key_modifier` bits.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_key(inst: u32, key: u32, down: u32, modifiers: u32) {
+    with(inst, (), |i| {
+        if i.headless {
+            i.key(key, down != 0, false, modifiers);
+        } else {
+            send(UserEvent::TestKey(key, down != 0, modifiers));
+        }
+    })
+}
+
+/// Test hook: a wheel scroll at (x, y) logical px by (dx, dy); positive dy scrolls content up.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_wheel(inst: u32, x: f32, y: f32, dx: f32, dy: f32) {
+    with(inst, (), |i| {
+        if i.headless {
+            i.wheel(x, y, dx, dy);
+        } else {
+            send(UserEvent::TestWheel(x, y, dx, dy));
         }
     })
 }

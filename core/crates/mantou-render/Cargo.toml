@@ -9,3 +9,4 @@ license.workspace = true
 wgpu = "30"
 pollster = "1"
 mantou-tree = { path = "../mantou-tree" }
+mantou-text = { path = "../mantou-text" }
