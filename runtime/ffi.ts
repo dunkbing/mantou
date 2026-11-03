@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-export const ABI_VERSION = 4;
+export const ABI_VERSION = 5;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -30,6 +30,12 @@ export const symbols = {
   mt_test_scene: { args: ["u32", "ptr", "u32"], returns: "u32" },
   mt_test_capture: { args: ["u32", "ptr", "u32"], returns: "i32" },
   mt_test_resize: { args: ["u32", "u32", "u32", "u32", "u32", "u32"], returns: "void" },
+  mt_test_text: { args: ["u32", "ptr", "u32"], returns: "void" },
+  mt_test_ime: { args: ["u32", "ptr", "u32", "u32", "u32"], returns: "void" },
+  mt_test_set_clipboard: { args: ["u32", "ptr", "u32"], returns: "void" },
+  mt_test_clipboard: { args: ["u32", "ptr", "u32"], returns: "u32" },
+  mt_test_value: { args: ["u32", "u32", "ptr", "u32"], returns: "u32" },
+  mt_test_focused: { args: ["u32"], returns: "u32" },
 } as const;
 
 /** MANTOU_CORE, else the release build, else the debug build. */

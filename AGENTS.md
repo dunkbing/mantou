@@ -10,15 +10,16 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 |---|---|
 | `schema/protocol.ts` | **Source of truth** for ops, node kinds, style properties and events |
 | `schema/gen.ts` | Generates `runtime/gen/protocol.ts`, `core/crates/mantou-tree/src/protocol.rs`, `schema/fixtures/*` |
-| `runtime/index.ts` | `mantou-ui`, what apps import: `run`, `mount`, `View`, `For`/`Index`/`Show`, `defineStyle`, Solid's reactivity |
+| `runtime/index.ts` | `mantou-ui`, what apps import: `run`, `mount`, `View`, `Text`, `Input`, `For`/`Index`/`Show`, `defineStyle`, Solid's reactivity |
 | `runtime/solid/` | The JSX layer: `plugin.ts` (Bun plugin: Babel + `babel-preset-solid`, universal mode), `renderer.ts` (Solid's universal renderer over the node tree), `components.ts`, `mount.ts`, `solid.ts` (Solid's client build), `preload.ts` |
 | `runtime/` | The rest: `main.ts` (bootstrap, main thread), `worker.ts` (Worker entry: registers the plugin, imports the app), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
-| `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`. No platform deps |
-| `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL) |
+| `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`; inputs' focus, keys, pointer and IME (`src/tree/input.rs`). No platform deps |
+| `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL); the inputs' editor (`editor.rs`: caret, selection, undo, limits, scrolling) |
 | `core/crates/mantou-render` | wgpu renderer: one instanced pipeline for rectangles (SDF rounded corners, borders) and glyphs, with clip rects; to a window surface or offscreen |
-| `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`), the winit window (`window.rs`), headless test hooks |
+| `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`: events, the clipboard), the winit window (`window.rs`: keys, IME), headless test hooks |
 | `core/fuzz` | cargo-fuzz targets (`decode`, `apply`, `layout`); nightly only, its own workspace |
 | `examples/counter` | `Counter.tsx`, a Solid component; `main.tsx` runs it; `Counter.test.tsx` tests it on the mock core |
+| `examples/todos` | A to-do list with `<Input>`s; `Todos.test.tsx` tests it headless |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
@@ -36,6 +37,7 @@ bun run test:headless       # Bun tests on the real core, no window (captures ne
 bun run test:core           # cargo tests: tree, fixtures, random batches, incremental-vs-scratch layout
 bun run selftest            # window self-test; on headless Linux: xvfb-run -a bun run selftest
 bun run counter             # the counter in a window (bun runtime/main.ts <entry.tsx> runs any app)
+bun run todos               # the to-do list (text input) in a window
 cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)
 ```
@@ -55,7 +57,8 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 9. **JSX goes through Mantou's plugin, and Solid's API comes from `mantou-ui`.** Bun resolves a bare `solid-js` to Solid's server build (no reactivity) and its runtime plugins can't redirect bare imports, so `.ts` files must never import `solid-js` directly; the plugin rewrites it in `.tsx` files. Apps run through `runtime/main.ts` (the Worker entry registers the plugin); tests get it from `bunfig.toml`'s preload.
 10. **A Solid owner's nodes are released when it's disposed** (`createElement` registers the cleanup); never release a node a component still owns.
 11. **Text goes inside `<Text>`**, which holds only text (its content is its text leaves joined, sent as one `TEXT` op per change). Text elsewhere isn't drawn, and the runtime warns once.
-12. **Layout is CSS flexbox.** `flexShrink` defaults to 1 and flex items are at least as tall as their content unless they clip, so fixed-size parts need `flexShrink: 0` and scroll containers' ancestors need `minHeight: 0`. Use `node.measure()` for sizes the app needs (it commits first, then asks the core).
+12. **The core owns text editing.** An `<Input>`'s caret, selection, undo, clipboard and IME live in the core, so typing never waits for JS; JS hears `TEXT_CHANGED` with a `rev`, and a `VALUE` with an older `rev` than the user's latest edit is ignored. Keys the focused input uses never reach `onKey`. Typing in an uncontrolled input sends no ops, and neither does a controlled input's echo.
+13. **Layout is CSS flexbox.** `flexShrink` defaults to 1 and flex items are at least as tall as their content unless they clip, so fixed-size parts need `flexShrink: 0` and scroll containers' ancestors need `minHeight: 0`. Use `node.measure()` for sizes the app needs (it commits first, then asks the core).
 
 ## Apps built on Mantou
 

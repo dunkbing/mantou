@@ -16,6 +16,16 @@ pub fn value_words(v: Value) -> Vec<u32> {
     }
 }
 
+/// A string operand: its UTF-8 byte length, then the bytes padded to words.
+pub fn string_words(text: &str) -> Vec<u32> {
+    let bytes = text.as_bytes();
+    let mut padded = bytes.to_vec();
+    padded.resize(bytes.len().div_ceil(4) * 4, 0);
+    let mut w = vec![bytes.len() as u32];
+    w.extend(padded.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+    w
+}
+
 /// An op batch under construction.
 #[derive(Clone, Debug, Default)]
 pub struct Ops {
@@ -74,12 +84,28 @@ impl Ops {
         self.op(op::CREATE, &[id, crate::protocol::node_kind::TEXT])
     }
     pub fn text(&mut self, id: u32, text: &str) -> &mut Self {
-        let bytes = text.as_bytes();
-        let mut w = vec![id, bytes.len() as u32];
-        let mut padded = bytes.to_vec();
-        padded.resize(bytes.len().div_ceil(4) * 4, 0);
-        w.extend(padded.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+        let mut w = vec![id];
+        w.extend(string_words(text));
         self.op(op::TEXT, &w)
+    }
+    pub fn create_input(&mut self, id: u32) -> &mut Self {
+        self.op(op::CREATE, &[id, crate::protocol::node_kind::INPUT])
+    }
+    pub fn value(&mut self, id: u32, rev: u32, text: &str) -> &mut Self {
+        let mut w = vec![id, rev];
+        w.extend(string_words(text));
+        self.op(op::VALUE, &w)
+    }
+    pub fn placeholder(&mut self, id: u32, text: &str) -> &mut Self {
+        let mut w = vec![id];
+        w.extend(string_words(text));
+        self.op(op::PLACEHOLDER, &w)
+    }
+    pub fn input_options(&mut self, id: u32, flags: u32, max_length: u32) -> &mut Self {
+        self.op(op::INPUT_OPTIONS, &[id, flags, max_length])
+    }
+    pub fn focus(&mut self, id: u32) -> &mut Self {
+        self.op(op::FOCUS, &[id])
     }
     pub fn set_root(&mut self, id: u32) -> &mut Self {
         self.op(op::SET_ROOT, &[id])

@@ -171,5 +171,53 @@
     "parent": 1,
     "child": 4,
     "before": 0
+  },
+  {
+    "op": "CREATE",
+    "id": 5,
+    "kind": 3
+  },
+  {
+    "op": "INPUT_OPTIONS",
+    "id": 5,
+    "flags": 1,
+    "maxLength": 280
+  },
+  {
+    "op": "PLACEHOLDER",
+    "id": 5,
+    "text": "Search mail"
+  },
+  {
+    "op": "VALUE",
+    "id": 5,
+    "rev": 0,
+    "text": "from:ana"
+  },
+  {
+    "op": "STYLE",
+    "id": 5,
+    "prop": "caretColor",
+    "value": "#2563ebff"
+  },
+  {
+    "op": "INSERT",
+    "parent": 1,
+    "child": 5,
+    "before": 0
+  },
+  {
+    "op": "FOCUS",
+    "id": 5
+  },
+  {
+    "op": "VALUE",
+    "id": 5,
+    "rev": 3,
+    "text": ""
+  },
+  {
+    "op": "FOCUS",
+    "id": 0
   }
 ]

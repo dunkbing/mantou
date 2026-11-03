@@ -15,7 +15,10 @@ strings:  repeated { id u32 · byteLen u32 · utf8 bytes (padded to 4) }   // ne
 ops:      repeated { opcode u16 · wordCount u16 · words… }
 ```
 
-**Status:** the op stream is implemented as above, with each op's first word `code | operandWords << 16`. The header and the string section aren't yet: `TITLE` carries its string inline, and nothing else needs strings until there is text. The source of truth is [`schema/protocol.ts`](https://github.com/dunkbing/mantou/blob/main/schema/protocol.ts); `bun run gen` generates the TypeScript and Rust bindings from it, and CI fails when they're stale. The ops implemented so far are `CREATE` (kind `View` only), `INSERT`, `REMOVE`, `RELEASE`, `STYLE`, `STYLE_RESET`, `STYLE_DEF`, `STYLE_USE`, `LISTEN`, plus three window ops, `SET_ROOT`, `CLEAR_COLOR` and `TITLE`.
+**Status:** the op stream is implemented as above, with each op's first word `code | operandWords << 16`. The header and the string section aren't yet: strings travel inline, as a byte length and then the UTF-8 bytes padded to words. The source of truth is [`schema/protocol.ts`](https://github.com/dunkbing/mantou/blob/main/schema/protocol.ts); `bun run gen` generates the TypeScript and Rust bindings from it, and CI fails when they're stale. The ops implemented so far:
+- **Tree:** `CREATE` (kinds `View`, `Text` and `Input`), `INSERT`, `REMOVE`, `RELEASE`, `STYLE`, `STYLE_RESET`, `STYLE_DEF`, `STYLE_USE`, `LISTEN`.
+- **Content:** `TEXT` (a Text node's content), and for inputs `VALUE` (id, rev, text), `PLACEHOLDER`, `INPUT_OPTIONS` (flags: multiline, read-only; the maximum length) and `FOCUS` (0 blurs), in place of the `PROP` and `COMMAND` ops below.
+- **Window:** `SET_ROOT`, `CLEAR_COLOR`, `TITLE`.
 
 | Op | Operands | Meaning |
 |---|---|---|
@@ -46,6 +49,7 @@ Style and prop ids, and their types, are **generated from one schema** shared by
 - The main thread appends event records to a buffer guarded by a mutex. It sets an atomic `wake_pending` flag, and only if that flag was clear does it call the threadsafe `wake` callback. That coalesces bursts into one wake.
 - On wake, the Worker calls `mt_take_events()`, which swaps the buffers and clears the flag. It then dispatches every record. Any ops the handlers produce flush in the same turn's microtask.
 - Record format: `type u16 · size u16 · target u32 · time f64 · payload…`
+- **Status:** records are `[head, a, b, c]` as u32 words (floats as bits) and then `head >> 16` more words; `head & 0xffff` is the type. Only `TEXT_CHANGED` has more words so far: its text. `mt_take_events` copies whole records and returns 0 when none are left, or `0x80000000 | size` when the next record doesn't fit, and the runtime grows its buffer. Implemented: `WINDOW_READY`, `RESIZED`, `SCALE_CHANGED`, `CLOSE_REQUESTED`, `POINTER_DOWN/MOVE/UP`, `KEY_DOWN/UP` (with modifiers), `PRESS`, `WHEEL`, `FOCUS`, `BLUR`, `TEXT_CHANGED` and `SUBMIT`.
 
 | Event | Payload |
 |---|---|
@@ -68,6 +72,7 @@ Style and prop ids, and their types, are **generated from one schema** shared by
   - `defaultValue` makes the input **uncontrolled**: the core holds the text, and `onChange` reports it.
   - `value` + `onChange` makes it **controlled**: the core applies keystrokes at once and reports `TEXT_CHANGE(value, rev)`. The `value` prop JS sends back carries the `rev` it answers, and the core ignores values whose `rev` is stale. A `value` that differs from what the user typed (uppercasing, say) replaces the text, and the caret is kept by its offset from the end.
 - **Constraints are declarative, not synchronous filters:** `maxLength`, `allow` (a regex over characters, checked natively), `inputMode`, `autoCapitalize`, `secure`. These cover what `beforeinput` filtering is usually for, without a synchronous round trip through JS.
+- **Status:** implemented as `<Input>` ([Text input](/progress/text-input/)), with `maxLength` and `readOnly` of the constraints. The editor is parley's `PlainEditor` with Mantou's undo, limits and scrolling (`mantou-text/src/editor.rs`); focus, keys, the pointer and the IME are in `mantou-tree`, and the clipboard is the FFI crate's. A controlled value that replaces the user's text keeps the caret at its byte offset, clamped, rather than its offset from the end. The keys the focused input uses aren't sent to JS at all, which settles the `onKeyDown` question of [§8.2](/design/protocols/#82-events-core--worker) for inputs.
 
 ### 8.4 Styles
 - **Decided (Q4): v1 uses typed style objects only** (`style={{…}}`). They cover flexbox and grid (Taffy), box properties (background, border with per-side widths, radii, shadow, opacity, transform, overflow/clip) and text (font family, size, weight, line height, color, alignment, decoration). TypeScript checks every property.

@@ -4,6 +4,9 @@
 //! lacks (emoji, other scripts). Layouts are cached by their text, style and
 //! width. No platform or GPU dependencies.
 
+pub mod editor;
+pub use editor::Editor;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -24,7 +27,7 @@ const INTER: [&[u8]; 4] = [
 ];
 
 /// The family stack every text uses: the bundled Inter, then the system's.
-const FAMILY: &str = "Inter, system-ui, sans-serif";
+pub(crate) const FAMILY: &str = "Inter, system-ui, sans-serif";
 
 /// Horizontal subpixel positions per pixel that glyphs are rasterized at.
 const SUBPIXEL_BINS: f32 = 4.0;
@@ -263,7 +266,7 @@ impl TextEngine {
     }
 
     /// Each kept line's glyphs, and its (baseline, line height, width without hanging whitespace).
-    fn glyphs_of(&mut self, layout: &Layout<()>, max_lines: usize) -> (Vec<Vec<PlacedGlyph>>, Vec<(f32, f32, f32)>) {
+    pub(crate) fn glyphs_of(&mut self, layout: &Layout<()>, max_lines: usize) -> (Vec<Vec<PlacedGlyph>>, Vec<(f32, f32, f32)>) {
         let mut lines = Vec::new();
         let mut extents = Vec::new();
         for line in layout.lines().take(max_lines) {

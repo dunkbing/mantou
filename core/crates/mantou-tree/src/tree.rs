@@ -5,13 +5,21 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
-use mantou_text::{Align, AtlasImage, TextEngine, TextStyle};
+use mantou_text::{Align, AtlasImage, PlacedGlyph, TextEngine, TextStyle};
 
 use taffy::prelude::*;
 use taffy::style::{AlignContent, AlignItems, Dimension, LengthPercentage, LengthPercentageAuto};
 
 use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
+
+mod input;
+
+use input::Input;
+pub use input::{Clipboard, InputEvent, MemoryClipboard};
+
+/// Selections of inputs whose style doesn't set one: #3b82f666.
+const SELECTION: u32 = 0x66f6823b;
 
 /// One quad, in device pixels: a filled rectangle, or a glyph from the atlas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -108,6 +116,9 @@ struct Visual {
     clips: bool,
     color: u32,
     text: TextStyle,
+    placeholder_color: Option<u32>,
+    caret_color: Option<u32>,
+    selection_color: Option<u32>,
 }
 
 struct Node {
@@ -120,6 +131,7 @@ struct Node {
     shared: u32,
     listen: u32,
     v: Visual,
+    input: Option<Box<Input>>,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -147,6 +159,13 @@ pub struct Tree {
     /// Laid-out boxes in paint order, for the scene and hit-testing.
     boxes: Vec<LaidOut>,
     stats: TreeStats,
+    /// The input with the keyboard focus.
+    focus: Option<u32>,
+    /// The input a press started in, while the button is down.
+    drag: Option<u32>,
+    input_events: Vec<InputEvent>,
+    /// macOS key bindings (see `set_mac_keys`).
+    mac: bool,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -184,6 +203,10 @@ impl Tree {
             layout_dirty: true,
             boxes: Vec::new(),
             stats: TreeStats::default(),
+            focus: None,
+            drag: None,
+            input_events: Vec::new(),
+            mac: cfg!(target_os = "macos"),
         }
     }
 
@@ -225,10 +248,15 @@ impl Tree {
                 if id == 0 || self.nodes.contains_key(&id) {
                     return Err(format!("CREATE: id {id} is taken or invalid"));
                 }
+                let mut input = None;
                 let taffy = match kind {
                     p::node_kind::VIEW => self.taffy.new_leaf(Style::default()),
                     p::node_kind::TEXT => {
                         self.text.get_or_insert_with(TextEngine::new);
+                        self.taffy.new_leaf_with_context(Style::default(), id)
+                    }
+                    p::node_kind::INPUT => {
+                        input = Some(Box::new(Input::new(self.text.get_or_insert_with(TextEngine::new))));
                         self.taffy.new_leaf_with_context(Style::default(), id)
                     }
                     _ => return Err(format!("CREATE: unknown kind {kind}")),
@@ -244,6 +272,7 @@ impl Tree {
                     shared: 0,
                     listen: 0,
                     v: Visual::default(),
+                    input,
                 });
                 self.restyle(id);
             }
@@ -266,6 +295,12 @@ impl Tree {
                 let _ = self.taffy.remove(node.taffy);
                 if self.root == Some(id) {
                     self.root = None;
+                }
+                if self.focus == Some(id) {
+                    self.focus = None;
+                }
+                if self.drag == Some(id) {
+                    self.drag = None;
                 }
                 self.layout_dirty = true;
             }
@@ -322,6 +357,44 @@ impl Tree {
                     self.layout_dirty = true;
                 }
             }
+            Op::Value { id, rev, text } => {
+                let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
+                let Some(inp) = node.input.as_mut() else { return Err(format!("VALUE: {id} is not an input")) };
+                if rev < inp.rev {
+                    return Ok(()); // the app hadn't seen the user's latest edit: theirs wins
+                }
+                let engine = self.text.as_mut().expect("inputs create the text engine");
+                let ed = inp.editor.get_mut();
+                if ed.text() != text {
+                    if rev == 0 {
+                        ed.set_text(engine, &text);
+                    } else {
+                        ed.replace(engine, &text);
+                    }
+                    if ed.multiline {
+                        let _ = self.taffy.mark_dirty(node.taffy);
+                        self.layout_dirty = true;
+                    }
+                }
+            }
+            Op::Placeholder { id, text } => {
+                let Some(inp) = self.node(id)?.input.as_mut() else { return Err(format!("PLACEHOLDER: {id} is not an input")) };
+                inp.placeholder = text;
+            }
+            Op::InputOptions { id, flags, max_length } => {
+                let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
+                let Some(inp) = node.input.as_mut() else { return Err(format!("INPUT_OPTIONS: {id} is not an input")) };
+                if inp.set_options(flags, max_length) {
+                    let _ = self.taffy.mark_dirty(node.taffy);
+                    self.layout_dirty = true;
+                }
+            }
+            Op::Focus { id } => {
+                if id != 0 && self.node(id)?.input.is_none() {
+                    return Err(format!("FOCUS: {id} is not an input"));
+                }
+                self.set_focus((id != 0).then_some(id));
+            }
             Op::Unknown { .. } => {}
         }
         Ok(())
@@ -332,8 +405,8 @@ impl Tree {
             return Err("INSERT: a node cannot contain itself".into());
         }
         self.node(child)?;
-        if self.node(parent)?.kind == p::node_kind::TEXT {
-            return Err(format!("INSERT: {parent} is a text node; text nodes have no children"));
+        if matches!(self.node(parent)?.kind, p::node_kind::TEXT | p::node_kind::INPUT) {
+            return Err(format!("INSERT: {parent} is a text or input node, which have no children"));
         }
         // No cycles: the child must not be an ancestor of the parent.
         let mut a = Some(parent);
@@ -397,7 +470,11 @@ impl Tree {
         v.hidden = style.display == Display::None;
         let taffy = node.taffy;
         let _ = self.taffy.set_style(taffy, style);
-        self.nodes.get_mut(&id).expect("exists").v = v;
+        let node = self.nodes.get_mut(&id).expect("exists");
+        if let Some(inp) = node.input.as_mut() {
+            inp.editor.get_mut().set_style(&v.text);
+        }
+        node.v = v;
         self.layout_dirty = true;
     }
 
@@ -436,6 +513,16 @@ impl Tree {
         let measured = self.taffy.compute_layout_with_measure(rt, space, |inputs, _, ctx, style| {
             taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, avail| {
                 let (Some(node), Some(text)) = (ctx.and_then(|id| nodes.get(id)), text.as_deref_mut()) else { return Size::ZERO };
+                if let Some(inp) = &node.input {
+                    // Like a browser's: a fixed width, unless the layout gives one (and no
+                    // minimum, so it can shrink); one line tall, or as tall as the text.
+                    let width = known.width.unwrap_or(match avail.width {
+                        AvailableSpace::MinContent => 0.0,
+                        _ => input::DEFAULT_WIDTH,
+                    });
+                    let height = known.height.unwrap_or_else(|| inp.editor.borrow_mut().measure_height(text, width).ceil());
+                    return Size { width, height };
+                }
                 let width = known.width.or(match avail.width {
                     AvailableSpace::Definite(w) => Some(w),
                     AvailableSpace::MinContent => Some(0.0),
@@ -451,6 +538,12 @@ impl Tree {
         }
         self.boxes.clear();
         self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY]);
+        for b in &self.boxes {
+            if let Some(inp) = &self.nodes[&b.id].input {
+                let c = b.content;
+                inp.editor.borrow_mut().set_size(c[2] - c[0], c[3] - c[1]);
+            }
+        }
         true
     }
 
@@ -516,18 +609,55 @@ impl Tree {
                 let c = b.content;
                 let Some(text) = self.text.as_mut() else { continue };
                 let layout = text.layout(&node.text, &node.v.text, Some((c[2] - c[0]).max(0.0)));
-                for g in &layout.glyphs {
-                    let (gx, gy) = ((c[0] + g.x) * s, (c[1] + g.y) * s);
-                    let Some(e) = text.glyph(g.font, g.id, g.size * s, gx - gx.floor()) else { continue };
-                    let x0 = gx.floor() + e.left as f32;
-                    let y0 = gy.round() - e.top as f32;
-                    let rect = [x0, y0, x0 + e.w as f32, y0 + e.h as f32];
-                    if !overlaps(rect, clip) {
-                        continue;
+                glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), s, color, clip);
+            }
+            if let (Some(inp), Some(text)) = (&node.input, self.text.as_mut()) {
+                let c = b.content;
+                let clip = intersect(clip, [snap(c[0]), snap(c[1]), snap(c[2]), snap(c[3])]);
+                if clip[2] <= clip[0] || clip[3] <= clip[1] {
+                    continue;
+                }
+                let focused = self.focus == Some(b.id);
+                let mut ed = inp.editor.borrow_mut();
+                if focused {
+                    ed.keep_caret_visible(text);
+                }
+                let (ox, oy) = input::origin(&ed, text, c);
+                let color = rgba(node.v.color, alpha);
+                let fill = |r: [f32; 4], color: [f32; 4]| Quad {
+                    rect: [snap(ox + r[0]), snap(oy + r[1]), snap(ox + r[2]), snap(oy + r[3])],
+                    color,
+                    uv: [0.0; 4],
+                    clip,
+                    radius: 0.0,
+                    border: 0.0,
+                    border_color: [0.0; 4],
+                };
+                if ed.text().is_empty() && !ed.is_composing() && !inp.placeholder.is_empty() {
+                    let pc = node.v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
+                    let style = TextStyle { max_lines: if ed.multiline { 0 } else { 1 }, ..node.v.text };
+                    let layout = text.layout(&inp.placeholder, &style, ed.multiline.then_some((c[2] - c[0]).max(0.0)));
+                    glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (ox, oy), s, pc, clip);
+                }
+                if focused {
+                    let sel = rgba(node.v.selection_color.unwrap_or(SELECTION), alpha);
+                    quads.extend(ed.selection(text).into_iter().map(|r| fill(r, sel)));
+                }
+                let placed = ed.glyphs(text);
+                glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), s, color, clip);
+                if focused {
+                    for r in ed.compose(text) {
+                        quads.push(fill([r[0], r[3] - 1.0, r[2], r[3]], color));
                     }
-                    let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
-                    quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4] });
-                    glyphs = true;
+                    let (anchor, head) = ed.selection_range();
+                    if anchor == head
+                        && let Some(r) = ed.caret(text)
+                    {
+                        let caret = rgba(node.v.caret_color.unwrap_or(node.v.color), alpha);
+                        let mut q = fill(r, caret);
+                        q.rect[2] = q.rect[2].max(q.rect[0] + 1.0);
+                        quads.push(q);
+                    }
                 }
             }
         }
@@ -627,6 +757,25 @@ impl Tree {
     pub fn scale(&self) -> f32 {
         self.scale
     }
+}
+
+/// Glyph quads for text laid out from `origin` (logical px); returns whether any was drawn.
+fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGlyph], origin: (f32, f32), s: f32, color: [f32; 4], clip: [f32; 4]) -> bool {
+    let mut any = false;
+    for g in glyphs {
+        let (gx, gy) = ((origin.0 + g.x) * s, (origin.1 + g.y) * s);
+        let Some(e) = text.glyph(g.font, g.id, g.size * s, gx - gx.floor()) else { continue };
+        let x0 = gx.floor() + e.left as f32;
+        let y0 = gy.round() - e.top as f32;
+        let rect = [x0, y0, x0 + e.w as f32, y0 + e.h as f32];
+        if !overlaps(rect, clip) {
+            continue;
+        }
+        let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
+        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4] });
+        any = true;
+    }
+    any
 }
 
 fn intersect(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
@@ -769,6 +918,21 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::BorderColor => {
             if let Value::Color(c) = value {
                 v.border_color = c
+            }
+        }
+        Prop::PlaceholderColor => {
+            if let Value::Color(c) = value {
+                v.placeholder_color = Some(c)
+            }
+        }
+        Prop::CaretColor => {
+            if let Value::Color(c) = value {
+                v.caret_color = Some(c)
+            }
+        }
+        Prop::SelectionColor => {
+            if let Value::Color(c) = value {
+                v.selection_color = Some(c)
             }
         }
         Prop::AlignContent => {

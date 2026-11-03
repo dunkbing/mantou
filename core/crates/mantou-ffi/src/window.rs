@@ -9,14 +9,14 @@ use mantou_render::Renderer;
 use mantou_tree::Scene;
 use mantou_tree::protocol::event as ev;
 use winit::application::ApplicationHandler;
-use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
+use winit::event::{ElementState, Ime, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::instance::{Instance, bump, lock};
-use crate::{G, UserEvent, app};
+use crate::{G, UserEvent, app, key_text};
 
 use mantou_tree::protocol::{key_modifier, named_key as key};
 use winit::event::MouseScrollDelta;
@@ -114,11 +114,34 @@ pub struct App {
     window: Option<Arc<Window>>,
     gpu: Option<Gpu>,
     modifiers: u32,
+    /// Whether the IME is on: while an input has the focus.
+    ime: bool,
 }
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0 }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false }
+    }
+
+    fn redraw_if(&self, changed: bool) {
+        if changed && let Some(w) = &self.window {
+            w.request_redraw();
+        }
+    }
+
+    /// Turns the IME on while an input has the focus, and puts its candidate window at the caret.
+    fn sync_ime(&mut self, window: &Window) {
+        let area = {
+            let mut tree = lock(&self.inst.tree);
+            tree.focused().and(tree.ime_area())
+        };
+        if area.is_some() != self.ime {
+            self.ime = area.is_some();
+            window.set_ime_allowed(self.ime);
+        }
+        if let Some([x0, y0, x1, y1]) = area {
+            window.set_ime_cursor_area(LogicalPosition::new(x0, y0), LogicalSize::new((x1 - x0).max(1.0), (y1 - y0).max(1.0)));
+        }
     }
 
     fn draw(&mut self) {
@@ -126,6 +149,7 @@ impl App {
         if let Some(t) = lock(&self.inst.tree).take_title() {
             window.set_title(&t);
         }
+        self.sync_ime(&window);
         let scene = lock(&self.inst.scene).clone();
         let Some(gpu) = self.gpu.as_mut() else { return };
         window.pre_present_notify();
@@ -231,9 +255,11 @@ impl ApplicationHandler<UserEvent> for App {
                     let _ = win.request_inner_size(PhysicalSize::new(w, h));
                 }
             }
-            UserEvent::TestPointer(kind, x, y) => self.inst.pointer(kind, x, y),
-            UserEvent::TestKey(k, down, mods) => self.inst.key(k, down, false, mods),
+            UserEvent::TestPointer(kind, x, y) => self.redraw_if(self.inst.pointer(kind, x, y)),
+            UserEvent::TestKey(k, down, mods) => self.redraw_if(self.inst.key(k, key_text(k).as_deref(), down, false, mods)),
             UserEvent::TestWheel(x, y, dx, dy) => self.inst.wheel(x, y, dx, dy),
+            UserEvent::TestText(t) => self.redraw_if(self.inst.insert_text(&t)),
+            UserEvent::TestIme(t, cursor) => self.redraw_if(self.inst.ime_preedit(&t, cursor)),
         }
     }
 
@@ -262,21 +288,34 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let s = self.scale();
-                inst.pointer(2, position.x as f32 / s, position.y as f32 / s);
+                self.redraw_if(inst.pointer(2, position.x as f32 / s, position.y as f32 / s));
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let (x, y) = inst.pointer_position();
                 if button == MouseButton::Left {
-                    inst.pointer(if state == ElementState::Pressed { 0 } else { 1 }, x, y);
+                    self.redraw_if(inst.pointer(if state == ElementState::Pressed { 0 } else { 1 }, x, y));
                 } else {
                     let kind = if state == ElementState::Pressed { ev::POINTER_DOWN } else { ev::POINTER_UP };
                     inst.push_event([kind, button_code(button), x.to_bits(), y.to_bits()]);
                 }
             }
-            WindowEvent::ModifiersChanged(m) => self.modifiers = modifier_bits(m.state()),
+            WindowEvent::ModifiersChanged(m) => {
+                self.modifiers = modifier_bits(m.state());
+                inst.modifiers.store(self.modifiers, Ordering::Relaxed);
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 let down = event.state == ElementState::Pressed;
-                inst.key(key_code(&event.logical_key), down, event.repeat, self.modifiers);
+                let text = event.text.as_ref().map(|t| t.as_str());
+                self.redraw_if(inst.key(key_code(&event.logical_key), text, down, event.repeat, self.modifiers));
+            }
+            WindowEvent::Ime(ime) => {
+                let changed = match ime {
+                    Ime::Preedit(text, cursor) => inst.ime_preedit(&text, cursor),
+                    Ime::Commit(text) => inst.ime_preedit("", None) | inst.insert_text(&text),
+                    Ime::Disabled => inst.ime_preedit("", None),
+                    Ime::Enabled => false,
+                };
+                self.redraw_if(changed);
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let (dx, dy) = match delta {

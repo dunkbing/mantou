@@ -33,6 +33,15 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.style(4, "overflow", "hidden");
   e.text(4, "Héllo, wörld ✉");
   e.insert(1, 4, 0);
+  e.create(5, 3);
+  e.inputOptions(5, 1, 280);
+  e.placeholder(5, "Search mail");
+  e.value(5, 0, "from:ana");
+  e.style(5, "caretColor", "#2563eb");
+  e.insert(1, 5, 0);
+  e.focus(5);
+  e.value(5, 3, "");
+  e.focus(0);
   const basic = e.take();
   return { basic };
 }

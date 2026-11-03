@@ -1,6 +1,6 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { JSX, TextProps, ViewProps } from "../jsx-runtime";
+import type { InputProps, JSX, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui } from "../ui";
 import { createElement, currentUi, spread } from "./renderer";
 import { onCleanup } from "./solid";
@@ -15,6 +15,17 @@ export function View(props: ViewProps): JSX.Element {
 /** Text, laid out and drawn by the core. Style it with color, fontSize, fontWeight, lineHeight, textAlign, maxLines… */
 export function Text(props: TextProps): JSX.Element {
   const node = createElement("text") as Node;
+  spread(node, props, false);
+  return node;
+}
+
+/**
+ * A text field: single-line, or multiline. Uncontrolled with `defaultValue`,
+ * or controlled with `value` and `onChange`. Style its text like <Text>'s,
+ * and its box like a <View>'s.
+ */
+export function Input(props: InputProps): JSX.Element {
+  const node = createElement("input") as Node;
   spread(node, props, false);
   return node;
 }

@@ -3,6 +3,16 @@
 import { Op, StyleProp, type StylePropName } from "./gen/protocol";
 import { encodeValue, f32bits } from "./style";
 
+const utf8 = new TextEncoder();
+
+/** A string operand: its UTF-8 byte length, then the bytes padded to words. */
+function stringWords(s: string): number[] {
+  const bytes = utf8.encode(s);
+  const words = new Uint32Array(Math.ceil(bytes.length / 4));
+  new Uint8Array(words.buffer).set(bytes);
+  return [bytes.length, ...words];
+}
+
 export class OpEncoder {
   private buf = new ArrayBuffer(4096);
   private u32 = new Uint32Array(this.buf);
@@ -48,19 +58,13 @@ export class OpEncoder {
   clearColor(r: number, g: number, b: number, a: number) {
     this.op(Op.CLEAR_COLOR, [f32bits(r), f32bits(g), f32bits(b), f32bits(a)]);
   }
-  title(s: string) {
-    const bytes = new TextEncoder().encode(s);
-    const words = new Uint32Array(Math.ceil(bytes.length / 4));
-    new Uint8Array(words.buffer).set(bytes);
-    this.op(Op.TITLE, [bytes.length, ...words]);
-  }
+  title(s: string) { this.op(Op.TITLE, stringWords(s)); }
 
-  text(id: number, s: string) {
-    const bytes = new TextEncoder().encode(s);
-    const words = new Uint32Array(Math.ceil(bytes.length / 4));
-    new Uint8Array(words.buffer).set(bytes);
-    this.op(Op.TEXT, [id, bytes.length, ...words]);
-  }
+  text(id: number, s: string) { this.op(Op.TEXT, [id, ...stringWords(s)]); }
+  value(id: number, rev: number, s: string) { this.op(Op.VALUE, [id, rev, ...stringWords(s)]); }
+  placeholder(id: number, s: string) { this.op(Op.PLACEHOLDER, [id, ...stringWords(s)]); }
+  inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
+  focus(id: number) { this.op(Op.FOCUS, [id]); }
 
   get empty() { return this.len === 0; }
 

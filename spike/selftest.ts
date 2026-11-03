@@ -158,7 +158,30 @@ async function main() {
     check("no press without a listener", core.stats().presses === missBefore && core.stats().quads === 6, { presses: core.stats().presses - missBefore });
   }
 
-  // 8. Resizes lay out on the main thread while the Worker is blocked.
+  // 8. Typing into an input: the main thread edits and draws; JS gets the text, not the keys.
+  {
+    let root = core.ui.nodes.get(core.hit(...BOARD))!;
+    while (root.parent) root = root.parent;
+    const input = core.ui.input({ position: "absolute", top: 8, right: 24, width: 160, height: 24, backgroundColor: "#ffffff" });
+    root.append(input);
+    await until("the input is laid out", () => core.nodeRect(input.id) !== null, 5_000);
+    const r = core.nodeRect(input.id)!;
+    core.testPointer("down", (r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
+    core.testPointer("up", (r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
+    await until("the input has the focus", () => input.focused, 5_000);
+    const before = core.stats();
+    const keys = core.received.keyDown ?? 0;
+    const commits = core.ui.commits;
+    for (const ch of "hi") core.testKey(ch.codePointAt(0)!);
+    await until("the text reaches JS", () => input.value === "hi", 5_000);
+    await until("the text is drawn", () => core.stats().glyphs - before.glyphs === 2, 5_000);
+    const d = delta(before, core.stats());
+    check("typing in an input", (core.received.keyDown ?? 0) === keys && core.ui.commits === commits && d.frames >= 1, {
+      value: input.value, keyDownsInJs: (core.received.keyDown ?? 0) - keys, commits: core.ui.commits - commits, frames: d.frames, glyphs: d.glyphs,
+    });
+  }
+
+  // 9. Resizes lay out on the main thread while the Worker is blocked.
   {
     await sleep(200);
     const before = core.stats();

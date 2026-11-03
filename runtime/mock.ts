@@ -16,6 +16,22 @@ export class MockCore {
     return this.commits.at(-1) ?? [];
   }
 
+  /** The user changes an Input's text to `text`, as the core would report it. */
+  change(nodeId: number, text: string) {
+    const node = this.ui.nodes.get(nodeId);
+    this.ui.dispatchInput({ type: "textChanged", target: nodeId, rev: (node?.rev ?? 0) + 1, text });
+  }
+
+  /** Enter in an Input. */
+  submit(nodeId: number) {
+    this.ui.dispatchInput({ type: "submit", target: nodeId });
+  }
+
+  /** An Input gets (or, with `false`, loses) the focus. */
+  focus(nodeId: number, focused = true) {
+    this.ui.dispatchInput({ type: focused ? "focus" : "blur", target: nodeId });
+  }
+
   /** Delivers a press as the core would (target, then bubbling). */
   press(nodeId: number, x = 0, y = 0) {
     this.ui.dispatchPress(nodeId, x, y);

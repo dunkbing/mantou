@@ -18,6 +18,11 @@ function decodeValue(prop: string, w: Uint32Array, i: number): [unknown, number]
   }
 }
 
+/** A string operand at word `i`: its byte length, then the bytes. */
+function str(w: Uint32Array, i: number): string {
+  return new TextDecoder().decode(new Uint8Array(w.buffer, (i + 1) * 4, w[i]));
+}
+
 export function decodeOps(bytes: Uint8Array): DecodedOp[] {
   if (bytes.byteLength % 4) throw new Error("op batch length is not a multiple of 4");
   const w = new Uint32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -54,16 +59,11 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "STYLE_USE": o = { op: name, id: w[a], styleId: w[a + 1] }; break;
       case "LISTEN": o = { op: name, id: w[a], mask: w[a + 1] }; break;
       case "CLEAR_COLOR": o = { op: name, r: bitsf32(w[a]), g: bitsf32(w[a + 1]), b: bitsf32(w[a + 2]), a: bitsf32(w[a + 3]) }; break;
-      case "TITLE": {
-        const len = w[a];
-        o = { op: name, title: new TextDecoder().decode(new Uint8Array(w.buffer, (a + 1) * 4, len)) };
-        break;
-      }
-      case "TEXT": {
-        const len = w[a + 1];
-        o = { op: name, id: w[a], text: new TextDecoder().decode(new Uint8Array(w.buffer, (a + 2) * 4, len)) };
-        break;
-      }
+      case "TITLE": o = { op: name, title: str(w, a) }; break;
+      case "TEXT": case "PLACEHOLDER": o = { op: name, id: w[a], text: str(w, a + 1) }; break;
+      case "VALUE": o = { op: name, id: w[a], rev: w[a + 1], text: str(w, a + 2) }; break;
+      case "INPUT_OPTIONS": o = { op: name, id: w[a], flags: w[a + 1], maxLength: w[a + 2] }; break;
+      case "FOCUS": o = { op: name, id: w[a] }; break;
       default: o = { op: name, words: Array.from(w.subarray(a, a + n)) };
     }
     out.push(o);

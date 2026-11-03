@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 3;
+pub const PROTOCOL_VERSION: u32 = 4;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -31,6 +31,14 @@ pub mod op {
     pub const TITLE: u32 = 12;
     /// The content of a Text node.
     pub const TEXT: u32 = 13;
+    /// An Input's text, from the app. Applied only when `rev` (the last TEXT_CHANGED rev the app has seen, 0 before any) is at least the input's, so a value derived from an older edit never undoes newer typing.
+    pub const VALUE: u32 = 14;
+    /// What an empty Input shows.
+    pub const PLACEHOLDER: u32 = 15;
+    /// An Input's options: InputFlag bits, and its maximum length in characters (0 = none).
+    pub const INPUT_OPTIONS: u32 = 16;
+    /// Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow.
+    pub const FOCUS: u32 = 17;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -48,6 +56,10 @@ pub fn op_name(code: u32) -> &'static str {
         11 => "CLEAR_COLOR",
         12 => "TITLE",
         13 => "TEXT",
+        14 => "VALUE",
+        15 => "PLACEHOLDER",
+        16 => "INPUT_OPTIONS",
+        17 => "FOCUS",
         _ => "UNKNOWN",
     }
 }
@@ -55,10 +67,16 @@ pub fn op_name(code: u32) -> &'static str {
 pub mod node_kind {
     pub const VIEW: u32 = 1;
     pub const TEXT: u32 = 2;
+    pub const INPUT: u32 = 3;
 }
 
 pub mod event_mask {
     pub const PRESS: u32 = 1;
+}
+
+pub mod input_flag {
+    pub const MULTILINE: u32 = 1;
+    pub const READ_ONLY: u32 = 4;
 }
 
 pub mod key_modifier {
@@ -114,6 +132,14 @@ pub mod event {
     pub const PRESS: u32 = 10;
     /// The wheel or trackpad scrolled. a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up).
     pub const WHEEL: u32 = 11;
+    /// An Input got the keyboard focus. a = input.
+    pub const FOCUS: u32 = 12;
+    /// An Input lost the keyboard focus. a = input.
+    pub const BLUR: u32 = 13;
+    /// The user changed an Input's text. a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words.
+    pub const TEXT_CHANGED: u32 = 14;
+    /// Enter in a single-line Input. a = input.
+    pub const SUBMIT: u32 = 15;
 }
 
 pub mod display {
@@ -246,10 +272,13 @@ pub enum Prop {
     BorderRadius = 42,
     BorderWidth = 43,
     BorderColor = 44,
+    PlaceholderColor = 45,
+    CaretColor = 46,
+    SelectionColor = 47,
 }
 
 impl Prop {
-    pub const COUNT: usize = 44;
+    pub const COUNT: usize = 47;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -297,6 +326,9 @@ impl Prop {
             42 => Prop::BorderRadius,
             43 => Prop::BorderWidth,
             44 => Prop::BorderColor,
+            45 => Prop::PlaceholderColor,
+            46 => Prop::CaretColor,
+            47 => Prop::SelectionColor,
             _ => return None,
         })
     }
@@ -347,6 +379,9 @@ impl Prop {
             Prop::BorderRadius => "borderRadius",
             Prop::BorderWidth => "borderWidth",
             Prop::BorderColor => "borderColor",
+            Prop::PlaceholderColor => "placeholderColor",
+            Prop::CaretColor => "caretColor",
+            Prop::SelectionColor => "selectionColor",
         }
     }
 
@@ -396,6 +431,9 @@ impl Prop {
             Prop::BorderRadius => ValueKind::F32,
             Prop::BorderWidth => ValueKind::F32,
             Prop::BorderColor => ValueKind::Color,
+            Prop::PlaceholderColor => ValueKind::Color,
+            Prop::CaretColor => ValueKind::Color,
+            Prop::SelectionColor => ValueKind::Color,
         }
     }
 

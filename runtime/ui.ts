@@ -2,8 +2,9 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, NodeKind, type StylePropName } from "./gen/protocol";
+import { EventMask, InputFlag, NodeKind, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
+import type { InputCoreEvent } from "./events";
 import { expandStyle, type Style } from "./style";
 
 export type { Style } from "./style";
@@ -52,6 +53,21 @@ export interface PressEvent {
   stopPropagation(): void;
 }
 
+/** An Input's options (INPUT_OPTIONS). */
+export interface InputOptions {
+  multiline?: boolean;
+  readOnly?: boolean;
+  /** In characters; 0 = no limit. */
+  maxLength?: number;
+}
+
+type InputHandlers = {
+  change: ((value: string) => void)[];
+  submit: ((value: string) => void)[];
+  focus: (() => void)[];
+  blur: (() => void)[];
+};
+
 /**
  * A style defined once and shared by many nodes (STYLE_DEF / STYLE_USE). It
  * isn't tied to a Ui: each Ui sends its definition the first time a node uses it.
@@ -99,11 +115,165 @@ export class Node {
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
   /** The content last sent for a Text node. */
   sentText = "";
+  /**
+   * An Input's text: what the core last reported, or the app last set. The
+   * core owns it while the user types; `rev` counts the user's edits seen.
+   */
+  value = "";
+  rev = 0;
+  private controlled: string | undefined;
+  /** A value set this turn, with the rev it was derived from; sent after the options. */
+  private pendingValue: { text: string; rev: number } | null = null;
+  private placeholderText = "";
+  private options = { flags: 0, maxLength: 0 };
+  private sentOptions = { flags: 0, maxLength: 0 };
+  private inputHandlers: InputHandlers | null = null;
 
   constructor(readonly ui: Ui, readonly id: number, readonly kind: number) {}
 
   get isText(): boolean {
     return this.kind === NodeKind.Text;
+  }
+
+  get isInput(): boolean {
+    return this.kind === NodeKind.Input;
+  }
+
+  /** A name for messages: "View", "Text" or "Input". */
+  get kindName(): string {
+    return this.isText ? "Text" : this.isInput ? "Input" : "View";
+  }
+
+  private assertInput(what: string) {
+    this.alive();
+    if (!this.isInput) throw new Error(`mantou: ${what} is for <Input>, not <${this.kindName}>`);
+  }
+
+  /**
+   * Sets an Input's text from the app. It never undoes typing the app hasn't
+   * seen yet: the core keeps the user's newer edit, and reports it.
+   */
+  setValue(value: string): this {
+    this.assertInput("setValue");
+    if (value === this.value) return this;
+    this.value = value;
+    this.pendingValue = { text: value, rev: this.rev };
+    this.ui.markPending(this);
+    return this;
+  }
+
+  /**
+   * Makes the Input controlled by `value` (undefined: uncontrolled). After
+   * each change the user makes, change handlers run; if the controlled value
+   * is then still different, the input goes back to it.
+   */
+  control(value: string | undefined): this {
+    this.assertInput("control");
+    this.controlled = value;
+    if (value !== undefined) this.setValue(value);
+    return this;
+  }
+
+  /** What an empty Input shows. */
+  placeholder(text: string): this {
+    this.assertInput("placeholder");
+    if (text === this.placeholderText) return this;
+    this.placeholderText = text;
+    this.ui.enc.placeholder(this.id, text);
+    this.ui.schedule();
+    return this;
+  }
+
+  /** Changes some of an Input's options; sent once at the end of the turn. */
+  setOptions(options: InputOptions): this {
+    this.assertInput("setOptions");
+    const o = this.options;
+    const flag = (bit: number, on: boolean | undefined) => {
+      if (on !== undefined) o.flags = on ? o.flags | bit : o.flags & ~bit;
+    };
+    flag(InputFlag.Multiline, options.multiline);
+    flag(InputFlag.ReadOnly, options.readOnly);
+    if (options.maxLength !== undefined) o.maxLength = Math.max(0, Math.floor(options.maxLength || 0));
+    this.ui.markPending(this);
+    return this;
+  }
+
+  /** Gives the Input the keyboard focus (FOCUS and BLUR events follow). */
+  focus(): this {
+    this.assertInput("focus");
+    this.ui.enc.focus(this.id);
+    this.ui.schedule();
+    return this;
+  }
+
+  /** Takes the keyboard focus away from this Input, if it has it. */
+  blur(): this {
+    this.alive();
+    if (this.ui.focused === this) {
+      this.ui.enc.focus(0);
+      this.ui.schedule();
+    }
+    return this;
+  }
+
+  /** Whether this Input has the keyboard focus (as the core last reported). */
+  get focused(): boolean {
+    return this.ui.focused === this;
+  }
+
+  /** Adds an Input handler: "change" (the user changed the text), "submit" (Enter), "focus", "blur". */
+  onInput<K extends keyof InputHandlers>(type: K, handler: InputHandlers[K][number]): () => void {
+    this.assertInput(`on${type[0].toUpperCase()}${type.slice(1)}`);
+    const list = ((this.inputHandlers ??= { change: [], submit: [], focus: [], blur: [] })[type] as unknown[]);
+    list.push(handler);
+    return () => {
+      const i = list.indexOf(handler);
+      if (i >= 0) list.splice(i, 1);
+    };
+  }
+
+  /** @internal */
+  handleInput(e: InputCoreEvent) {
+    const h = this.inputHandlers;
+    switch (e.type) {
+      case "textChanged":
+        if (e.rev < this.rev) return;
+        this.value = e.text;
+        this.rev = e.rev;
+        for (const f of [...(h?.change ?? [])]) f(e.text);
+        if (this.controlled !== undefined && !this.released) this.setValue(this.controlled);
+        return;
+      case "submit":
+        for (const f of [...(h?.submit ?? [])]) f(this.value);
+        return;
+      case "focus":
+        for (const f of [...(h?.focus ?? [])]) f();
+        return;
+      case "blur":
+        for (const f of [...(h?.blur ?? [])]) f();
+    }
+  }
+
+  /** @internal Sends what is batched until the end of the turn (text, input options). */
+  flushPending() {
+    if (this.released) return;
+    if (this.isText) {
+      const text = this.textContent;
+      if (text !== this.sentText) {
+        this.sentText = text;
+        this.ui.enc.text(this.id, text);
+      }
+    } else if (this.isInput) {
+      const o = this.options, s = this.sentOptions;
+      if (o.flags !== s.flags || o.maxLength !== s.maxLength) {
+        this.sentOptions = { ...o };
+        this.ui.enc.inputOptions(this.id, o.flags, o.maxLength);
+      }
+      // After the options: a multiline value keeps its newlines.
+      const v = this.pendingValue;
+      this.pendingValue = null;
+      if (v) this.ui.enc.value(this.id, v.rev, v.text);
+    }
   }
 
   /** A Text node's content: its text leaves joined. */
@@ -115,7 +285,7 @@ export class Node {
 
   /** @internal */
   textChanged() {
-    if (this.isText && !this.released) this.ui.textDirty(this);
+    if (this.isText && !this.released) this.ui.markPending(this);
   }
 
   /** Child nodes, without text leaves. */
@@ -165,6 +335,7 @@ export class Node {
     if (child instanceof Node) {
       child.alive();
       if (this.isText) throw new Error("mantou: <Text> holds only text; put views next to it, not inside it");
+      if (this.isInput) throw new Error("mantou: <Input> has no children");
     } else if (!this.isText && child.text.trim()) {
       this.ui.warnText(child.text);
     }
@@ -225,6 +396,7 @@ export class Node {
     this.children.length = 0;
     this.pressHandlers.length = 0;
     this.wheelHandlers.length = 0;
+    this.inputHandlers = null;
     this.released = true;
     this.ui.free(this);
   }
@@ -301,11 +473,32 @@ export class Ui {
   private nextStyleId = 1;
   private styleIds = new WeakMap<SharedStyle, number>();
   private root: Node | null = null;
-  private dirtyText = new Set<Node>();
+  private pendingNodes = new Set<Node>();
   private keyHandlers = new Set<(e: KeyEvent) => void>();
   private warnedText = false;
+  /** The Input with the keyboard focus, as the core last reported. */
+  focused: Node | null = null;
 
   constructor(private sink: Sink) {}
+
+  /** Creates an Input: a text field (multiline with setOptions). */
+  input(...styles: (Style | SharedStyle)[]): Node {
+    const id = this.freeIds.pop() ?? this.nextId++;
+    const node = new Node(this, id, NodeKind.Input);
+    this.nodes.set(id, node);
+    this.enc.create(id, NodeKind.Input);
+    for (const s of styles) s instanceof SharedStyle ? node.use(s) : node.style(s);
+    this.schedule();
+    return node;
+  }
+
+  /** Delivers an Input event (focus, blur, a text change, submit) to its node. */
+  dispatchInput(e: InputCoreEvent) {
+    const node = this.nodes.get(e.target);
+    if (e.type === "focus") this.focused = node ?? null;
+    else if (e.type === "blur" && this.focused?.id === e.target) this.focused = null;
+    node?.handleInput(e);
+  }
 
   /** Creates a Text node; its content is the text leaves put inside it. */
   textNode(...styles: (Style | SharedStyle)[]): Node {
@@ -319,8 +512,8 @@ export class Ui {
   }
 
   /** @internal */
-  textDirty(node: Node) {
-    this.dirtyText.add(node);
+  markPending(node: Node) {
+    this.pendingNodes.add(node);
     this.schedule();
   }
 
@@ -406,6 +599,7 @@ export class Ui {
   free(node: Node) {
     this.nodes.delete(node.id);
     if (this.root === node) this.root = null;
+    if (this.focused === node) this.focused = null;
     this.enc.release(node.id);
     this.freeIds.push(node.id);
     this.schedule();
@@ -428,15 +622,8 @@ export class Ui {
 
   flush() {
     this.scheduled = false;
-    for (const node of this.dirtyText) {
-      if (node.released) continue;
-      const text = node.textContent;
-      if (text !== node.sentText) {
-        node.sentText = text;
-        this.enc.text(node.id, text);
-      }
-    }
-    this.dirtyText.clear();
+    for (const node of this.pendingNodes) node.flushPending();
+    this.pendingNodes.clear();
     if (this.enc.empty) return;
     this.lastCommitOps = this.enc.ops;
     const bytes = this.enc.take();

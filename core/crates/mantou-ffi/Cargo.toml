@@ -12,5 +12,7 @@ crate-type = ["cdylib"]
 winit = "0.30.13"
 wgpu = "30"
 pollster = "1"
+# The system clipboard for the window (headless instances keep their own).
+arboard = { version = "3", default-features = false }
 mantou-tree = { path = "../mantou-tree" }
 mantou-render = { path = "../mantou-render" }

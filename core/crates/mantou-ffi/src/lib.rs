@@ -37,7 +37,9 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// Bumped on any change to an exported signature or the op/event formats.
 /// 2: the shadow-tree protocol. 3: instance handles on every per-UI function; headless instances.
 /// 4: text, wheel events, key modifiers; mt_test_key, mt_test_wheel; a glyphs counter.
-pub const ABI_VERSION: u32 = 4;
+/// 5: text input: variable-length event records, mt_test_text, mt_test_ime, mt_test_clipboard,
+/// mt_test_set_clipboard, mt_test_value, mt_test_focused.
+pub const ABI_VERSION: u32 = 5;
 
 /// The window's instance.
 const APP: u32 = 1;
@@ -51,6 +53,8 @@ pub(crate) enum UserEvent {
     TestPointer(u32, f32, f32),
     TestKey(u32, bool, u32),
     TestWheel(f32, f32, f32, f32),
+    TestText(String),
+    TestIme(String, Option<(usize, usize)>),
 }
 
 /// Process-wide state: the instances and the window's event loop.
@@ -255,7 +259,9 @@ pub unsafe extern "C" fn mt_commit(inst: u32, ptr: *const u8, len: u32) -> i32 {
 }
 
 /// Copies whole queued event records into `dst` (at most `cap` bytes) and
-/// returns the number of bytes written. Call again while it returns a full buffer.
+/// returns the number of bytes written; call again until it returns 0. When
+/// the next record alone is larger than `cap`, writes nothing and returns
+/// `0x80000000 | its size`: call again with a buffer that large.
 ///
 /// # Safety
 /// `dst` must be valid for writes of `cap` bytes.
@@ -263,7 +269,7 @@ pub unsafe extern "C" fn mt_commit(inst: u32, ptr: *const u8, len: u32) -> i32 {
 pub unsafe extern "C" fn mt_take_events(inst: u32, dst: *mut u8, cap: u32) -> u32 {
     // SAFETY: guaranteed by the caller.
     let out = unsafe { bytes_mut(dst, cap) };
-    with(inst, 0, |i| i.take_events(out) as u32)
+    with(inst, 0, |i| i.take_events(out))
 }
 
 /// Writes up to `cap` counters into `dst` and returns how many it wrote:
@@ -328,16 +334,113 @@ pub extern "C" fn mt_test_input(inst: u32, kind: u32, x: f32, y: f32) {
 }
 
 /// Test hook: a key event. `key` is a Unicode scalar or a named key code
-/// (protocol `named_key`), `modifiers` the `key_modifier` bits.
+/// (protocol `named_key`), `modifiers` the `key_modifier` bits. A printable
+/// character types itself, as on a keyboard.
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_test_key(inst: u32, key: u32, down: u32, modifiers: u32) {
     with(inst, (), |i| {
         if i.headless {
-            i.key(key, down != 0, false, modifiers);
+            i.key(key, key_text(key).as_deref(), down != 0, false, modifiers);
         } else {
             send(UserEvent::TestKey(key, down != 0, modifiers));
         }
     })
+}
+
+/// What a key code types when pressed: itself, if it's a printable character.
+pub(crate) fn key_text(key: u32) -> Option<String> {
+    char::from_u32(key).filter(|c| !c.is_control()).map(String::from)
+}
+
+/// Test hook: text arriving for the focused input at once, as an IME commit
+/// or a paste would (undo treats it as one step).
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_text(inst: u32, ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let b = unsafe { bytes(ptr, len) };
+    let text = String::from_utf8_lossy(b).into_owned();
+    with(inst, (), |i| {
+        if i.headless {
+            i.insert_text(&text);
+        } else {
+            send(UserEvent::TestText(text));
+        }
+    })
+}
+
+/// Test hook: an IME composition in progress (empty ends it), with the
+/// composition's cursor as a byte range, or `u32::MAX` twice for none.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_ime(inst: u32, ptr: *const u8, len: u32, cursor_start: u32, cursor_end: u32) {
+    // SAFETY: guaranteed by the caller.
+    let b = unsafe { bytes(ptr, len) };
+    let text = String::from_utf8_lossy(b).into_owned();
+    let cursor = (cursor_start != u32::MAX).then(|| (cursor_start as usize, (cursor_end as usize).max(cursor_start as usize)));
+    let cursor = cursor.filter(|c| c.1 <= text.len() && text.is_char_boundary(c.0) && text.is_char_boundary(c.1));
+    with(inst, (), |i| {
+        if i.headless {
+            i.ime_preedit(&text, cursor);
+        } else {
+            send(UserEvent::TestIme(text, cursor));
+        }
+    })
+}
+
+/// Test hook: puts text on the instance's clipboard (the system's, for the window).
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_set_clipboard(inst: u32, ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let b = unsafe { bytes(ptr, len) };
+    let text = String::from_utf8_lossy(b).into_owned();
+    with(inst, (), |i| i.with_clipboard(|cb| cb.set(&text)))
+}
+
+/// Test hook: the clipboard's text. Writes at most `cap` bytes and returns the full length.
+///
+/// # Safety
+/// `dst` must be valid for writes of `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_clipboard(inst: u32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, 0, |i| write_str(out, &i.with_clipboard(|cb| cb.get()).unwrap_or_default()))
+}
+
+/// Test hook: an input's text as the core has it. Writes at most `cap` bytes
+/// and returns the full length, or `u32::MAX` when `id` isn't an input.
+///
+/// # Safety
+/// `dst` must be valid for writes of `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_value(inst: u32, id: u32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, u32::MAX, |i| match lock(&i.tree).value_of(id) {
+        Some(v) => write_str(out, &v),
+        None => u32::MAX,
+    })
+}
+
+/// Test hook: the focused input, or 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_focused(inst: u32) -> u32 {
+    with(inst, 0, |i| lock(&i.tree).focused().unwrap_or(0))
+}
+
+/// Copies as much of `s` as fits and returns its full length.
+fn write_str(out: &mut [u8], s: &str) -> u32 {
+    let n = s.len().min(out.len());
+    out[..n].copy_from_slice(&s.as_bytes()[..n]);
+    s.len() as u32
 }
 
 /// Test hook: a wheel scroll at (x, y) logical px by (dx, dy); positive dy scrolls content up.

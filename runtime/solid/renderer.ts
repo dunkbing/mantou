@@ -36,8 +36,46 @@ function applyStyle(node: Node, value: StyleProp, prev: StyleProp) {
   node.style(patch as Style);
 }
 
-const pressOff = new WeakMap<Node, () => void>();
-const wheelOff = new WeakMap<Node, () => void>();
+/** Per node, the function that removes each handler prop's current handler. */
+const handlerOff = new WeakMap<Node, Map<string, () => void>>();
+
+function setHandler(node: Node, name: string, value: unknown, add: (f: never) => () => void) {
+  let offs = handlerOff.get(node);
+  if (!offs) handlerOff.set(node, (offs = new Map()));
+  offs.get(name)?.();
+  offs.delete(name);
+  if (typeof value === "function") offs.set(name, add(value as never));
+}
+
+const inputEvents: Record<string, "change" | "submit" | "focus" | "blur"> = { onChange: "change", onSubmit: "submit", onFocus: "focus", onBlur: "blur" };
+
+function setInputProperty(node: Node, name: string, value: unknown, prev: unknown): boolean {
+  switch (name) {
+    case "value":
+      node.control(value === undefined || value === null ? undefined : String(value));
+      return true;
+    case "defaultValue":
+      if (prev === undefined && value !== undefined && value !== null) node.setValue(String(value));
+      return true;
+    case "placeholder":
+      node.placeholder(value === undefined || value === null ? "" : String(value));
+      return true;
+    case "multiline":
+    case "readOnly":
+      node.setOptions({ [name]: !!value });
+      return true;
+    case "maxLength":
+      node.setOptions({ maxLength: Number(value ?? 0) });
+      return true;
+    case "autoFocus":
+      if (value && !prev) node.focus();
+      return true;
+  }
+  const type = inputEvents[name];
+  if (!type) return false;
+  setHandler(node, name, value, (f) => node.onInput(type, f));
+  return true;
+}
 
 function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
   if (!(node instanceof Node)) return;
@@ -46,18 +84,14 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       applyStyle(node, value as StyleProp, prev as StyleProp);
       return;
     case "onPress":
-      pressOff.get(node)?.();
-      pressOff.delete(node);
-      if (typeof value === "function") pressOff.set(node, node.onPress(value as (e: PressEvent) => void));
+      setHandler(node, name, value, (f: (e: PressEvent) => void) => node.onPress(f));
       return;
     case "onWheel":
-      wheelOff.get(node)?.();
-      wheelOff.delete(node);
-      if (typeof value === "function") wheelOff.set(node, node.onWheel(value as (e: WheelEvent) => void));
+      setHandler(node, name, value, (f: (e: WheelEvent) => void) => node.onWheel(f));
       return;
-    default:
-      throw new Error(`mantou: <${node.isText ? "Text" : "View"}> has no property "${name}"`);
   }
+  if (node.isInput && setInputProperty(node, name, value, prev)) return;
+  throw new Error(`mantou: <${node.kindName}> has no property "${name}"`);
 }
 
 export const {
@@ -75,8 +109,9 @@ export const {
   use,
 } = createRenderer<Child>({
   createElement(tag) {
-    if (tag !== "view" && tag !== "text") throw new Error(`mantou: unknown element <${tag}>; use <View> or <Text>`);
-    const node = tag === "text" ? currentUi().textNode() : currentUi().view();
+    const ui = currentUi();
+    const node = tag === "view" ? ui.view() : tag === "text" ? ui.textNode() : tag === "input" ? ui.input() : null;
+    if (!node) throw new Error(`mantou: unknown element <${tag}>; use <View>, <Text> or <Input>`);
     if (getOwner()) onCleanup(() => node.release());
     return node;
   },

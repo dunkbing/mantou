@@ -42,7 +42,7 @@ int32_t  mt_test_capture(uint32_t inst, uint8_t* rgba, uint32_t cap);     // off
 uint32_t mt_stats(uint32_t inst, uint64_t* out, uint32_t cap);            // counters: frames, commits, wakes, events, resizes, …
 ```
 
-`runtime/headless.ts` wraps them as `HeadlessCore` (`step`, `press`, `pointer`, `rect`, `hit`, `resize`, `scene`, `capture`, `stats`), which the app test API of §12.3 will build on.
+`runtime/headless.ts` wraps them as `HeadlessCore` (`step`, `press`, `pointer`, `key`, `wheel`, `type`, `insertText`, `compose`, `clipboard`, `value`, `focused`, `rect`, `hit`, `resize`, `scene`, `capture`, `stats`), which the app test API of §12.3 will build on.
 
 **No Worker in headless mode.** There's no native event loop to own the main thread, so the app runs on the test's own thread. `mt_commit` is synchronous, and events are collected with `mt_take_events` right after each `mt_test_input` and `mt_test_step`. Tests are therefore deterministic and single-threaded.
 

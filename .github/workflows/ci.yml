@@ -34,7 +34,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run test
       - name: Rust tests (tree, fixtures, random batches, incremental-vs-scratch layout)
-        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-tree
+        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-tree -p mantou-text
       - name: Build the native core
         run: cargo build --release --manifest-path core/Cargo.toml
       - name: Headless tests on the real core

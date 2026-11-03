@@ -2,11 +2,13 @@
 //! counters. The window is one instance; headless test instances are others
 //! (design §12.2). Nothing here touches winit or a GPU surface.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
-use mantou_tree::protocol::event as ev;
-use mantou_tree::{Scene, Tree};
+use mantou_tree::protocol::{event as ev, key_modifier};
+use mantou_tree::{Clipboard, InputEvent, MemoryClipboard, Scene, Tree};
 
 /// A poisoned lock only means another entry point panicked; the data is still usable.
 pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -32,12 +34,52 @@ pub struct Stats {
 /// Counter order of `mt_stats`.
 pub const STAT_COUNT: usize = 13;
 
+/// Presses this close in time (ms) and space (logical px) count as a double (triple…) click.
+const MULTI_CLICK_MS: f64 = 500.0;
+const MULTI_CLICK_PX: f32 = 4.0;
+
 #[derive(Default)]
 struct Pointer {
     /// Logical px.
     position: (f32, f32),
     /// The press target under the pointer when the primary button went down.
     pressed_on: Option<u32>,
+    primary_down: bool,
+    /// The last primary press (time ms, x, y) and how many came in a row.
+    last_down: Option<(f64, f32, f32)>,
+    clicks: u32,
+}
+
+/// The window's clipboard: the system's, else one in memory.
+pub struct SystemClipboard {
+    system: Option<arboard::Clipboard>,
+    fallback: MemoryClipboard,
+}
+
+impl SystemClipboard {
+    pub fn new() -> SystemClipboard {
+        let system = arboard::Clipboard::new().inspect_err(|e| eprintln!("mantou-core: no system clipboard ({e}); using one in memory")).ok();
+        SystemClipboard { system, fallback: MemoryClipboard::default() }
+    }
+}
+
+impl Clipboard for SystemClipboard {
+    fn get(&mut self) -> Option<String> {
+        match self.system.as_mut() {
+            Some(c) => c.get_text().ok().filter(|t| !t.is_empty()),
+            None => self.fallback.get(),
+        }
+    }
+    fn set(&mut self, text: &str) {
+        match self.system.as_mut() {
+            Some(c) => {
+                if let Err(e) = c.set_text(text) {
+                    eprintln!("mantou-core: could not copy: {e}");
+                }
+            }
+            None => self.fallback.set(text),
+        }
+    }
 }
 
 pub struct Instance {
@@ -55,6 +97,13 @@ pub struct Instance {
     /// `extern "C" fn()` of the threadsafe JSCallback, 0 when none.
     wake: AtomicUsize,
     pointer: Mutex<Pointer>,
+    /// Modifier keys held (key_modifier bits), for shift-clicks.
+    pub modifiers: AtomicU32,
+    /// Keys whose key-down an input used: their key-up isn't sent either.
+    swallowed: Mutex<HashSet<u32>>,
+    /// The window's is created on the main thread, on first use (macOS wants that).
+    clipboard: Mutex<Option<Box<dyn Clipboard + Send>>>,
+    started: Instant,
 }
 
 impl Instance {
@@ -69,14 +118,55 @@ impl Instance {
             wake_pending: AtomicBool::new(false),
             wake: AtomicUsize::new(0),
             pointer: Mutex::new(Pointer::default()),
+            modifiers: AtomicU32::new(0),
+            swallowed: Mutex::new(HashSet::new()),
+            clipboard: Mutex::new(None),
+            started: Instant::now(),
         }
+    }
+
+    /// Runs `f` with the clipboard: the system's for the window, a private one for headless instances.
+    pub fn with_clipboard<R>(&self, f: impl FnOnce(&mut dyn Clipboard) -> R) -> R {
+        let mut slot = lock(&self.clipboard);
+        let cb = slot.get_or_insert_with(|| if self.headless { Box::new(MemoryClipboard::default()) } else { Box::new(SystemClipboard::new()) });
+        f(cb.as_mut())
+    }
+
+    /// Milliseconds on the instance's clock (the manual one for headless instances).
+    fn now_ms(&self) -> f64 {
+        if self.headless { *lock(&self.clock_ms) } else { self.started.elapsed().as_secs_f64() * 1000.0 }
     }
 
     /// Queues an event for JS and wakes the Worker, at most once until it takes them.
     pub fn push_event(&self, rec: [u32; 4]) {
-        lock(&self.events).extend_from_slice(&rec);
+        self.push_record(&rec, &[]);
+    }
+
+    /// Queues an event with extra words after its four (protocol: `head >> 16` of them).
+    fn push_record(&self, rec: &[u32; 4], extra: &[u32]) {
+        {
+            let mut q = lock(&self.events);
+            q.push(rec[0] | (extra.len() as u32) << 16);
+            q.extend_from_slice(&rec[1..]);
+            q.extend_from_slice(extra);
+        }
         bump(&self.stats.events);
         self.wake_js();
+    }
+
+    /// Queues the tree's input events (focus, text changes…) for JS.
+    fn flush_input(&self, tree: &mut Tree) {
+        for e in tree.take_input_events() {
+            match e {
+                InputEvent::Focus(id) => self.push_event([ev::FOCUS, id, 0, 0]),
+                InputEvent::Blur(id) => self.push_event([ev::BLUR, id, 0, 0]),
+                InputEvent::Submit(id) => self.push_event([ev::SUBMIT, id, 0, 0]),
+                InputEvent::Changed { id, rev, text } => {
+                    let words = mantou_tree::encode::string_words(&text);
+                    self.push_record(&[ev::TEXT_CHANGED, id, rev, words[0]], &words[1..]);
+                }
+            }
+        }
     }
 
     pub fn events_pending(&self) -> bool {
@@ -108,17 +198,34 @@ impl Instance {
         }
     }
 
-    /// Moves whole event records into `out` and returns the bytes written.
-    pub fn take_events(&self, out: &mut [u8]) -> usize {
+    /// Moves whole event records into `out` and returns the bytes written:
+    /// 0 when none are queued, or `0x8000_0000 | size` when the next record
+    /// alone doesn't fit (the caller retries with a buffer that size).
+    pub fn take_events(&self, out: &mut [u8]) -> u32 {
         // Clear before taking: an event pushed after this point either lands in
         // this take or wakes the Worker again, so none is ever stranded.
         self.wake_pending.store(false, Ordering::Release);
         let mut q = lock(&self.events);
-        let n_words = q.len().min((out.len() / 16) * 4);
-        for (chunk, word) in out[..n_words * 4].chunks_exact_mut(4).zip(q.drain(..n_words)) {
+        let cap = out.len() / 4;
+        let mut n = 0;
+        while n < q.len() {
+            let len = 4 + (q[n] >> 16) as usize;
+            if n + len > cap {
+                if n == 0 {
+                    self.wake_pending.store(true, Ordering::Release); // still pending: the caller retries
+                    return 0x8000_0000 | (len * 4) as u32;
+                }
+                break;
+            }
+            n += len;
+        }
+        for (chunk, word) in out[..n * 4].chunks_exact_mut(4).zip(q.drain(..n)) {
             chunk.copy_from_slice(&word.to_le_bytes());
         }
-        n_words * 4
+        if !q.is_empty() {
+            self.wake_pending.store(true, Ordering::Release); // the caller takes again
+        }
+        (n * 4) as u32
     }
 
     /// Lays out if needed and publishes a new scene. Call with the tree locked.
@@ -143,6 +250,7 @@ impl Instance {
                 return -1;
             }
         }
+        self.flush_input(&mut tree);
         self.publish(&mut tree);
         bump(&self.stats.commits);
         0
@@ -161,30 +269,56 @@ impl Instance {
         self.publish(&mut tree)
     }
 
+    /// Runs an input change on the tree; if it changed anything, queues its
+    /// events and publishes a new scene. Returns whether it did (the window then redraws).
+    fn edit(&self, f: impl FnOnce(&mut Tree) -> bool) -> bool {
+        let mut tree = lock(&self.tree);
+        let changed = f(&mut tree);
+        self.flush_input(&mut tree);
+        if changed {
+            self.publish(&mut tree);
+        }
+        changed
+    }
+
     /// Pointer input in logical px. kind: 0 = primary down, 1 = primary up, 2 = move.
-    /// A press is a down and an up on the same press target.
-    pub fn pointer(&self, kind: u32, x: f32, y: f32) {
+    /// A press is a down and an up on the same press target. Returns whether
+    /// the scene changed (an input got the focus or a selection).
+    pub fn pointer(&self, kind: u32, x: f32, y: f32) -> bool {
         let mut p = lock(&self.pointer);
         p.position = (x, y);
         match kind {
             0 => {
+                let now = self.now_ms();
+                let near = |(t, px, py): (f64, f32, f32)| now - t <= MULTI_CLICK_MS && (x - px).abs() <= MULTI_CLICK_PX && (y - py).abs() <= MULTI_CLICK_PX;
+                p.clicks = if p.last_down.is_some_and(near) { p.clicks + 1 } else { 1 };
+                p.last_down = Some((now, x, y));
+                p.primary_down = true;
+                let clicks = p.clicks;
                 p.pressed_on = lock(&self.tree).press_target(x, y);
                 drop(p);
                 self.push_event([ev::POINTER_DOWN, 0, x.to_bits(), y.to_bits()]);
+                let shift = self.modifiers.load(Ordering::Relaxed) & key_modifier::SHIFT != 0;
+                self.edit(|t| t.pointer_down(x, y, clicks, shift))
             }
             1 => {
                 let target = lock(&self.tree).press_target(x, y);
                 let pressed = p.pressed_on.take();
+                p.primary_down = false;
                 drop(p);
+                lock(&self.tree).pointer_up();
                 self.push_event([ev::POINTER_UP, 0, x.to_bits(), y.to_bits()]);
                 if let Some(t) = target.filter(|t| pressed == Some(*t)) {
                     bump(&self.stats.presses);
                     self.push_event([ev::PRESS, t, x.to_bits(), y.to_bits()]);
                 }
+                false
             }
             _ => {
+                let dragging = p.primary_down;
                 drop(p);
                 self.push_event([ev::POINTER_MOVE, 0, x.to_bits(), y.to_bits()]);
+                dragging && self.edit(|t| t.pointer_drag(x, y))
             }
         }
     }
@@ -195,13 +329,41 @@ impl Instance {
         self.push_event([ev::WHEEL, target, dx.to_bits(), dy.to_bits()]);
     }
 
-    /// A key event: `key` is a Unicode scalar or a named key code.
-    pub fn key(&self, key: u32, down: bool, repeat: bool, modifiers: u32) {
-        if down {
-            self.push_event([ev::KEY_DOWN, key, repeat as u32, modifiers]);
-        } else {
-            self.push_event([ev::KEY_UP, key, 0, modifiers]);
+    /// A key event: `key` is a Unicode scalar or a named key code, `text` what
+    /// it types. The focused input sees key-downs first; the keys it uses
+    /// don't reach JS. Returns whether the scene changed.
+    pub fn key(&self, key: u32, text: Option<&str>, down: bool, repeat: bool, modifiers: u32) -> bool {
+        self.modifiers.store(modifiers, Ordering::Relaxed);
+        if !down {
+            if !lock(&self.swallowed).remove(&key) {
+                self.push_event([ev::KEY_UP, key, 0, modifiers]);
+            }
+            return false;
         }
+        let mut used = false;
+        let changed = self.edit(|t| {
+            if t.focused().is_none() {
+                return false;
+            }
+            used = self.with_clipboard(|cb| t.key(key, text, modifiers, cb));
+            used
+        });
+        if used {
+            lock(&self.swallowed).insert(key);
+        } else {
+            self.push_event([ev::KEY_DOWN, key, repeat as u32, modifiers]);
+        }
+        changed
+    }
+
+    /// Text for the focused input that isn't from a key: an IME commit, or a test typing.
+    pub fn insert_text(&self, text: &str) -> bool {
+        self.edit(|t| t.insert_text(text))
+    }
+
+    /// The IME's composition; empty ends it.
+    pub fn ime_preedit(&self, text: &str, cursor: Option<(usize, usize)>) -> bool {
+        self.edit(|t| t.ime_preedit(text, cursor))
     }
 
     pub fn pointer_position(&self) -> (f32, f32) {

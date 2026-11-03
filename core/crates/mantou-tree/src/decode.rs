@@ -36,6 +36,10 @@ pub enum Op {
     ClearColor([f32; 4]),
     Title(String),
     Text { id: u32, text: String },
+    Value { id: u32, rev: u32, text: String },
+    Placeholder { id: u32, text: String },
+    InputOptions { id: u32, flags: u32, max_length: u32 },
+    Focus { id: u32 },
     /// An op from a newer protocol: skipped, so old cores tolerate new runtimes.
     Unknown { code: u32 },
 }
@@ -87,6 +91,29 @@ fn value(prop: Prop, w: &[u32], at: usize) -> Result<(Value, usize), DecodeError
 
 fn prop(code: u32, at: usize) -> Result<Prop, DecodeError> {
     Prop::from_code(code).map_or_else(|| err(at, format!("unknown style property {code}")), Ok)
+}
+
+fn id_then_string(a: &[u32], at: usize, name: &str) -> Result<u32, DecodeError> {
+    if a.len() < 2 {
+        return err(at, format!("{name} needs an id and a length"));
+    }
+    Ok(a[0])
+}
+
+/// A string operand: at operand `k`, its byte length, then the bytes padded to
+/// words, which must end the op. `start` is the word offset of the operands.
+fn string(bytes: &[u8], a: &[u32], start: usize, k: usize, name: &str) -> Result<String, DecodeError> {
+    let at = start - 1;
+    let Some(&len) = a.get(k) else { return err(at, format!("{name} needs a length")) };
+    let len = len as usize;
+    if len.div_ceil(4) != a.len() - k - 1 {
+        return err(at, format!("{name} length does not match its words"));
+    }
+    let from = (start + k + 1) * 4;
+    match std::str::from_utf8(&bytes[from..from + len]) {
+        Ok(s) => Ok(s.to_owned()),
+        Err(_) => err(at, format!("{name} is not UTF-8")),
+    }
 }
 
 pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
@@ -172,33 +199,22 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                 fixed(4)?;
                 Op::ClearColor([0, 1, 2, 3].map(|k| f32::from_bits(a[k])))
             }
-            op::TITLE => {
-                if n < 1 {
-                    return err(i, "TITLE needs a length");
+            op::TITLE => Op::Title(string(bytes, a, i + 1, 0, "TITLE")?),
+            op::TEXT => Op::Text { id: id_then_string(a, i, "TEXT")?, text: string(bytes, a, i + 1, 1, "TEXT")? },
+            op::PLACEHOLDER => Op::Placeholder { id: id_then_string(a, i, "PLACEHOLDER")?, text: string(bytes, a, i + 1, 1, "PLACEHOLDER")? },
+            op::VALUE => {
+                if n < 3 {
+                    return err(i, "VALUE needs an id, a rev and a length");
                 }
-                let len = a[0] as usize;
-                if len.div_ceil(4) != n - 1 {
-                    return err(i, "TITLE length does not match its words");
-                }
-                let start = (i + 2) * 4;
-                match std::str::from_utf8(&bytes[start..start + len]) {
-                    Ok(s) => Op::Title(s.to_owned()),
-                    Err(_) => return err(i, "TITLE is not UTF-8"),
-                }
+                Op::Value { id: a[0], rev: a[1], text: string(bytes, a, i + 1, 2, "VALUE")? }
             }
-            op::TEXT => {
-                if n < 2 {
-                    return err(i, "TEXT needs an id and a length");
-                }
-                let len = a[1] as usize;
-                if len.div_ceil(4) != n - 2 {
-                    return err(i, "TEXT length does not match its words");
-                }
-                let start = (i + 3) * 4;
-                match std::str::from_utf8(&bytes[start..start + len]) {
-                    Ok(s) => Op::Text { id: a[0], text: s.to_owned() },
-                    Err(_) => return err(i, "TEXT is not UTF-8"),
-                }
+            op::INPUT_OPTIONS => {
+                fixed(3)?;
+                Op::InputOptions { id: a[0], flags: a[1], max_length: a[2] }
+            }
+            op::FOCUS => {
+                fixed(1)?;
+                Op::Focus { id: a[0] }
             }
             _ => Op::Unknown { code },
         };

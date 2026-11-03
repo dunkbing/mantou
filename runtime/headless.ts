@@ -29,6 +29,23 @@ export interface Capture {
 
 let shared: CoreLib | null = null;
 
+export interface KeyMods {
+  shift?: boolean;
+  ctrl?: boolean;
+  alt?: boolean;
+  meta?: boolean;
+  /** The platform's shortcut key: Command on macOS, Control elsewhere. */
+  primary?: boolean;
+}
+
+const utf8 = new TextEncoder();
+const isMac = process.platform === "darwin";
+
+/** UTF-8 bytes for FFI, or null for an empty string (bun:ffi takes no empty buffers). */
+function bytes(s: string): Uint8Array | null {
+  return s ? utf8.encode(s) : null;
+}
+
 export class HeadlessCore {
   readonly lib: CoreLib = (shared ??= openCore());
   readonly handle: number;
@@ -94,15 +111,77 @@ export class HeadlessCore {
     return this.pointer("up", x, y);
   }
 
-  /** Presses and releases a key. `key` is a character or a named key ("ArrowDown"…). */
-  key(key: string, mods: { shift?: boolean; ctrl?: boolean; alt?: boolean; meta?: boolean } = {}): this {
-    const code = key.length === 1 || [...key].length === 1 ? key.codePointAt(0)! : (NamedKey as Record<string, number>)[key];
+  /**
+   * Presses and releases a key. `key` is a character or a named key
+   * ("ArrowDown"…). A character types itself into the focused Input, unless
+   * a shortcut modifier is held.
+   */
+  key(key: string, mods: KeyMods = {}): this {
+    const code = [...key].length === 1 ? key.codePointAt(0)! : (NamedKey as Record<string, number>)[key];
     if (code === undefined) throw new Error(`mantou: unknown key "${key}"`);
-    const bits = (mods.shift ? KeyModifier.Shift : 0) | (mods.ctrl ? KeyModifier.Control : 0) | (mods.alt ? KeyModifier.Alt : 0) | (mods.meta ? KeyModifier.Meta : 0);
+    const ctrl = mods.ctrl || (mods.primary && !isMac), meta = mods.meta || (mods.primary && isMac);
+    const bits = (mods.shift ? KeyModifier.Shift : 0) | (ctrl ? KeyModifier.Control : 0) | (mods.alt ? KeyModifier.Alt : 0) | (meta ? KeyModifier.Meta : 0);
     this.ui.flush();
     this.lib.symbols.mt_test_key(this.handle, code, 1, bits);
     this.lib.symbols.mt_test_key(this.handle, code, 0, bits);
     return this.step();
+  }
+
+  /** Types `text` key by key into the focused Input, as a keyboard would ("\n" presses Enter). */
+  type(text: string): this {
+    for (const ch of text) this.key(ch === "\n" ? "Enter" : ch);
+    return this;
+  }
+
+  /** Text arriving all at once, as from an IME or dictation (one undo step). */
+  insertText(text: string): this {
+    this.ui.flush();
+    const b = bytes(text);
+    this.lib.symbols.mt_test_text(this.handle, b, b?.byteLength ?? 0);
+    return this.step();
+  }
+
+  /** An IME composition in progress in the focused Input ("" ends it); `cursor` is a byte range in it. */
+  compose(text: string, cursor?: [number, number]): this {
+    this.ui.flush();
+    const b = bytes(text);
+    const none = 0xffffffff;
+    this.lib.symbols.mt_test_ime(this.handle, b, b?.byteLength ?? 0, cursor?.[0] ?? none, cursor?.[1] ?? none);
+    return this.step();
+  }
+
+  /** The instance's own clipboard (copy, cut and paste in Inputs use it). */
+  get clipboard(): string {
+    return this.readString((buf) => this.lib.symbols.mt_test_clipboard(this.handle, buf, buf.byteLength)) ?? "";
+  }
+
+  set clipboard(text: string) {
+    const b = bytes(text);
+    this.lib.symbols.mt_test_set_clipboard(this.handle, b, b?.byteLength ?? 0);
+  }
+
+  /** An Input's text as the core has it, or null if the node isn't an Input. */
+  value(node: Node): string | null {
+    this.step();
+    return this.readString((buf) => this.lib.symbols.mt_test_value(this.handle, node.id, buf, buf.byteLength));
+  }
+
+  /** The Input with the keyboard focus, as the core has it. */
+  focused(): Node | null {
+    this.step();
+    return this.ui.nodes.get(this.lib.symbols.mt_test_focused(this.handle)) ?? null;
+  }
+
+  /** Calls `read` (which returns the full length, or 0xffffffff for none) with a big enough buffer. */
+  private readString(read: (buf: Uint8Array) => number): string | null {
+    let buf = new Uint8Array(1024);
+    let n = read(buf);
+    if (n === 0xffffffff) return null;
+    if (n > buf.byteLength) {
+      buf = new Uint8Array(n);
+      n = read(buf);
+    }
+    return new TextDecoder().decode(buf.subarray(0, n));
   }
 
   /** Scrolls the wheel at logical (x, y); positive dy scrolls content up. */

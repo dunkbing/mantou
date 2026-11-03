@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
@@ -33,9 +33,16 @@ export const ops: OpDef[] = [
   { name: "CLEAR_COLOR", code: 11, operands: [["r", "f32"], ["g", "f32"], ["b", "f32"], ["a", "f32"]], doc: "The window's background colour (sRGB, 0–1)." },
   { name: "TITLE", code: 12, operands: [["title", "string"]], doc: "The window's title." },
   { name: "TEXT", code: 13, operands: [["id", "id"], ["text", "string"]], doc: "The content of a Text node." },
+  { name: "VALUE", code: 14, operands: [["id", "id"], ["rev", "u32"], ["text", "string"]], doc: "An Input's text, from the app. Applied only when `rev` (the last TEXT_CHANGED rev the app has seen, 0 before any) is at least the input's, so a value derived from an older edit never undoes newer typing." },
+  { name: "PLACEHOLDER", code: 15, operands: [["id", "id"], ["text", "string"]], doc: "What an empty Input shows." },
+  { name: "INPUT_OPTIONS", code: 16, operands: [["id", "id"], ["flags", "u32"], ["maxLength", "u32"]], doc: "An Input's options: InputFlag bits, and its maximum length in characters (0 = none)." },
+  { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow." },
 ];
 
-export const nodeKinds = { View: 1, Text: 2 } as const;
+export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
+
+/** INPUT_OPTIONS flags. */
+export const inputFlags = { Multiline: 1, ReadOnly: 4 } as const;
 
 export const eventMask = { Press: 1 } as const;
 
@@ -97,9 +104,17 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "borderRadius", code: 42, type: "f32", default: "0" },
   { name: "borderWidth", code: 43, type: "f32", default: "0" },
   { name: "borderColor", code: 44, type: "color", default: "transparent" },
+  // Inputs.
+  { name: "placeholderColor", code: 45, type: "color", default: "the text colour at 40% opacity" },
+  { name: "caretColor", code: 46, type: "color", default: "the text colour" },
+  { name: "selectionColor", code: 47, type: "color", default: "#3b82f666" },
 ];
 
-/** Events: fixed 16-byte records `[type, a, b, c]` (u32 words; floats as bits). */
+/**
+ * Events: records of u32 words (floats as bits), `[head, a, b, c]` and then
+ * `head >> 16` more words: `head & 0xffff` is the type. Most events have no
+ * extra words; TEXT_CHANGED carries its text.
+ */
 export const events: { name: string; code: number; fields: string; doc: string }[] = [
   { name: "WINDOW_READY", code: 1, fields: "a = width px, b = height px, c = scale (f32)", doc: "The window opened." },
   { name: "RESIZED", code: 2, fields: "a = width px, b = height px", doc: "The window's size changed." },
@@ -112,6 +127,10 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "SCALE_CHANGED", code: 9, fields: "c = scale (f32)", doc: "The window's scale factor changed." },
   { name: "PRESS", code: 10, fields: "a = target node, b = x, c = y (f32, logical px)", doc: "A press (down and up on the same node) on a node with a Press listener on its path." },
   { name: "WHEEL", code: 11, fields: "a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up)", doc: "The wheel or trackpad scrolled." },
+  { name: "FOCUS", code: 12, fields: "a = input", doc: "An Input got the keyboard focus." },
+  { name: "BLUR", code: 13, fields: "a = input", doc: "An Input lost the keyboard focus." },
+  { name: "TEXT_CHANGED", code: 14, fields: "a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words", doc: "The user changed an Input's text." },
+  { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
 ];
 
 /** Bits of a key event's modifiers. */

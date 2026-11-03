@@ -24,6 +24,33 @@ export interface TextProps {
   children?: JSX.Element;
 }
 
+/** A text field. Keys it uses (typing, arrows, shortcuts like copy) don't reach onKey handlers. */
+export interface InputProps {
+  /** Controlled: the text. Keep it in sync with onChange, or the input goes back to it. */
+  value?: string;
+  /** Uncontrolled: the text it starts with. */
+  defaultValue?: string;
+  /** What it shows while empty. */
+  placeholder?: string;
+  /** Enter adds a line (Ctrl/Cmd+Enter submits), and it grows with its text. */
+  multiline?: boolean;
+  readOnly?: boolean;
+  /** In characters. */
+  maxLength?: number;
+  /** Focus it when it's created. */
+  autoFocus?: boolean;
+  /** The user changed the text. */
+  onChange?: (value: string) => void;
+  /** Enter in a single-line input, Ctrl/Cmd+Enter in a multiline one. */
+  onSubmit?: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  onPress?: (e: PressEvent) => void;
+  onWheel?: (e: WheelEvent) => void;
+  style?: StyleProp;
+  ref?: Node | ((node: Node) => void);
+}
+
 export namespace JSX {
   export type Element = Node | TextLeaf | ArrayElement | (() => Element) | string | number | boolean | null | undefined;
   export interface ArrayElement extends Array<Element> {}
@@ -33,6 +60,7 @@ export namespace JSX {
   export interface IntrinsicElements {
     view: ViewProps;
     text: TextProps;
+    input: InputProps;
   }
   export interface IntrinsicAttributes {}
 }

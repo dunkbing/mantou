@@ -17,7 +17,7 @@ description: Text rendering, rounded corners, borders, clipping, keys and the wh
 
 It runs in a window, where its first frame appears about 0.7 s after launch on Linux (mostly Babel compiling the app's JSX), and on headless instances: its tests cover opening, keyboard triage and undo, tabs, the wheel, quick replies, the sidebar and captured pixels.
 
-There's no text input yet, so there's no compose window or search.
+It was built before Mantou had [text input](/progress/text-input/), so it has no compose window or search yet.
 
 ## What the framework gained
 
