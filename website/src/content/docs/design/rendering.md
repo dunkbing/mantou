@@ -24,6 +24,7 @@ description: "The frame pipeline, scene, wgpu renderer, scrolling and animation,
 
 ### 9.4 Scrolling and animation
 - **Scrolling** belongs to the core: wheel and trackpad input, momentum (taken from the OS where it provides it), rubber-banding and scrollbars. JS receives throttled `SCROLL` events only if it listens for them.
+  - **Status:** implemented for `overflow: "scroll"` views ([Scrolling and dialogs](/progress/scrolling/)): the wheel and trackpad on the main thread with no relayout, a draggable overlay thumb, `SCROLL_TO` and `SCROLL_INTO_VIEW` applied after the batch's layout, and `SCROLL` events at most once per placement. Rubber-banding, keyboard scrolling and virtualized lists aren't yet.
 - **Virtualized lists:** the core asks JS for rows by index as they come into view (`LIST_NEED(rows)`), and JS answers with ops. Rows that leave the view are recycled, with new item signals bound to them.
 - **Animations:**
   - Declarative transitions on style props (`transition={{ opacity: 200 }}`) and an `animate()` command run in the core, with timing curves and springs.

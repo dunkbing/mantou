@@ -66,6 +66,8 @@ export class OpEncoder {
   inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
   focus(id: number) { this.op(Op.FOCUS, [id]); }
   focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
+  scrollTo(id: number, x: number, y: number, flags: number) { this.op(Op.SCROLL_TO, [id, f32bits(x), f32bits(y), flags]); }
+  scrollIntoView(id: number, block: number) { this.op(Op.SCROLL_INTO_VIEW, [id, block]); }
 
   get empty() { return this.len === 0; }
 

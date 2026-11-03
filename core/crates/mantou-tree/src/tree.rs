@@ -14,8 +14,10 @@ use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
 
 mod input;
+mod scroll;
 
 use input::Input;
+use scroll::{Drag, Request, ScrollState, Thumb};
 pub use input::{Clipboard, MemoryClipboard};
 
 /// What the tree tells JS: about inputs, and boxes that listeners asked for.
@@ -27,6 +29,8 @@ pub enum TreeEvent {
     Submit(u32),
     /// A node with a Layout listener got a new box: x, y, width, height (logical px).
     Layout { id: u32, rect: [f32; 4] },
+    /// A scroll view with a Scroll listener scrolled to this offset.
+    Scroll { id: u32, offset: [f32; 2] },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -130,6 +134,10 @@ struct Visual {
     placeholder_color: Option<u32>,
     caret_color: Option<u32>,
     selection_color: Option<u32>,
+    /// overflow: "scroll".
+    scrolls: bool,
+    no_scrollbar: bool,
+    scrollbar_color: Option<u32>,
 }
 
 struct Node {
@@ -147,6 +155,8 @@ struct Node {
     reported: Option<[f32; 4]>,
     /// FOCUS_SCOPE flags (0 = not a focus scope).
     scope: u32,
+    /// A scroll view's offset and limits (overflow: "scroll").
+    scroll: Option<ScrollState>,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -189,6 +199,13 @@ pub struct Tree {
     /// The focus when the current batch began: where a scope that appears in
     /// it (and takes the focus with an autoFocus input) gives it back.
     focus_at_batch: Option<u32>,
+    /// A scroll offset changed: boxes must be placed again (no relayout needed).
+    boxes_dirty: bool,
+    /// Scrollbar thumbs, placed with the boxes.
+    thumbs: Vec<Thumb>,
+    thumb_drag: Option<Drag>,
+    /// SCROLL_TO and SCROLL_INTO_VIEW requests, applied after the batch's layout.
+    requests: Vec<Request>,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -233,6 +250,10 @@ impl Tree {
             reports_pending: false,
             scopes: Vec::new(),
             focus_at_batch: None,
+            boxes_dirty: false,
+            thumbs: Vec::new(),
+            thumb_drag: None,
+            requests: Vec::new(),
         }
     }
 
@@ -302,6 +323,7 @@ impl Tree {
                     input,
                     reported: None,
                     scope: 0,
+                    scroll: None,
                 });
                 self.restyle(id);
             }
@@ -428,6 +450,16 @@ impl Tree {
                     self.layout_dirty = true;
                 }
             }
+            Op::ScrollTo { id, x, y, flags } => {
+                if self.node(id)?.scroll.is_none() {
+                    return Err(format!("SCROLL_TO: {id} is not a scroll view"));
+                }
+                self.request_scroll_to(id, x, y, flags);
+            }
+            Op::ScrollIntoView { id, block } => {
+                self.node(id)?;
+                self.request_into_view(id, block);
+            }
             Op::FocusScope { id, flags } => {
                 self.node(id)?.scope = flags;
                 self.layout_dirty = true; // scopes open and close at layout
@@ -521,6 +553,9 @@ impl Tree {
         if let Some(inp) = node.input.as_mut() {
             inp.editor.get_mut().set_style(&v.text);
         }
+        if v.scrolls != node.scroll.is_some() {
+            node.scroll = v.scrolls.then(ScrollState::default);
+        }
         node.v = v;
         self.layout_dirty = true;
     }
@@ -546,7 +581,10 @@ impl Tree {
     /// Lays out the tree if anything changed since the last layout.
     pub fn layout(&mut self) -> bool {
         if !self.layout_dirty {
-            if self.reports_pending {
+            // Scrolling moves boxes without a relayout.
+            if self.boxes_dirty || !self.requests.is_empty() {
+                self.place();
+            } else if self.reports_pending {
                 self.report_layouts();
             }
             return false;
@@ -586,8 +624,15 @@ impl Tree {
         if measured.is_ok() {
             self.stats.layouts += 1;
         }
-        self.boxes.clear();
-        self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY]);
+        self.place();
+        true
+    }
+
+    /// Places the boxes from the last layout and scroll offsets, applies the
+    /// app's scroll requests, and queues what listeners asked to hear.
+    fn place(&mut self) {
+        self.place_boxes();
+        self.apply_requests();
         for b in &self.boxes {
             if let Some(inp) = &self.nodes[&b.id].input {
                 let c = b.content;
@@ -595,8 +640,17 @@ impl Tree {
             }
         }
         self.report_layouts();
+        self.report_scrolls();
         self.update_scopes();
-        true
+    }
+
+    fn place_boxes(&mut self) {
+        self.boxes_dirty = false;
+        self.boxes.clear();
+        self.thumbs.clear();
+        if let Some(root) = self.root {
+            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY]);
+        }
     }
 
     /// Queues a Layout event for each listening node whose box changed since
@@ -640,10 +694,42 @@ impl Tree {
         let rect = [x, y, x + l.size.width, y + l.size.height];
         let (pd, bd) = (l.padding, l.border);
         let content = [x + pd.left + bd.left, y + pd.top + bd.top, rect[2] - pd.right - bd.right, rect[3] - pd.bottom - bd.bottom];
-        self.boxes.push(LaidOut { id, rect, content, clip });
+        let laid = LaidOut { id, rect, content, clip };
+        self.boxes.push(laid);
         let inner = if node.v.clips { intersect(clip, rect) } else { clip };
-        for c in self.nodes[&id].children.clone() {
-            self.collect_boxes(c, x, y, inner);
+        let border = [bd.left, bd.top, bd.right, bd.bottom];
+        // A scroll view: how far its content reaches (from its padding box), and so how far it scrolls.
+        let mut extent = [0.0f32; 2];
+        if node.scroll.is_some() {
+            for &c in &node.children {
+                let cn = &self.nodes[&c];
+                let Ok(cl) = self.taffy.layout(cn.taffy) else { continue };
+                if cn.v.hidden {
+                    continue;
+                }
+                extent[0] = extent[0].max(cl.location.x + cl.size.width + cl.margin.right - bd.left + pd.right);
+                extent[1] = extent[1].max(cl.location.y + cl.size.height + cl.margin.bottom - bd.top + pd.bottom);
+            }
+            let view = scroll::viewport(&laid, border);
+            let st = self.nodes.get_mut(&id).and_then(|n| n.scroll.as_mut()).expect("a scroll view");
+            st.max = [(extent[0] - (view[2] - view[0])).max(0.0), (extent[1] - (view[3] - view[1])).max(0.0)];
+            st.offset = [st.offset[0].clamp(0.0, st.max[0]), st.offset[1].clamp(0.0, st.max[1])];
+        }
+        let node = &self.nodes[&id];
+        let offset = node.scroll.map_or([0.0; 2], |s| s.offset);
+        for c in node.children.clone() {
+            self.collect_boxes(c, x - offset[0], y - offset[1], inner);
+        }
+        let node = &self.nodes[&id];
+        if let Some(st) = node.scroll
+            && !node.v.no_scrollbar
+        {
+            let at = self.boxes.len();
+            let mut t = scroll::thumbs(id, &laid, border, &st, extent, at);
+            for th in &mut t {
+                th.clip = intersect(clip, rect);
+            }
+            self.thumbs.extend(t);
         }
     }
 
@@ -663,7 +749,33 @@ impl Tree {
             [ch(0), ch(8), ch(16), ch(24) * alpha]
         };
         let mut glyphs = false;
-        for b in &self.boxes {
+        let thumb_quad = |t: &Thumb, nodes: &HashMap<u32, Node>| {
+            let v = &nodes[&t.view].v;
+            let mut alpha = v.opacity;
+            let mut a = nodes[&t.view].parent;
+            while let Some(pid) = a {
+                alpha *= nodes[&pid].v.opacity;
+                a = nodes[&pid].parent;
+            }
+            let c = t.clip;
+            let clip = if c[0].is_finite() { [snap(c[0]), snap(c[1]), snap(c[2]), snap(c[3])] } else { NO_CLIP };
+            let r = t.rect;
+            Quad {
+                rect: [snap(r[0]), snap(r[1]), snap(r[2]), snap(r[3])],
+                color: rgba(v.scrollbar_color.unwrap_or(0x8c80_8080), alpha),
+                uv: [0.0; 4],
+                clip,
+                radius: scroll::THUMB_RADIUS * s,
+                border: 0.0,
+                border_color: [0.0; 4],
+            }
+        };
+        let mut thumbs = self.thumbs.iter().peekable();
+        for (i, b) in self.boxes.iter().enumerate() {
+            // A scroll view's thumb goes over its content, before whatever comes after it.
+            while let Some(t) = thumbs.next_if(|t| t.at <= i) {
+                quads.push(thumb_quad(t, &self.nodes));
+            }
             let node = &self.nodes[&b.id];
             let mut alpha = node.v.opacity;
             let mut a = node.parent;
@@ -744,6 +856,9 @@ impl Tree {
                 }
             }
         }
+        for t in thumbs {
+            quads.push(thumb_quad(t, &self.nodes));
+        }
         let atlas = if glyphs { self.text.as_ref().map(|t| t.atlas()) } else { None };
         Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas }
     }
@@ -762,6 +877,9 @@ impl Tree {
     /// The node a press at this point targets: the topmost node under it, if a
     /// node on its path to the root listens for presses.
     pub fn press_target(&self, x: f32, y: f32) -> Option<u32> {
+        if self.on_thumb(x, y) {
+            return None; // a scrollbar thumb is the core's, not the content's
+        }
         let hit = self.hit(x, y)?;
         let mut a = Some(hit);
         while let Some(id) = a {
@@ -985,11 +1103,24 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::MaxLines => v.text.max_lines = num().clamp(0.0, 10_000.0) as u32,
         Prop::FontStyle => v.text.italic = e == p::font_style::ITALIC,
         Prop::Overflow => {
-            v.clips = e == p::overflow::HIDDEN;
+            v.clips = e == p::overflow::HIDDEN || e == p::overflow::SCROLL;
+            v.scrolls = e == p::overflow::SCROLL;
             // Also tells Taffy, so the box's automatic minimum size is 0 (CSS):
-            // a clipping box can be smaller than its content.
-            let o = if v.clips { taffy::style::Overflow::Hidden } else { taffy::style::Overflow::Visible };
+            // a clipping box can be smaller than its content. Scrollbars are
+            // drawn over the content, so they take no space (scrollbar_width 0).
+            let o = match e {
+                p::overflow::HIDDEN => taffy::style::Overflow::Hidden,
+                p::overflow::SCROLL => taffy::style::Overflow::Scroll,
+                _ => taffy::style::Overflow::Visible,
+            };
             s.overflow = taffy::geometry::Point { x: o, y: o };
+            s.scrollbar_width = 0.0;
+        }
+        Prop::Scrollbar => v.no_scrollbar = e == p::scrollbar::NONE,
+        Prop::ScrollbarColor => {
+            if let Value::Color(c) = value {
+                v.scrollbar_color = Some(c)
+            }
         }
         Prop::BorderRadius => v.radius = num().max(0.0),
         Prop::BorderWidth => {

@@ -1,6 +1,6 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { InputProps, JSX, TextProps, ViewProps } from "../jsx-runtime";
+import type { InputProps, JSX, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
 import { createElement, currentUi, spread } from "./renderer";
 import { createSignal, onCleanup } from "./solid";
@@ -17,6 +17,54 @@ export function Text(props: TextProps): JSX.Element {
   const node = createElement("text") as Node;
   spread(node, props, false);
   return node;
+}
+
+/**
+ * A scroll view: the core scrolls it (wheel, trackpad, dragging its thumb),
+ * with no round trip through JS. Its children go in a content view that
+ * keeps their full size (it doesn't shrink), styled with `contentStyle`; its
+ * `ref` is the scroll view, for `scrollTo`, `scrollBy` and `onScroll`.
+ * Ancestors in a flex column usually need `minHeight: 0` so it can be
+ * smaller than its content.
+ */
+export function Scroll(props: ScrollProps): JSX.Element {
+  const outer = createElement("view") as Node;
+  const inner = createElement("view") as Node;
+  spread(
+    outer,
+    {
+      get style() {
+        return [{ overflow: "scroll", ...(props.scrollbar ? { scrollbar: props.scrollbar } : {}) }, props.style];
+      },
+      get onScroll() {
+        return props.onScroll;
+      },
+      get onLayout() {
+        return props.onLayout;
+      },
+      get onWheel() {
+        return props.onWheel;
+      },
+      get ref() {
+        return props.ref;
+      },
+    },
+    true,
+  );
+  spread(
+    inner,
+    {
+      get style() {
+        return [{ flexShrink: 0 }, props.contentStyle];
+      },
+      get children() {
+        return props.children;
+      },
+    },
+    false,
+  );
+  outer.append(inner);
+  return outer;
 }
 
 /**

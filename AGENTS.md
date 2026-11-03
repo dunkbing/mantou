@@ -60,6 +60,7 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 11. **Text goes inside `<Text>`**, which holds only text (its content is its text leaves joined, sent as one `TEXT` op per change). Text elsewhere isn't drawn, and the runtime warns once.
 12. **The core owns text editing.** An `<Input>`'s caret, selection, undo, clipboard and IME live in the core, so typing never waits for JS; JS hears `TEXT_CHANGED` with a `rev`, and a `VALUE` with an older `rev` than the user's latest edit is ignored. Keys the focused input uses never reach `onKey`. Typing in an uncontrolled input sends no ops, and neither does a controlled input's echo.
 13. **Layout is CSS flexbox.** `flexShrink` defaults to 1 and flex items are at least as tall as their content unless they clip, so fixed-size parts need `flexShrink: 0` and scroll containers' ancestors need `minHeight: 0`. Use `onLayout` (or `useWindowSize()`) for sizes the app follows, and `node.measure()` for a one-off (it commits first, then asks the core). Views are `position: relative` by default, so `right`/`bottom` of absolute children resolve against their parent.
+14. **The core scrolls.** `overflow: "scroll"` views (`<Scroll>`) keep their offset in the core, which applies it when placing boxes: the wheel and the thumb scroll on the main thread with no JS and no relayout. Apps scroll with `scrollTo`/`scrollBy`/`scrollIntoView` (applied after the turn's layout) and listen with `onScroll`; never scroll with negative margins.
 
 ## Apps built on Mantou
 

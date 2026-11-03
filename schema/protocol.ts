@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
@@ -37,6 +37,8 @@ export const ops: OpDef[] = [
   { name: "PLACEHOLDER", code: 15, operands: [["id", "id"], ["text", "string"]], doc: "What an empty Input shows." },
   { name: "INPUT_OPTIONS", code: 16, operands: [["id", "id"], ["flags", "u32"], ["maxLength", "u32"]], doc: "An Input's options: InputFlag bits, and its maximum length in characters (0 = none)." },
   { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow." },
+  { name: "SCROLL_TO", code: 19, operands: [["id", "id"], ["x", "f32"], ["y", "f32"], ["flags", "u32"]], doc: "Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout." },
+  { name: "SCROLL_INTO_VIEW", code: 20, operands: [["id", "id"], ["block", "u32"]], doc: "Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
@@ -49,7 +51,13 @@ export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
-export const eventMask = { Press: 1, Layout: 2 } as const;
+export const eventMask = { Press: 1, Layout: 2, Scroll: 4 } as const;
+
+/** SCROLL_TO flags. */
+export const scrollFlags = { By: 1 } as const;
+
+/** SCROLL_INTO_VIEW: where the node ends up in its scroll view ("nearest" moves as little as it can). */
+export const scrollBlocks = { Nearest: 0, Start: 1, Center: 2, End: 3 } as const;
 
 /** Style value types: how many words each takes after the property code. */
 export type ValueType =
@@ -103,8 +111,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "textAlign", code: 38, type: { enum: ["start", "center", "end"] }, default: "start" },
   { name: "maxLines", code: 39, type: "f32", default: "0 (no limit); a cut-off last line ends in an ellipsis" },
   { name: "fontStyle", code: 40, type: { enum: ["normal", "italic"] }, default: "normal" },
-  // Clips the node's children to its box.
-  { name: "overflow", code: 41, type: { enum: ["visible", "hidden"] }, default: "visible" },
+  // "hidden" clips the node's children to its box; "scroll" clips them and the core scrolls them.
+  { name: "overflow", code: 41, type: { enum: ["visible", "hidden", "scroll"] }, default: "visible" },
   // Box decoration. The border is drawn inside the box and insets its content, as CSS's border-box.
   { name: "borderRadius", code: 42, type: "f32", default: "0" },
   { name: "borderWidth", code: 43, type: "f32", default: "0" },
@@ -113,6 +121,9 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "placeholderColor", code: 45, type: "color", default: "the text colour at 40% opacity" },
   { name: "caretColor", code: 46, type: "color", default: "the text colour" },
   { name: "selectionColor", code: 47, type: "color", default: "#3b82f666" },
+  // Scroll views (overflow: "scroll"): a thumb drawn over the content while it overflows, which can be dragged.
+  { name: "scrollbar", code: 48, type: { enum: ["auto", "none"] }, default: "auto" },
+  { name: "scrollbarColor", code: 49, type: "color", default: "#8080808c" },
 ];
 
 /**
@@ -136,6 +147,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "BLUR", code: 13, fields: "a = input", doc: "An Input lost the keyboard focus." },
   { name: "TEXT_CHANGED", code: 14, fields: "a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words", doc: "The user changed an Input's text." },
   { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
+  { name: "SCROLL", code: 17, fields: "a = scroll view, b = x, c = y (f32, logical px: the offset)", doc: "A scroll view with a Scroll listener scrolled (at most once per frame)." },
   { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
 ];
 

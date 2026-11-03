@@ -1,6 +1,6 @@
 // A to-do list: type in the field and press Enter to add an item, press an
-// item to tick it off. The field is controlled: it clears after each add.
-import { For, Input, Text, View, createSignal, defineStyle, type InputProps } from "mantou-ui";
+// item to tick it off; the list scrolls once it's long. The field is controlled: it clears after each add.
+import { For, Input, Scroll, Text, View, createSignal, defineStyle, type InputProps } from "mantou-ui";
 
 const field = defineStyle({
   height: 40,
@@ -48,7 +48,7 @@ export function Todos(props: { initial?: Todo[] }) {
   const left = () => todos().filter((t) => !t.done).length;
 
   return (
-    <View style={{ flexGrow: 1, padding: 24, gap: 12, backgroundColor: "#f3f4f6" }}>
+    <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 12, backgroundColor: "#f3f4f6" }}>
       <Text style={{ fontSize: 22, fontWeight: 700, color: "#111827" }}>To do</Text>
       <Field
         placeholder="What needs doing?"
@@ -58,7 +58,7 @@ export function Todos(props: { initial?: Todo[] }) {
         maxLength={80}
         autoFocus
       />
-      <View style={{ flexGrow: 1, minHeight: 0 }}>
+      <Scroll style={{ flexGrow: 1, minHeight: 0 }}>
         <For each={todos()}>
           {(todo) => (
             <View style={row} onPress={() => toggle(todo)}>
@@ -67,7 +67,7 @@ export function Todos(props: { initial?: Todo[] }) {
             </View>
           )}
         </For>
-      </View>
+      </Scroll>
       <Field style={{ height: "auto", minHeight: 64, paddingTop: 8, paddingBottom: 8 }} placeholder="Notes" multiline />
       <Text style={{ fontSize: 13, color: "#6b7280" }}>{`${left()} left`}</Text>
     </View>

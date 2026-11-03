@@ -14,6 +14,7 @@ export type CoreEvent =
   | { type: "press"; target: number; x: number; y: number }
   | { type: "wheel"; target: number; dx: number; dy: number }
   | { type: "layout"; target: number; x: number; y: number; width: number; height: number }
+  | { type: "scroll"; target: number; x: number; y: number }
   | InputCoreEvent;
 
 /** What the core says about Input nodes. */
@@ -74,6 +75,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.SCALE_CHANGED: return { type: "scaleChanged", scale: f[i + 3] };
     case Event.PRESS: return { type: "press", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.WHEEL: return { type: "wheel", target: w[i + 1], dx: f[i + 2], dy: f[i + 3] };
+    case Event.SCROLL: return { type: "scroll", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
     case Event.BLUR: return { type: "blur", target: w[i + 1] };
@@ -120,11 +122,13 @@ export function route(
     dispatchInput(e: InputCoreEvent): void;
     dispatchLayout(t: number, rect: { x: number; y: number; width: number; height: number }): void;
     dispatchResize(width: number, height: number, scale: number): void;
+    dispatchScroll(t: number, x: number, y: number): void;
     readonly windowSize: { scale: number } | null;
   },
   e: CoreEvent,
 ) {
   if (e.type === "press") ui.dispatchPress(e.target, e.x, e.y);
+  else if (e.type === "scroll") ui.dispatchScroll(e.target, e.x, e.y);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });
   // Sizes arrive in device px; the app works in logical px.
   else if (e.type === "windowReady") ui.dispatchResize(e.width / e.scale, e.height / e.scale, e.scale);

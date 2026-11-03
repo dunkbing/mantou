@@ -43,6 +43,11 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.value(5, 3, "");
   e.focus(0);
   e.focusScope(1, 3);
+  e.style(3, "overflow", "scroll");
+  e.style(3, "scrollbar", "none");
+  e.scrollTo(3, 0, 120, 0);
+  e.scrollTo(3, 0, -40, 1);
+  e.scrollIntoView(4, 0);
   const basic = e.take();
   return { basic };
 }

@@ -293,7 +293,7 @@ impl App {
             }
             UserEvent::TestPointer(kind, x, y) => self.redraw_if(self.inst.pointer(kind, x, y)),
             UserEvent::TestKey(k, down, mods) => self.redraw_if(self.inst.key(k, key_text(k).as_deref(), down, false, mods)),
-            UserEvent::TestWheel(x, y, dx, dy) => self.inst.wheel(x, y, dx, dy),
+            UserEvent::TestWheel(x, y, dx, dy) => self.redraw_if(self.inst.wheel(x, y, dx, dy)),
             UserEvent::TestText(t) => self.redraw_if(self.inst.insert_text(&t)),
             UserEvent::TestIme(t, cursor) => self.redraw_if(self.inst.ime_preedit(&t, cursor)),
         }
@@ -362,7 +362,7 @@ impl App {
                     }
                 };
                 let (x, y) = inst.pointer_position();
-                inst.wheel(x, y, dx, dy);
+                self.redraw_if(inst.wheel(x, y, dx, dy));
             }
             WindowEvent::RedrawRequested => self.draw(),
             WindowEvent::Occluded(false) => self.redraw_if(true),

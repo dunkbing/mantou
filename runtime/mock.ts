@@ -37,6 +37,11 @@ export class MockCore {
     this.ui.dispatchLayout(nodeId, rect);
   }
 
+  /** The core scrolled a scroll view to an offset. */
+  scroll(nodeId: number, x: number, y: number) {
+    this.ui.dispatchScroll(nodeId, x, y);
+  }
+
   /** The window resized (logical px). */
   resize(width: number, height: number, scale = 1) {
     this.ui.dispatchResize(width, height, scale);

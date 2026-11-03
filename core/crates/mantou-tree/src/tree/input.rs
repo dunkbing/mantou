@@ -145,6 +145,9 @@ impl Tree {
     /// line; `extend` = shift-click). Elsewhere: blur. Returns whether
     /// anything changed.
     pub fn pointer_down(&mut self, x: f32, y: f32, clicks: u32, extend: bool) -> bool {
+        if self.thumb_down(x, y) {
+            return true; // dragging a scrollbar: the focus stays where it is
+        }
         let target = self.hit(x, y).filter(|id| self.nodes[id].input.is_some());
         let Some(id) = target else {
             self.drag = None;
@@ -168,6 +171,9 @@ impl Tree {
     /// The pointer moved with the primary button down: extends the selection
     /// of the input the press started in.
     pub fn pointer_drag(&mut self, x: f32, y: f32) -> bool {
+        if self.thumb_drag.is_some() {
+            return self.thumb_move(x, y);
+        }
         let Some(id) = self.drag.filter(|&d| Some(d) == self.focus) else { return false };
         let Some((ox, oy)) = self.origin_of(id) else { return false };
         self.with_focused(false, |ed, t| ed.extend_to_point(t, x - ox, y - oy))
@@ -175,6 +181,7 @@ impl Tree {
 
     pub fn pointer_up(&mut self) {
         self.drag = None;
+        self.thumb_up();
     }
 
     /// Whether `id` is `ancestor` or inside it.

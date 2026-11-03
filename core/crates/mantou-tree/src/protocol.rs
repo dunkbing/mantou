@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 6;
+pub const PROTOCOL_VERSION: u32 = 7;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -39,6 +39,10 @@ pub mod op {
     pub const INPUT_OPTIONS: u32 = 16;
     /// Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow.
     pub const FOCUS: u32 = 17;
+    /// Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout.
+    pub const SCROLL_TO: u32 = 19;
+    /// Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout.
+    pub const SCROLL_INTO_VIEW: u32 = 20;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -62,6 +66,8 @@ pub fn op_name(code: u32) -> &'static str {
         15 => "PLACEHOLDER",
         16 => "INPUT_OPTIONS",
         17 => "FOCUS",
+        19 => "SCROLL_TO",
+        20 => "SCROLL_INTO_VIEW",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -76,6 +82,18 @@ pub mod node_kind {
 pub mod event_mask {
     pub const PRESS: u32 = 1;
     pub const LAYOUT: u32 = 2;
+    pub const SCROLL: u32 = 4;
+}
+
+pub mod scroll_flag {
+    pub const BY: u32 = 1;
+}
+
+pub mod scroll_block {
+    pub const NEAREST: u32 = 0;
+    pub const START: u32 = 1;
+    pub const CENTER: u32 = 2;
+    pub const END: u32 = 3;
 }
 
 pub mod focus_scope_flag {
@@ -150,6 +168,8 @@ pub mod event {
     pub const TEXT_CHANGED: u32 = 14;
     /// Enter in a single-line Input. a = input.
     pub const SUBMIT: u32 = 15;
+    /// A scroll view with a Scroll listener scrolled (at most once per frame). a = scroll view, b = x, c = y (f32, logical px: the offset).
+    pub const SCROLL: u32 = 17;
     /// A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left).
     pub const LAYOUT: u32 = 16;
 }
@@ -226,6 +246,12 @@ pub mod font_style {
 pub mod overflow {
     pub const VISIBLE: u32 = 0;
     pub const HIDDEN: u32 = 1;
+    pub const SCROLL: u32 = 2;
+}
+
+pub mod scrollbar {
+    pub const AUTO: u32 = 0;
+    pub const NONE: u32 = 1;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -287,10 +313,12 @@ pub enum Prop {
     PlaceholderColor = 45,
     CaretColor = 46,
     SelectionColor = 47,
+    Scrollbar = 48,
+    ScrollbarColor = 49,
 }
 
 impl Prop {
-    pub const COUNT: usize = 47;
+    pub const COUNT: usize = 49;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -341,6 +369,8 @@ impl Prop {
             45 => Prop::PlaceholderColor,
             46 => Prop::CaretColor,
             47 => Prop::SelectionColor,
+            48 => Prop::Scrollbar,
+            49 => Prop::ScrollbarColor,
             _ => return None,
         })
     }
@@ -394,6 +424,8 @@ impl Prop {
             Prop::PlaceholderColor => "placeholderColor",
             Prop::CaretColor => "caretColor",
             Prop::SelectionColor => "selectionColor",
+            Prop::Scrollbar => "scrollbar",
+            Prop::ScrollbarColor => "scrollbarColor",
         }
     }
 
@@ -439,13 +471,15 @@ impl Prop {
             Prop::TextAlign => ValueKind::Enum(3),
             Prop::MaxLines => ValueKind::F32,
             Prop::FontStyle => ValueKind::Enum(2),
-            Prop::Overflow => ValueKind::Enum(2),
+            Prop::Overflow => ValueKind::Enum(3),
             Prop::BorderRadius => ValueKind::F32,
             Prop::BorderWidth => ValueKind::F32,
             Prop::BorderColor => ValueKind::Color,
             Prop::PlaceholderColor => ValueKind::Color,
             Prop::CaretColor => ValueKind::Color,
             Prop::SelectionColor => ValueKind::Color,
+            Prop::Scrollbar => ValueKind::Enum(2),
+            Prop::ScrollbarColor => ValueKind::Color,
         }
     }
 
@@ -477,7 +511,8 @@ impl Prop {
             ],
             Prop::TextAlign => &["start", "center", "end"],
             Prop::FontStyle => &["normal", "italic"],
-            Prop::Overflow => &["visible", "hidden"],
+            Prop::Overflow => &["visible", "hidden", "scroll"],
+            Prop::Scrollbar => &["auto", "none"],
             _ => &[],
         }
     }

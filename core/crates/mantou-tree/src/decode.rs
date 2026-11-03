@@ -41,6 +41,9 @@ pub enum Op {
     InputOptions { id: u32, flags: u32, max_length: u32 },
     Focus { id: u32 },
     FocusScope { id: u32, flags: u32 },
+    /// x or y NaN: keep that axis.
+    ScrollTo { id: u32, x: f32, y: f32, flags: u32 },
+    ScrollIntoView { id: u32, block: u32 },
     /// An op from a newer protocol: skipped, so old cores tolerate new runtimes.
     Unknown { code: u32 },
 }
@@ -220,6 +223,18 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUS_SCOPE => {
                 fixed(2)?;
                 Op::FocusScope { id: a[0], flags: a[1] }
+            }
+            op::SCROLL_TO => {
+                fixed(4)?;
+                let (x, y) = (f32::from_bits(a[1]), f32::from_bits(a[2]));
+                if x.is_infinite() || y.is_infinite() {
+                    return err(i, "SCROLL_TO offsets must be finite or NaN");
+                }
+                Op::ScrollTo { id: a[0], x, y, flags: a[3] }
+            }
+            op::SCROLL_INTO_VIEW => {
+                fixed(2)?;
+                Op::ScrollIntoView { id: a[0], block: a[1] }
             }
             _ => Op::Unknown { code },
         };

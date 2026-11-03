@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, FocusScopeFlag, InputFlag, NodeKind, type StylePropName } from "./gen/protocol";
+import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { expandStyle, type Style } from "./style";
@@ -23,6 +23,15 @@ export interface Rect {
   width: number;
   height: number;
 }
+
+/** A scroll view's offset, in logical px. */
+export interface ScrollOffset {
+  x: number;
+  y: number;
+}
+
+/** Where scrollIntoView puts a node: "nearest" (the default) moves as little as it can. */
+export type ScrollBlockName = "nearest" | "start" | "center" | "end";
 
 /** The window's size in logical px, and its scale factor (device px per logical px). */
 export interface WindowSize {
@@ -123,6 +132,9 @@ export class Node {
   private pressHandlers: ((e: PressEvent) => void)[] = [];
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
   private layoutHandlers: ((rect: Rect) => void)[] = [];
+  private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
+  /** A scroll view's offset, as the core last reported it to scroll handlers. */
+  scrollOffset: ScrollOffset = { x: 0, y: 0 };
   /** The box the core last reported to this node's layout handlers. */
   layout: Rect | null = null;
   /** The content last sent for a Text node. */
@@ -426,6 +438,7 @@ export class Node {
     this.pressHandlers.length = 0;
     this.wheelHandlers.length = 0;
     this.layoutHandlers.length = 0;
+    this.scrollHandlers.length = 0;
     this.inputHandlers = null;
     this.released = true;
     this.ui.free(this);
@@ -455,7 +468,10 @@ export class Node {
   }
 
   private listen() {
-    const mask = (this.pressHandlers.length ? EventMask.Press : 0) | (this.layoutHandlers.length ? EventMask.Layout : 0);
+    const mask =
+      (this.pressHandlers.length ? EventMask.Press : 0) |
+      (this.layoutHandlers.length ? EventMask.Layout : 0) |
+      (this.scrollHandlers.length ? EventMask.Scroll : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
   }
@@ -475,6 +491,58 @@ export class Node {
       this.layoutHandlers.splice(i, 1);
       if (this.layoutHandlers.length === 0 && !this.released) this.listen();
     };
+  }
+
+  /**
+   * Adds a scroll handler to a scroll view (overflow: "scroll"): it hears the
+   * offset after the core scrolls it, at most once per frame. Returns a
+   * function that removes it.
+   */
+  onScroll(handler: (offset: ScrollOffset) => void): () => void {
+    this.alive();
+    this.scrollHandlers.push(handler);
+    if (this.scrollHandlers.length === 1) this.listen();
+    return () => {
+      const i = this.scrollHandlers.indexOf(handler);
+      if (i < 0) return;
+      this.scrollHandlers.splice(i, 1);
+      if (this.scrollHandlers.length === 0 && !this.released) this.listen();
+    };
+  }
+
+  /** @internal */
+  handleScroll(offset: ScrollOffset) {
+    this.scrollOffset = offset;
+    for (const h of [...this.scrollHandlers]) h(offset);
+  }
+
+  /** Scrolls this scroll view to an offset (an axis left out stays), clamped, after this turn's layout. */
+  scrollTo(to: Partial<ScrollOffset>): this {
+    this.alive();
+    this.ui.enc.scrollTo(this.id, to.x ?? NaN, to.y ?? NaN, 0);
+    this.ui.schedule();
+    return this;
+  }
+
+  /** Scrolls this scroll view by an amount, clamped, after this turn's layout. */
+  scrollBy(by: Partial<ScrollOffset>): this {
+    this.alive();
+    this.ui.enc.scrollTo(this.id, by.x ?? 0, by.y ?? 0, ScrollFlag.By);
+    this.ui.schedule();
+    return this;
+  }
+
+  /**
+   * Scrolls the scroll views around this node so it shows, after this turn's
+   * layout (so a node added in the same turn works). `block` is where it ends
+   * up vertically; sideways, it moves as little as it can.
+   */
+  scrollIntoView(options: { block?: ScrollBlockName } = {}): this {
+    this.alive();
+    const block = { nearest: ScrollBlock.Nearest, start: ScrollBlock.Start, center: ScrollBlock.Center, end: ScrollBlock.End }[options.block ?? "nearest"];
+    this.ui.enc.scrollIntoView(this.id, block);
+    this.ui.schedule();
+    return this;
   }
 
   /** @internal */
@@ -562,6 +630,11 @@ export class Ui {
     const size = { width, height, scale };
     this.windowSize = size;
     for (const h of [...this.resizeHandlers]) h(size);
+  }
+
+  /** Delivers a scroll view's new offset to its scroll handlers. */
+  dispatchScroll(targetId: number, x: number, y: number) {
+    this.nodes.get(targetId)?.handleScroll({ x, y });
   }
 
   /** Delivers a node's new box to its layout handlers. */

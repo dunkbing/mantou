@@ -65,6 +65,8 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "INPUT_OPTIONS": o = { op: name, id: w[a], flags: w[a + 1], maxLength: w[a + 2] }; break;
       case "FOCUS": o = { op: name, id: w[a] }; break;
       case "FOCUS_SCOPE": o = { op: name, id: w[a], flags: w[a + 1] }; break;
+      case "SCROLL_TO": o = { op: name, id: w[a], x: bitsf32(w[a + 1]), y: bitsf32(w[a + 2]), flags: w[a + 3] }; break;
+      case "SCROLL_INTO_VIEW": o = { op: name, id: w[a], block: w[a + 1] }; break;
       default: o = { op: name, words: Array.from(w.subarray(a, a + n)) };
     }
     out.push(o);

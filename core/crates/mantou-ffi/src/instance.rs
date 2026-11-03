@@ -165,6 +165,7 @@ impl Instance {
                     let words = mantou_tree::encode::string_words(&text);
                     self.push_record(&[ev::TEXT_CHANGED, id, rev, words[0]], &words[1..]);
                 }
+                TreeEvent::Scroll { id, offset: [x, y] } => self.push_event([ev::SCROLL, id, x.to_bits(), y.to_bits()]),
                 TreeEvent::Layout { id, rect: [x, y, w, h] } => {
                     self.push_record(&[ev::LAYOUT, id, x.to_bits(), y.to_bits()], &[w.to_bits(), h.to_bits()]);
                 }
@@ -329,9 +330,13 @@ impl Instance {
     }
 
     /// A wheel or trackpad scroll at (x, y) logical px; positive dy scrolls content up.
-    pub fn wheel(&self, x: f32, y: f32, dx: f32, dy: f32) {
+    /// Scrolls the scroll view under the point here, without JS (design
+    /// §9.4), and still tells JS about the wheel. Returns whether the scene changed.
+    pub fn wheel(&self, x: f32, y: f32, dx: f32, dy: f32) -> bool {
         let target = lock(&self.tree).hit(x, y).unwrap_or(0);
+        let scrolled = self.edit(|t| t.wheel(x, y, dx, dy));
         self.push_event([ev::WHEEL, target, dx.to_bits(), dy.to_bits()]);
+        scrolled
     }
 
     /// A key event: `key` is a Unicode scalar or a named key code, `text` what

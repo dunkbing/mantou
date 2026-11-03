@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { Node, PressEvent, Rect, TextLeaf, WheelEvent } from "./ui";
+import type { Node, PressEvent, Rect, ScrollOffset, TextLeaf, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -14,11 +14,29 @@ export interface ViewProps {
    * the focus goes back to the input that had it before it opened.
    */
   focusScope?: boolean;
+  /** A scroll view's offset after the core scrolls it (with `style={{ overflow: "scroll" }}`). */
+  onScroll?: (offset: ScrollOffset) => void;
   onPress?: (e: PressEvent) => void;
   /** Wheel and trackpad scrolling over this view (it bubbles, like presses). */
   onWheel?: (e: WheelEvent) => void;
   /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
   onLayout?: (rect: Rect) => void;
+  ref?: Node | ((node: Node) => void);
+  children?: JSX.Element;
+}
+
+/** A scroll view (see `Scroll`). */
+export interface ScrollProps {
+  /** The scroll view's own style; `overflow: "scroll"` is set for you. */
+  style?: StyleProp;
+  /** The style of the content view inside, which holds the children. */
+  contentStyle?: StyleProp;
+  /** "auto" (default): a thumb over the content while it overflows, which can be dragged; "none": no thumb. */
+  scrollbar?: "auto" | "none";
+  /** The offset after the core scrolls it, at most once per frame. */
+  onScroll?: (offset: ScrollOffset) => void;
+  onLayout?: (rect: Rect) => void;
+  onWheel?: (e: WheelEvent) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
 }

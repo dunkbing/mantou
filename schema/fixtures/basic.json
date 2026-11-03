@@ -224,5 +224,36 @@
     "op": "FOCUS_SCOPE",
     "id": 1,
     "flags": 3
+  },
+  {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "overflow",
+    "value": "scroll"
+  },
+  {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "scrollbar",
+    "value": "none"
+  },
+  {
+    "op": "SCROLL_TO",
+    "id": 3,
+    "x": 0,
+    "y": 120,
+    "flags": 0
+  },
+  {
+    "op": "SCROLL_TO",
+    "id": 3,
+    "x": 0,
+    "y": -40,
+    "flags": 1
+  },
+  {
+    "op": "SCROLL_INTO_VIEW",
+    "id": 4,
+    "block": 0
   }
 ]

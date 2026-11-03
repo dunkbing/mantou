@@ -110,6 +110,12 @@ impl Ops {
     pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
         self.op(op::FOCUS_SCOPE, &[id, flags])
     }
+    pub fn scroll_to(&mut self, id: u32, x: f32, y: f32, flags: u32) -> &mut Self {
+        self.op(op::SCROLL_TO, &[id, x.to_bits(), y.to_bits(), flags])
+    }
+    pub fn scroll_into_view(&mut self, id: u32, block: u32) -> &mut Self {
+        self.op(op::SCROLL_INTO_VIEW, &[id, block])
+    }
     pub fn set_root(&mut self, id: u32) -> &mut Self {
         self.op(op::SET_ROOT, &[id])
     }

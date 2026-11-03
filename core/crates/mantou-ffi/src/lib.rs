@@ -458,7 +458,7 @@ fn write_str(out: &mut [u8], s: &str) -> u32 {
 pub extern "C" fn mt_test_wheel(inst: u32, x: f32, y: f32, dx: f32, dy: f32) {
     with(inst, (), |i| {
         if i.headless {
-            i.wheel(x, y, dx, dy);
+            let _ = i.wheel(x, y, dx, dy);
         } else {
             send(UserEvent::TestWheel(x, y, dx, dy));
         }
