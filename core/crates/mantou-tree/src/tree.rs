@@ -105,7 +105,7 @@ const MAX_REPORTED_ERRORS: usize = 16;
 impl Tree {
     pub fn new() -> Tree {
         let mut taffy = TaffyTree::new();
-        // Rounding happens here, to device pixels, not in Taffy (NSH pitfall:
+        // Rounding happens here, to device pixels, not in Taffy:
         // Taffy's rounding leaves stale values for absolutely positioned nodes).
         taffy.disable_rounding();
         Tree {

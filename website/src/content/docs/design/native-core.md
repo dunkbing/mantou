@@ -11,7 +11,7 @@ description: "The Rust core: its crates, code layout and C ABI."
 |---|---|---|
 | Windows, input, IME, event loop | `winit` | `run_app` on the main thread; `EventLoopProxy` for wake-ups from other threads |
 | GPU | `wgpu` | Metal / D3D12 / Vulkan, with GL as a fallback; WGSL shaders |
-| Layout | `taffy` | flexbox, grid, block. Do our own rounding to device pixels (an NSH pitfall) |
+| Layout | `taffy` | flexbox, grid, block. Do our own rounding to device pixels |
 | Text layout and shaping | `parley` + `fontique` | Bidi, line breaking, font fallback. `cosmic-text` is the alternative |
 | Glyph rasterization | `swash` | Coverage + color (emoji) atlases |
 | Accessibility | `accesskit` + `accesskit_winit` | VoiceOver, Narrator/UIA, Orca/AT-SPI |

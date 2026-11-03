@@ -1,6 +1,6 @@
 ---
 title: "Overview"
-description: "What Mantou is, its goals and non-goals, and the prior art it builds on."
+description: "What Mantou is, its goals and non-goals, and the design principles it builds on."
 ---
 
 _Architecture & design_
@@ -39,21 +39,25 @@ The main thread never runs app JavaScript and never waits for it. That keeps scr
 - Running in a browser.
 - Pixel-identical text to each platform's own toolkit (see [§8.5](/design/protocols/#85-text) for the trade-off).
 
-## 3. Background and prior art
+## 3. Background and design influences
 
-| | **MyGo** (`egoist/mygo`, @48da1ba) | **NSH** (`longbridge/nsh`, @b13c8c2) | **Mantou** |
-|---|---|---|---|
-| Who owns the process | Go | Rust host | Bun; the main thread is handed to the native loop |
-| Where app code runs | Go, on the main thread | QuickJS on an engine thread | Bun `Worker` (JavaScriptCore, JIT) |
-| UI model | Immediate-mode API, rebuilds the tree every frame | Compiled JSX + Solid-style signals (in Rust) | Compiled JSX + Solid signals (in JS) |
-| Tree, layout, text | Go: flexbox/grid, OS text engines | Rust: Taffy, OS text engines | Rust: Taffy, parley |
-| Drawing | Own GPU renderer (Metal/D3D11/GL) + CPU fallback | Native views per node (AppKit, GTK 4, Direct2D) or GPUI | wgpu, MyGo-style instanced quads |
-| Web/Node APIs | n/a | Re-implemented in Rust | Provided by Bun |
+| | **Mantou** |
+|---|---|
+| Who owns the process | Bun; the main thread is handed to the native loop |
+| Where app code runs | Bun `Worker` (JavaScriptCore, JIT) |
+| UI model | Compiled JSX + Solid signals (in JS) |
+| Tree, layout, text | Rust: Taffy, parley |
+| Drawing | wgpu, instanced quads |
+| Web/Node APIs | Provided by Bun |
 
-### What we take from each
+### Design principles
 
-- **From MyGo:** frames are drawn only when asked for, so an idle window costs nothing. The scene is a flat list of operations. The renderer draws one instanced quad per operation with a signed-distance-field (SDF) shader for rounded rects, borders and shadows, plus glyph atlases. Layout results are cached and reused when an element hasn't changed.
-- **From NSH:**
+- **Rendering:**
+  - Frames are drawn only when asked for, so an idle window costs nothing.
+  - The scene is a flat list of operations.
+  - The renderer draws one instanced quad per operation with a signed-distance-field (SDF) shader for rounded rects, borders and shadows, plus glyph atlases.
+  - Layout results are cached and reused when an element hasn't changed.
+- **Threads and the tree:**
   - The app UI never waits for JS. One JS turn produces one commit.
   - The core keeps a shadow tree; JS only sends mutations.
   - Text is measured off the main thread and cached by content hash plus width.
@@ -61,4 +65,3 @@ The main thread never runs app JavaScript and never waits for it. That keeps scr
   - A node already in place is never re-inserted.
   - During a resize, the app waits a bounded time for the new layout.
   - Layout rounds to device pixels, not whole points.
-- **Electrobun and `webview-bun`** prove that Bun desktop apps can be packaged and shipped. They render in a webview, so they're useful for packaging ideas, not for rendering.

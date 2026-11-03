@@ -45,5 +45,5 @@ Worker        app code → ops → mt_commit()        core events → threadsafe
 - **Linux runtime dependencies:** winit loads `libxkbcommon-x11` at run time, and a missing library panics at start-up. The panic is caught at the C boundary and reported as exit code 101 with a clear message, but packages (`.deb`, AppImage) must declare these libraries.
 - **Synthetic X events are ignored:** winit ignores `XSendEvent` key events, so test input must use XTEST or the core's own input hook ([§12.2](/design/testing/#122-headless-mode-core-support)).
 - **wgpu 30** takes the display handle at instance creation, and OpenGL (EGL) needs it. The self-test also passes on the GL backend (`WGPU_BACKEND=gl`).
-- **Memory:** about 150 MB RSS in the self-test, almost all of it Mesa's software rasterizer, which carries an LLVM JIT. Bun plus an idle Worker measured 24 MB. MyGo reports the same effect from Mesa.
+- **Memory:** about 150 MB RSS in the self-test, almost all of it Mesa's software rasterizer, which carries an LLVM JIT. Bun plus an idle Worker measured 24 MB.
 - **Size:** the core library is 7.9 MB stripped on Linux; the unstripped build with line tables is 59 MB.

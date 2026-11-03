@@ -11,23 +11,21 @@ Testing covers two things:
 
 ### 12.1 Principles
 
-These are adopted from MyGo's "Waiting in tests" rules and NSH's `nsh test`.
-
 - **Never sleep and then check.** Wait for the condition or event itself (`waitFor`). A global guard of about a minute only turns a hang into a failure that names what never happened. Timeouts are never tuned to make a test pass.
 - **Time is controlled.** Headless apps run on a manual clock that moves only when the test says so (`app.clock.advance(ms)`). Animations, debounces, double-clicks, long presses and Mantou's `after()` timers all read it. No test depends on how fast the machine is.
   - **JS side:** `open()` turns on `bun:test`'s fake timers. Verified in Bun 1.4.4: they cover `setTimeout`, `setInterval`, `Date` and `performance.now`.
   - **Native side:** the core's clock is advanced through `mt_test_step`.
   - `app.clock.advance(ms)` moves both together, so JS timers and native animations stay in step. Bun has no `requestAnimationFrame`, so Mantou's animation-frame API reads the core's clock.
-- **Every step settles.** Each action (`press`, `type`, `scroll`, …) runs until the app is idle at the current clock time: no queued ops, events or due timers, and no request in flight. NSH's `EngineControl::flush` works the same way.
+- **Every step settles.** Each action (`press`, `type`, `scroll`, …) runs until the app is idle at the current clock time: no queued ops, events or due timers, and no request in flight.
 - **Measure counts in tests, time in benchmarks.** Tests assert ops per update, FFI calls per turn, layouts, text measurements, frames drawn and wake-ups. Wall-clock time is measured only by benchmarks, which are tracked over time ([§12.7](/design/testing/#127-benchmarks-tracked-not-gating)).
 - **Query the way users and assistive technology see the app.** Find elements by role and accessible name, or by visible text, before falling back to test ids. A control a test can't find by role probably can't be found by a screen reader either.
-- **Use one test API in two modes.** The same test file runs headless (fast, in-process, the default) or against a real window (`--target window`), through one driver interface. NSH does the same with its `Headless` and `Remote` drivers.
+- **Use one test API in two modes.** The same test file runs headless (fast, in-process, the default) or against a real window (`--target window`), through one driver interface.
 
 ### 12.2 Headless mode (core support)
 
 The core runs without winit or a GPU surface. The tree, layout, text, scene building, hit-testing, focus, scrolling, animation and the AccessKit tree are all platform-independent ([§6.2](/design/native-core/#62-layout-of-the-cores-code)), so only the platform layer is swapped out.
 
-This makes the core **multi-instance**: every ABI function takes an instance handle, and there are no global singletons. That's NSH's rule, and it also enables embedding several surfaces in one app. [§6.3](/design/native-core/#63-c-abi) changes accordingly: `mt_run` creates the app instance, and the functions below create headless ones.
+This makes the core **multi-instance**: every ABI function takes an instance handle, and there are no global singletons. This also enables embedding several surfaces in one app. [§6.3](/design/native-core/#63-c-abi) changes accordingly: `mt_run` creates the app instance, and the functions below create headless ones.
 
 **As built (C ABI version 3).** Handles are `u32`, every per-UI function (`mt_commit`, `mt_take_events`, `mt_stats`, `mt_set_wake`) takes one, and the window is the instance `mt_app()` returns. The design's buffer-based `mt_test_input` and `mt_test_query` became scalar calls for now; they grow when keys, text and accessibility queries arrive.
 
@@ -52,7 +50,7 @@ The real threading model is covered by the window-mode tests ([§12.5](/design/t
 
 ### 12.3 The app test API (`mantou-ui/test`)
 
-It's built on **`bun:test`**: Jest-compatible, with `describe`, hooks, `expect.extend`, snapshots and `--coverage` included. NSH had to write its own test runner, matchers and value equality in Rust; we get all of that from Bun.
+It's built on **`bun:test`**: Jest-compatible, with `describe`, hooks, `expect.extend`, snapshots and `--coverage` included. We don't have to write our own test runner, matchers or value equality.
 
 ```tsx
 import { test, expect } from "bun:test";
@@ -90,7 +88,7 @@ test("adds a todo", async () => {
 
 **Failure output:** the step that failed, the query, the texts on screen and a compact accessibility tree. With `--trace`, also every step's ops and commit timings.
 
-**`mantou test <entry>` without a test file:** runs the app headless and replays steps from stdin, as NSH's `nsh test App.tsx` does. It's for quick checks and bug reports.
+**`mantou test <entry>` without a test file:** runs the app headless and replays steps from stdin. It's for quick checks and bug reports.
 
 ### 12.4 Testing Mantou, layer by layer
 
@@ -98,19 +96,19 @@ test("adds a todo", async () => {
 |---|---|---|
 | **Op schema and codegen** | `cargo test` + `bun test` | TS encoder → Rust decoder round trip for every op and value type. The generated code matches committed golden files. Version and ABI mismatches fail with the intended message |
 | **Op decoder** | `cargo fuzz` | Malformed or truncated buffers never panic or read out of bounds; they return errors. Random *valid* op sequences keep tree invariants: one parent per child, no cycles, released ids never reused before `RELEASE` |
-| **Tree and layout** | `cargo test`, property tests (`proptest`) | Incremental layout equals layout from scratch after random mutations, frame after frame (MyGo's `TestLayoutCacheMatches`). Rounding to device pixels at scales 1, 1.25, 1.5, 2 and 2.625. Taffy pitfalls from NSH (`pitfalls.md`) as regression tests |
+| **Tree and layout** | `cargo test`, property tests (`proptest`) | Incremental layout equals layout from scratch after random mutations, frame after frame. Rounding to device pixels at scales 1, 1.25, 1.5, 2 and 2.625. Known Taffy pitfalls as regression tests |
 | **Text** | `cargo test` | Measure cache: a colour change means no relayout and a width change hits the cache. Bidi, wrapping, ellipsis, emoji, font fallback. Caret and selection geometry. Atlas full mid-frame → room is made and the frame repainted, with no missing glyphs |
 | **Scene builder** | `cargo test` + text snapshots | Scene dumps for reference trees. Clipping, layering of scroll containers and animations, operations hidden under an opaque fill dropped |
 | **Input and focus** | `cargo test` | Hit-testing with transforms and clips, tab order, pointer capture, press synthesis, wheel and momentum scrolling on the manual clock, text editing and the IME composition state machine |
 | **Accessibility** | `cargo test` | AccessKit tree for reference trees: roles, names, values, states, actions, and updates after commits |
-| **Renderer** | `cargo test` (offscreen wgpu) | Reference scenes (MyGo's `gputest.Scene` idea) drawn offscreen and compared with committed images within a per-pixel tolerance. Each backend has its own images where they legitimately differ. Once the CPU fallback exists, it becomes the oracle that GPU output is compared against, as MyGo does |
+| **Renderer** | `cargo test` (offscreen wgpu) | Reference scenes drawn offscreen and compared with committed images within a per-pixel tolerance. Each backend has its own images where they legitimately differ. Once the CPU fallback exists, it becomes the oracle that GPU output is compared against |
 | **TS runtime** | `bun test` with a **mock core** that records ops | Op streams per primitive and component. Granularity: one signal update → expected op count. `<If>`/`<Each>` keep siblings and moves never re-insert. Nodes are released when their owner is disposed (live-node count returns to its baseline). Event dispatch: capture and bubble, `stopPropagation`. Text-input `rev` handling |
 | **JSX plugin** | `bun test` | Compile output snapshots: static vs dynamic props, spreads, refs, components, and source maps pointing back at the TSX |
 | **Full stack, headless** | `bun test` + `mantou-ui/test` | Every example app and the component gallery: behaviour, accessibility queries, image snapshots, op-count budgets |
 
 ### 12.5 Window mode: the real threading model and platform layer
 
-The same test files run with `mantou test --target window`. Each `open` starts the app as a **separate process** with a real window. The test process drives it over a local socket through a test-only automation protocol, using the same `Driver` interface as headless mode (MyGo's `plugins/automation`, NSH's `Remote` driver). Steps settle the same way: the app reports idle.
+The same test files run with `mantou test --target window`. Each `open` starts the app as a **separate process** with a real window. The test process drives it over a local socket through a test-only automation protocol, using the same `Driver` interface as headless mode. Steps settle the same way: the app reports idle.
 
 On top of the shared app tests, a **platform suite** covers what headless mode can't:
 
@@ -120,7 +118,7 @@ On top of the shared app tests, a **platform suite** covers what headless mode c
   - Idle: over a 5-second window with nothing changing, **0 frames presented and 0 Worker wake-ups** (counters from `mt_test_stats`, not CPU percentages).
   - The bounded resize wait never exceeds its limit; this is a counter of waits that hit the limit.
 - **Platform integration:** window lifecycle and close requests, multiple windows, DPI changes (where the CI runner can simulate them), menus and their actions, clipboard round trip, file drop, dialogs (driven through the automation protocol's dialog stubs).
-- **IME:** the composition path is driven by synthetic IME events in the platform layer. The real input methods (macOS Japanese/Pinyin, Microsoft IME, ibus/fcitx) are covered by a **manual release checklist**, because CI can't drive them reliably. MyGo skips these tests while an input method is selected for the same reason.
+- **IME:** the composition path is driven by synthetic IME events in the platform layer. The real input methods (macOS Japanese/Pinyin, Microsoft IME, ibus/fcitx) are covered by a **manual release checklist**, because CI can't drive them reliably.
 - **Accessibility smoke tests:** read the window through each OS's own API (AX on macOS, UI Automation on Windows, AT-SPI on Linux) from a helper process. Check that a button's role and name arrive and that a press action reaches JS.
 
 ### 12.6 CI matrix
@@ -149,7 +147,7 @@ On top of the shared app tests, a **platform suite** covers what headless mode c
 - **Scroll:** frame time of a virtual list of 1,000,000 rows during a scripted fling.
 - **Start-up:** process start → first frame presented (packaged app, cold and warm).
 - **Memory:** idle footprint of the counter example; growth after 10,000 open/close cycles of a dialog, which should be none.
-- **Input latency:** synthetic input → frame presented, measured by the core (MyGo has an input-latency harness that can serve as a model).
+- **Input latency:** synthetic input → frame presented, measured by the core.
 
 Regressions above a threshold open an issue automatically. They never fail PRs, because timings are noisy.
 

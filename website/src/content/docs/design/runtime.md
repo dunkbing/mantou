@@ -17,8 +17,8 @@ process.exit(core.symbols.mt_exit_code());
 ```
 
 ### 7.2 Components, reactivity, compiled JSX
-- **Reactivity:** Solid's signals in plain JS (`signal`, `computed`, `effect`), re-exported from `mantou-ui`. JavaScriptCore's JIT makes this fast, so there's no reason to move the reactive graph into native code as NSH did.
-- **JSX:** Bun's built-in transform is React-style (`jsx()` calls), so it doesn't fit. A `Bun.plugin` runs `babel-preset-solid` with `generate: "universal"` and `moduleName` pointing at our renderer. The plugin runs in `dev`, in `build` and in the test runner. A faster Oxc-based compiler can come later, like NSH's.
+- **Reactivity:** Solid's signals in plain JS (`signal`, `computed`, `effect`), re-exported from `mantou-ui`. JavaScriptCore's JIT makes this fast, so there's no reason to move the reactive graph into native code.
+- **JSX:** Bun's built-in transform is React-style (`jsx()` calls), so it doesn't fit. A `Bun.plugin` runs `babel-preset-solid` with `generate: "universal"` and `moduleName` pointing at our renderer. The plugin runs in `dev`, in `build` and in the test runner. A faster Oxc-based compiler can come later.
 - **Renderer:** `solid-js/universal`'s `createRenderer`, implemented over a **JS mirror tree**. Solid's renderer API needs synchronous `getParentNode`, `getFirstChild` and `getNextSibling`. Each mirror node holds an id, a parent, its children and its handlers. Every mutation updates the mirror and appends an op.
 
 **Status:** implemented as described, with three findings.
@@ -57,4 +57,4 @@ run(() => (
   - Development builds count live nodes and warn when the safety net releases a node, because that means a release path was missed.
   - Inserting a node whose owner has been disposed is an error in development builds and a no-op in production.
   - **Status:** release on owner disposal is implemented (`runtime/solid/renderer.ts`); the `FinalizationRegistry` safety net and the development-build checks aren't yet.
-  - NSH frees nodes only through GC finalizers. We avoid that because the timing of JavaScriptCore's garbage collection is unpredictable, and native resources (GPU textures, text layouts) would linger.
+  - Nodes aren't freed through GC finalizers alone, because the timing of JavaScriptCore's garbage collection is unpredictable, and native resources (GPU textures, text layouts) would linger.

@@ -12,9 +12,9 @@ description: "Alternatives considered, risks, decisions on the former open quest
 | **Layout in TS** (Yoga WASM), display list per frame | Text measurement crosses FFI mid-layout; scrolling and resize would depend on the JS thread |
 | **Pure TS over `bun:ffi`** to AppKit/Win32/GTK, with no Rust | No structs by value; verbose Objective-C and COM; much more FFI traffic; three backends |
 | **Wrap OS widgets** | Three implementations per widget; looks and behaves differently per platform |
-| **Native views per node** (NSH's approach) | Scroll physics and text come native, but there are three backends to maintain. The core stays backend-agnostic at the scene level so this could be added later |
-| **Embed QuickJS** instead of using Bun (NSH's approach) | Would run on mobile, with a small binary, but loses the JIT, npm and Node APIs. Bun can't be embedded. If mobile becomes a requirement, revisit, or use NSH itself |
-| **Immediate-mode rebuild per frame** (MyGo's approach) | Rebuilding the tree every frame in JS creates garbage-collection pressure; fine-grained signals avoid it |
+| **Native views per node** (AppKit, GTK, Direct2D) | Scroll physics and text come native, but there are three backends to maintain. The core stays backend-agnostic at the scene level so this could be added later |
+| **Embed a small JS engine** such as QuickJS instead of using Bun | Would run on mobile, with a small binary, but loses the JIT, npm and Node APIs. Bun can't be embedded. If mobile becomes a requirement, revisit |
+| **Immediate-mode rebuild per frame** | Rebuilding the tree every frame in JS creates garbage-collection pressure; fine-grained signals avoid it |
 
 ## 15. Risks
 
@@ -34,19 +34,13 @@ description: "Alternatives considered, risks, decisions on the former open quest
 3. **Q3 Node release — decided:** deterministic release when the owning Solid scope is disposed, a `FinalizationRegistry` safety net, and a development-build warning when the safety net fires ([§7.4](/design/runtime/#74-node-lifetime)). Native resources such as textures and text layouts shouldn't wait on JavaScriptCore's GC timing.
 4. **Q4 Styling — decided:** typed style objects in v1, with shared `STYLE_DEF`/`STYLE_USE` on the wire from the start, and an optional build-time Tailwind subset later that compiles into the same definitions ([§8.4](/design/protocols/#84-styles)). Type checking and a small surface come first; classes later cost no change to the core.
 5. **Q5 Text engine — decided:** parley everywhere behind a `TextEngine` trait, with a screenshot comparison against native labels once text renders, and Core Text as the first native backend if needed ([§8.5](/design/protocols/#85-text)). One engine means one code path and text snapshots that hold on every OS.
-6. **Q6 Reuse `nsh-core` — decided: no; borrow ideas, not the crate.** Checked at NSH @b13c8c2: `nsh-core` is about 149k lines of Rust.
-   - It carries NSH's own reactive graph (we keep Solid in JS), a Tailwind parser, navigation, storage, WebSocket and tokio.
-   - Its output is `MountItem`s for native views (`Create { kind: ViewKind }`, `Insert`…) rather than a scene for a GPU renderer.
-   - It's at version 0.3, so its API is still moving.
-   - Adopting it would mean adopting NSH's architecture. What we take instead, under Apache-2.0 with attribution where code is copied: Taffy's rounding fix, the measure-cache design, the `before`-anchored insert, and the pitfall list as regression tests.
+6. **Q6 Reuse an existing native core — decided: no; build our own.** The candidates we looked at were large, carried their own reactive graph (we keep Solid in JS) and networking stacks, targeted native views rather than a scene for a GPU renderer, and had APIs that were still moving. Adopting one would mean adopting its architecture. We keep the ideas instead ([§3](/design/overview/#3-background-and-design-influences)): our own rounding to device pixels on top of Taffy, the measure-cache design, the `before`-anchored insert, and known Taffy pitfalls as regression tests.
 7. **Q7 Hot reload — decided:** `mantou dev` restarts the Worker on save and keeps the windows open. The core clears the instance's tree but keeps windows, surfaces, GPU resources and atlases, so nothing flashes, and the new Worker rebuilds the UI.
    - State survives only if the app opts in, through `persist(key, signal)`, which stashes values in the core across restarts (development builds only).
    - Component-level hot module replacement (solid-refresh style) is deferred. A fresh Worker never leaves stale module state behind, and Bun starts a Worker in milliseconds.
 
 ## 17. References
 
-- **MyGo**, `docs/architecture.md` §"Native UI" (line 2234 on): frame loop `ui/runtime.go` (`runFrame`); layout cache `ui/layoutcache.go`; paint `ui/paint.go`; scene `internal/scene/scene.go`; GPU renderers `internal/gpu/{metal,d3d11,gl}`; present and fallback `ui/window.go` (`present`).
-- **NSH**, `docs/dev/architecture.md` (thread model, commit pipeline); `docs/dev/native-pipeline.md` (JSX compiler, renderer, ops, lists); `docs/dev/pitfalls.md` (Taffy rounding, re-insert, GC roots); `docs/dev/macos.md` (bounded resize wait).
 - **Solid** `solid-js/universal`, `babel-preset-solid` (`generate: "universal"`).
 - **Rust crates:** winit, wgpu, taffy, parley, fontique, swash, accesskit, muda, rfd, arboard.
 

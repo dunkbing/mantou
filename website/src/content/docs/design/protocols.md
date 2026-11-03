@@ -75,13 +75,13 @@ Style and prop ids, and their types, are **generated from one schema** shared by
   - The JSX plugin hoists static style objects. The runtime sends each one once as `STYLE_DEF(styleId, props…)`, and nodes reference it with `STYLE_USE(id, styleId)`.
   - Dynamic values still go through per-property `STYLE` ops, and they override the shared style.
   - A list of 1,000 rows sharing one style therefore costs one definition plus 1,000 four-byte references.
-- **Later (once the base components settle):** an optional build-time Tailwind subset that compiles `class="…"` into the same `STYLE_DEF`s, so the core never parses classes. It's worth adding for AI-generated UI, as NSH found, but not before theming and the base components settle.
+- **Later (once the base components settle):** an optional build-time Tailwind subset that compiles `class="…"` into the same `STYLE_DEF`s, so the core never parses classes. It's worth adding for AI-generated UI, but not before theming and the base components settle.
 - Units are logical pixels. The core rounds layout to device pixels at the window's scale factor.
 
 ### 8.5 Text
 - parley lays text out on the Worker thread, inside `mt_commit` during layout. Measurements are cached by a hash of the layout-relevant content plus the width constraint; colour is excluded, so a colour change never triggers layout.
-- swash rasterizes glyphs into a coverage atlas and a colour atlas. Following MyGo, a glyph seen for the first time goes into a transient zone and moves to a lasting one once drawn again. If an atlas fills mid-frame, the core makes room and repaints rather than showing missing glyphs.
-- **Decided (Q5): parley on every platform in v1, behind a `TextEngine` trait** (as NSH has).
+- swash rasterizes glyphs into a coverage atlas and a colour atlas. A glyph seen for the first time goes into a transient zone and moves to a lasting one once drawn again. If an atlas fills mid-frame, the core makes room and repaints rather than showing missing glyphs.
+- **Decided (Q5): parley on every platform in v1, behind a `TextEngine` trait**.
   - **Why:** one implementation to build and debug. Layout is also identical on every OS when the fonts are the same: tests bundle a test font, so headless text and image snapshots taken on Linux CI hold everywhere.
-  - **Cost:** text won't match each OS's own toolkit pixel for pixel, as MyGo's system text stacks do.
+  - **Cost:** text won't match each OS's own toolkit pixel for pixel, as a system text stack would.
   - **Checkpoint once text renders:** compare screenshots of parley text against native labels on each OS. If the difference is noticeable, add a Core Text backend first, since Mac users notice text rendering most. The trait keeps that change local to `mantou-text`.
