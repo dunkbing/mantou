@@ -2,8 +2,14 @@
 //! selection and movement by grapheme, word and line, hit-testing, IME
 //! composition), plus what Mantou adds: its text styles, undo and redo with
 //! typing grouped, a length limit, read-only, single-line inputs (newlines
-//! become spaces) and scrolling that keeps the caret in view. Lengths are
-//! logical px, relative to the input's content box.
+//! become spaces), scrolling that keeps the caret in view, and secure
+//! (password) inputs. Lengths are logical px, relative to the input's content box.
+//!
+//! A secure input's editor holds a bullet per character, so caret movement,
+//! selection, hit-testing and drawing all work on what's shown; the real text
+//! is kept beside it (`real`). Every edit ends with a collapsed caret, so the
+//! range it changed follows from the caret, the lengths before and after, and
+//! the text inserted (`reconcile`).
 
 use std::borrow::Cow;
 
@@ -12,11 +18,15 @@ use parley::{FontFamily, FontStyle, FontWeight, Layout, LineHeight, PlainEditor,
 use crate::{FAMILY, PlacedGlyph, TextEngine, TextStyle};
 
 const CARET_WIDTH: f32 = 1.5;
+/// What a secure input shows per character.
+const BULLET: char = '•';
 const UNDO_LIMIT: usize = 200;
 
 #[derive(Clone, Debug, PartialEq)]
 struct Snapshot {
     text: String,
+    /// A secure input's real text.
+    real: Option<String>,
     anchor: usize,
     focus: usize,
 }
@@ -40,6 +50,17 @@ pub struct Editor {
     /// How far the content is scrolled (x for single-line, y for multiline).
     scroll: [f32; 2],
     size: [f32; 2],
+    /// The real text of a secure input (the editor shows bullets); None otherwise.
+    real: Option<String>,
+}
+
+fn bullets(n: usize) -> String {
+    std::iter::repeat_n(BULLET, n).collect()
+}
+
+/// The byte offset of the `n`th character of `s` (its length past the end).
+fn byte_of(s: &str, n: usize) -> usize {
+    s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
 }
 
 /// Rectangles are [x0, y0, x1, y1] in logical px from the content box's top
@@ -59,9 +80,66 @@ impl Editor {
             last_edit: None,
             scroll: [0.0; 2],
             size: [0.0; 2],
+            real: None,
         };
         e.apply_style();
         e
+    }
+
+    pub fn is_secure(&self) -> bool {
+        self.real.is_some()
+    }
+
+    /// Makes the input secure (bullets shown, no copying) or not. Keeps the
+    /// text and the caret; clears the undo history, which holds the other kind.
+    pub fn set_secure(&mut self, engine: &mut TextEngine, secure: bool) {
+        if secure == self.is_secure() {
+            return;
+        }
+        let text = self.text();
+        let (anchor, focus) = self.char_selection();
+        if secure {
+            self.ed.set_text(&bullets(text.chars().count()));
+            self.real = Some(text);
+        } else {
+            self.real = None;
+            self.ed.set_text(&text);
+        }
+        let raw = self.ed.raw_text().to_owned();
+        self.ed.driver(&mut engine.fcx, &mut engine.lcx).select_byte_range(byte_of(&raw, anchor), byte_of(&raw, focus));
+        self.undo.clear();
+        self.redo.clear();
+        self.last_edit = None;
+    }
+
+    /// The selection as character offsets (anchor, focus) into what's shown.
+    fn char_selection(&self) -> (usize, usize) {
+        let raw = self.ed.raw_text();
+        let sel = self.ed.raw_selection();
+        let chars = |i: usize| raw[..i.min(raw.len())].chars().count();
+        (chars(sel.anchor().index()), chars(sel.focus().index()))
+    }
+
+    /// What the editor shows for `text`: itself, or bullets.
+    fn shown(&self, text: &str) -> String {
+        if self.is_secure() { bullets(text.chars().count()) } else { text.to_owned() }
+    }
+
+    /// After an edit of a secure input, applies to the real text what the edit
+    /// did to the bullets: `inserted` replaced the characters between the
+    /// caret's new position minus its length and the length removed.
+    fn reconcile(&mut self, before_len: usize, inserted: &str) {
+        let Some(real) = self.real.as_mut() else { return };
+        let after_len = self.ed.raw_text().chars().count();
+        let ins = inserted.chars().count();
+        let caret = {
+            let raw = self.ed.raw_text();
+            raw[..self.ed.raw_selection().focus().index().min(raw.len())].chars().count()
+        };
+        let start = caret.saturating_sub(ins);
+        let removed = (before_len + ins).saturating_sub(after_len);
+        let (a, b) = (byte_of(real, start), byte_of(real, start + removed));
+        real.replace_range(a..b, inserted);
     }
 
     fn apply_style(&mut self) {
@@ -99,9 +177,12 @@ impl Editor {
         }
     }
 
-    /// The text, without an IME composition in progress.
+    /// The text, without an IME composition in progress (a secure input's real text).
     pub fn text(&self) -> String {
-        self.ed.text().to_string()
+        match &self.real {
+            Some(r) => r.clone(),
+            None => self.ed.text().to_string(),
+        }
     }
 
     pub fn is_composing(&self) -> bool {
@@ -120,7 +201,10 @@ impl Editor {
     /// end, and the undo history is cleared.
     pub fn set_text(&mut self, engine: &mut TextEngine, text: &str) {
         let t = self.clean(text).into_owned();
-        self.ed.set_text(&t);
+        self.ed.set_text(&self.shown(&t));
+        if self.is_secure() {
+            self.real = Some(t);
+        }
         self.ed.driver(&mut engine.fcx, &mut engine.lcx).move_to_text_end();
         self.undo.clear();
         self.redo.clear();
@@ -135,21 +219,27 @@ impl Editor {
             self.ed.driver(&mut engine.fcx, &mut engine.lcx).clear_compose();
         }
         let t = self.clean(text).into_owned();
-        if t == self.ed.raw_text() {
+        if t == self.text() {
             return;
         }
         self.checkpoint(Edit::Other);
-        self.ed.set_text(&t); // keeps the selection's offsets, clamped
+        self.ed.set_text(&self.shown(&t)); // keeps the selection's offsets, clamped
+        if self.is_secure() {
+            self.real = Some(t);
+        }
         self.last_edit = None;
     }
 
     fn snapshot(&self) -> Snapshot {
         let sel = self.ed.raw_selection();
-        Snapshot { text: self.ed.raw_text().to_owned(), anchor: sel.anchor().index(), focus: sel.focus().index() }
+        Snapshot { text: self.ed.raw_text().to_owned(), real: self.real.clone(), anchor: sel.anchor().index(), focus: sel.focus().index() }
     }
 
     fn restore(&mut self, engine: &mut TextEngine, s: Snapshot) {
         self.ed.set_text(&s.text);
+        if self.is_secure() {
+            self.real = s.real;
+        }
         self.ed.driver(&mut engine.fcx, &mut engine.lcx).select_byte_range(s.anchor, s.focus);
     }
 
@@ -180,7 +270,8 @@ impl Editor {
         }
         let mut t = self.clean(text).into_owned();
         if self.max_len > 0 {
-            let selected = self.ed.selected_text().map_or(0, |s| s.chars().count());
+            let (a, f) = self.char_selection();
+            let selected = a.abs_diff(f);
             let room = self.max_len.saturating_sub(self.text().chars().count() - selected);
             t = t.chars().take(room).collect();
             if t.is_empty() {
@@ -189,7 +280,10 @@ impl Editor {
         }
         let word_break = t.chars().any(char::is_whitespace);
         self.checkpoint(if word_break { Edit::Other } else { Edit::Typing });
-        self.ed.driver(&mut engine.fcx, &mut engine.lcx).insert_or_replace_selection(&t);
+        let before = self.ed.raw_text().chars().count();
+        let shown = self.shown(&t);
+        self.ed.driver(&mut engine.fcx, &mut engine.lcx).insert_or_replace_selection(&shown);
+        self.reconcile(before, &t);
         if word_break {
             self.last_edit = None;
         }
@@ -214,6 +308,9 @@ impl Editor {
         self.checkpoint(Edit::Other);
         f(&mut self.ed.driver(&mut engine.fcx, &mut engine.lcx));
         let changed = self.ed.raw_text() != before;
+        if changed {
+            self.reconcile(before.chars().count(), "");
+        }
         if !changed {
             self.undo.pop();
         }
@@ -229,9 +326,9 @@ impl Editor {
         })
     }
 
-    /// Cuts the selection; returns the text removed.
+    /// Cuts the selection; returns the text removed. A secure input refuses.
     pub fn cut(&mut self, engine: &mut TextEngine) -> Option<String> {
-        let text = self.ed.selected_text()?.to_owned();
+        let text = self.selected_text()?;
         if self.read_only {
             return None;
         }
@@ -241,7 +338,11 @@ impl Editor {
         Some(text)
     }
 
+    /// The selected text, for copying; none from a secure input.
     pub fn selected_text(&self) -> Option<String> {
+        if self.is_secure() {
+            return None;
+        }
         self.ed.selected_text().map(str::to_owned)
     }
 
@@ -294,7 +395,8 @@ impl Editor {
 
     /// Shows an IME composition at the caret (`cursor`: a byte range within it).
     pub fn set_compose(&mut self, engine: &mut TextEngine, text: &str, cursor: Option<(usize, usize)>) {
-        if self.read_only {
+        // A secure input takes no compositions: the platform turns the IME off for it.
+        if self.read_only || (self.is_secure() && !text.is_empty()) {
             return;
         }
         let mut d = self.ed.driver(&mut engine.fcx, &mut engine.lcx);
@@ -531,6 +633,42 @@ mod tests {
         assert_eq!(ed.selection_range(), (2, 2), "clamped");
         ed.undo(&mut e);
         assert_eq!(ed.text(), "HELLO");
+    }
+
+    #[test]
+    fn a_secure_input_shows_bullets_and_edits_the_real_text() {
+        let (mut e, mut ed) = editor(false);
+        ed.set_secure(&mut e, true);
+        for ch in "hunter2".chars() {
+            ed.insert(&mut e, &ch.to_string());
+        }
+        assert_eq!(ed.text(), "hunter2");
+        assert_eq!(ed.glyphs(&mut e).len(), 7, "a bullet per character");
+        // Edits in the middle land in the right place of the real text.
+        ed.navigate(&mut e, |d| d.move_left());
+        ed.navigate(&mut e, |d| d.move_left());
+        ed.backspace(&mut e, false);
+        assert_eq!(ed.text(), "huntr2", "the e before the caret");
+        ed.insert(&mut e, "é");
+        ed.delete(&mut e, false);
+        assert_eq!(ed.text(), "hunté2", "é typed, then the r after it deleted");
+        // A selection is replaced; copying and cutting are refused.
+        ed.navigate(&mut e, |d| d.select_all());
+        assert_eq!(ed.selected_text(), None);
+        assert_eq!(ed.cut(&mut e), None);
+        assert_eq!(ed.text(), "hunté2");
+        ed.insert(&mut e, "pa ss");
+        assert_eq!(ed.text(), "pa ss");
+        assert!(ed.undo(&mut e));
+        assert_eq!(ed.text(), "hunté2");
+        // No IME compositions; turning it off shows the text again, caret kept.
+        ed.set_compose(&mut e, "に", None);
+        assert!(!ed.is_composing());
+        ed.navigate(&mut e, |d| d.move_to_text_end());
+        ed.set_secure(&mut e, false);
+        assert_eq!(ed.text(), "hunté2");
+        assert_eq!(ed.selection_range(), ("hunté2".len(), "hunté2".len()));
+        assert_eq!(ed.selected_text(), None, "nothing selected");
     }
 
     #[test]

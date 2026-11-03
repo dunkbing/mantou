@@ -65,6 +65,7 @@ function setInputProperty(node: Node, name: string, value: unknown, prev: unknow
       return true;
     case "multiline":
     case "readOnly":
+    case "secure":
       node.setOptions({ [name]: !!value });
       return true;
     case "maxLength":

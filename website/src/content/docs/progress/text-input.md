@@ -30,6 +30,7 @@ const [draft, setDraft] = createSignal("");
 | `placeholder` | Shown while it's empty, in `placeholderColor` (default: the text colour at 40%) |
 | `multiline` | Enter adds a line; the input grows with its text unless its height is set |
 | `maxLength`, `readOnly` | Checked in the core, so no keystroke has to wait for JS to be refused. Read-only text can still be selected and copied |
+| `secure` | A password field: a bullet per character, copy and cut refused (paste works), and the window tells the OS it's a password field, so platforms that support it turn the IME and suggestions off. Flip it for a "show password" toggle. The app still gets the real text in `onChange` |
 | `autoFocus` | Focus it when it's created; later changes to it do nothing (call `node.focus()` to move the focus) |
 | `style` | A `<View>`'s box properties and a `<Text>`'s text properties, plus `caretColor` and `selectionColor` |
 
@@ -59,7 +60,7 @@ The core does all of it, on the main thread for the window, without a round trip
 
 ## Not yet
 
-Caret blinking; password fields (`secure`); character filters (`allow`) and `inputMode`; the selection in the API (reading it, or setting it from the app); focus for views other than inputs; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
+Caret blinking; character filters (`allow`) and `inputMode`; the selection in the API (reading it, or setting it from the app); focus for views other than inputs; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
 
 ## Tests
 

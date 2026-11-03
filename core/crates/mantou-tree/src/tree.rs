@@ -410,7 +410,8 @@ impl Tree {
             Op::InputOptions { id, flags, max_length } => {
                 let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
                 let Some(inp) = node.input.as_mut() else { return Err(format!("INPUT_OPTIONS: {id} is not an input")) };
-                if inp.set_options(flags, max_length) {
+                let engine = self.text.as_mut().expect("inputs create the text engine");
+                if inp.set_options(engine, flags, max_length) {
                     let _ = self.taffy.mark_dirty(node.taffy);
                     self.layout_dirty = true;
                 }

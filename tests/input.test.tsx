@@ -191,3 +191,28 @@ test("autoFocus focuses only when the input is created (#4)", () => {
   expect(h.focused()?.id).toBe(a.id);
   void b;
 });
+
+test("a secure input shows bullets, refuses copy and cut, and still pastes (#7)", () => {
+  let pw!: Node;
+  const [shown, setShown] = createSignal(false);
+  const values: string[] = [];
+  const h = app(() => <Input ref={pw} style={field} secure={!shown()} onChange={(v) => values.push(v)} autoFocus />);
+  h.type("s3cret");
+  expect(h.value(pw)).toBe("s3cret");
+  expect(values.at(-1)).toBe("s3cret"); // the app gets the real text
+  expect(h.stats().glyphs).toBe(6); // a bullet each
+  h.clipboard = "before";
+  h.key("a", { primary: true }).key("c", { primary: true }).key("x", { primary: true });
+  expect(h.clipboard).toBe("before"); // nothing copied
+  expect(h.value(pw)).toBe("s3cret"); // nothing cut
+  h.key("End").key("ArrowLeft").key("Backspace"); // the "e" before the "t"
+  expect(h.value(pw)).toBe("s3crt");
+  h.clipboard = "!x";
+  h.key("End").key("v", { primary: true });
+  expect(h.value(pw)).toBe("s3crt!x");
+  setShown(true); // "show password"
+  h.step();
+  expect(h.value(pw)).toBe("s3crt!x");
+  h.key("a", { primary: true }).key("c", { primary: true });
+  expect(h.clipboard).toBe("s3crt!x");
+});

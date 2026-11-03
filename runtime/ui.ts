@@ -63,6 +63,8 @@ export interface PressEvent {
 /** An Input's options (INPUT_OPTIONS). */
 export interface InputOptions {
   multiline?: boolean;
+  /** A password field: a bullet per character, no copy or cut, the IME off. */
+  secure?: boolean;
   readOnly?: boolean;
   /** In characters; 0 = no limit. */
   maxLength?: number;
@@ -203,6 +205,7 @@ export class Node {
     };
     flag(InputFlag.Multiline, options.multiline);
     flag(InputFlag.ReadOnly, options.readOnly);
+    flag(InputFlag.Secure, options.secure);
     if (options.maxLength !== undefined) o.maxLength = Math.max(0, Math.floor(options.maxLength || 0));
     this.ui.markPending(this);
     return this;

@@ -29,8 +29,9 @@ impl Input {
         Input { editor: RefCell::new(editor), placeholder: String::new(), rev: 0 }
     }
 
-    pub(super) fn set_options(&mut self, flags: u32, max_length: u32) -> bool {
+    pub(super) fn set_options(&mut self, engine: &mut TextEngine, flags: u32, max_length: u32) -> bool {
         let ed = self.editor.get_mut();
+        ed.set_secure(engine, flags & input_flag::SECURE != 0);
         let multiline = flags & input_flag::MULTILINE != 0;
         let changed = ed.multiline != multiline;
         ed.set_multiline(multiline);
@@ -78,6 +79,11 @@ impl Tree {
     /// The focused input.
     pub fn focused(&self) -> Option<u32> {
         self.focus
+    }
+
+    /// Whether the focused input is secure (the window then tells the OS it's a password field).
+    pub fn focused_is_secure(&self) -> bool {
+        self.focus.and_then(|id| self.nodes.get(&id)?.input.as_ref()).is_some_and(|i| i.editor.borrow().is_secure())
     }
 
     /// An input's text (for tests and debugging).

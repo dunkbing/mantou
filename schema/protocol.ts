@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
@@ -41,8 +41,8 @@ export const ops: OpDef[] = [
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
 
-/** INPUT_OPTIONS flags. */
-export const inputFlags = { Multiline: 1, ReadOnly: 4 } as const;
+/** INPUT_OPTIONS flags. Secure: a bullet per character, no copying, the IME off. */
+export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
 export const eventMask = { Press: 1, Layout: 2 } as const;

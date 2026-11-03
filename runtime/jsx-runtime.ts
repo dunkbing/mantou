@@ -39,6 +39,12 @@ export interface InputProps {
   /** Enter adds a line (Ctrl/Cmd+Enter submits), and it grows with its text. */
   multiline?: boolean;
   readOnly?: boolean;
+  /**
+   * A password field: the core draws a bullet per character, refuses copy and
+   * cut (paste still works), and tells the OS so it turns the IME off. Flip it
+   * for a "show password" toggle.
+   */
+  secure?: boolean;
   /** In characters. */
   maxLength?: number;
   /** Focus it when it's created. Later changes to it do nothing (use `node.focus()`). */

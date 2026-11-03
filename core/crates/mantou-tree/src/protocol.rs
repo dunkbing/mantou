@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 5;
+pub const PROTOCOL_VERSION: u32 = 6;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -77,6 +77,7 @@ pub mod event_mask {
 
 pub mod input_flag {
     pub const MULTILINE: u32 = 1;
+    pub const SECURE: u32 = 2;
     pub const READ_ONLY: u32 = 4;
 }
 

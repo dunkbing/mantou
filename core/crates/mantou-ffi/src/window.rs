@@ -13,7 +13,7 @@ use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 use winit::event::{ElementState, Ime, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{ImePurpose, Window, WindowId};
 
 use crate::instance::{Instance, bump, lock};
 use crate::{G, UserEvent, app, guard, key_text};
@@ -128,11 +128,13 @@ pub struct App {
     modifiers: u32,
     /// Whether the IME is on: while an input has the focus.
     ime: bool,
+    /// Whether the window told the OS a password field has the focus.
+    ime_password: bool,
 }
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -143,13 +145,19 @@ impl App {
 
     /// Turns the IME on while an input has the focus, and puts its candidate window at the caret.
     fn sync_ime(&mut self, window: &Window) {
-        let area = {
+        let (area, secure) = {
             let mut tree = lock(&self.inst.tree);
-            tree.focused().and(tree.ime_area())
+            (tree.focused().and(tree.ime_area()), tree.focused_is_secure())
         };
         if area.is_some() != self.ime {
             self.ime = area.is_some();
             window.set_ime_allowed(self.ime);
+        }
+        // A password field: the platforms that support it turn composition
+        // and suggestions off (winit's ImePurpose).
+        if secure != self.ime_password {
+            self.ime_password = secure;
+            window.set_ime_purpose(if secure { ImePurpose::Password } else { ImePurpose::Normal });
         }
         if let Some([x0, y0, x1, y1]) = area {
             window.set_ime_cursor_area(LogicalPosition::new(x0, y0), LogicalSize::new((x1 - x0).max(1.0), (y1 - y0).max(1.0)));
