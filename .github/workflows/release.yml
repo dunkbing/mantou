@@ -3,6 +3,7 @@
 #
 #   git tag v0.1.0 && git push origin v0.1.0     build, test, publish 0.1.0
 #   Actions → release → Run workflow             the same from a version you type; a dry run by default
+#   a push to main that changes the packaging    a dry run, as 0.0.0-dry.<run>
 #
 # Every package is smoke-tested from its tarball on each platform before
 # anything is published, and from the registry after. Needs the NPM_TOKEN secret.
@@ -11,6 +12,8 @@ name: release
 on:
   push:
     tags: ["v*"]
+    branches: [main]
+    paths: [".github/workflows/release.yml", "scripts/**", "package.json", "runtime/ffi.ts", "runtime/cli.ts"]
   workflow_dispatch:
     inputs:
       version:
@@ -25,7 +28,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: ${{ inputs.version || github.ref_name }}
+  VERSION: ${{ inputs.version || (github.ref_type == 'tag' && github.ref_name) || format('0.0.0-dry.{0}', github.run_number) }}
 
 jobs:
   core:
@@ -132,7 +135,7 @@ jobs:
   publish:
     name: Publish to npm
     needs: smoke
-    if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+    if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
