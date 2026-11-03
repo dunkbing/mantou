@@ -134,6 +134,16 @@ pub mod position {
     pub const ABSOLUTE: u32 = 1;
 }
 
+pub mod align_content {
+    pub const STRETCH: u32 = 0;
+    pub const START: u32 = 1;
+    pub const END: u32 = 2;
+    pub const CENTER: u32 = 3;
+    pub const SPACE_BETWEEN: u32 = 4;
+    pub const SPACE_AROUND: u32 = 5;
+    pub const SPACE_EVENLY: u32 = 6;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -178,10 +188,11 @@ pub enum Prop {
     Left = 30,
     BackgroundColor = 31,
     Opacity = 32,
+    AlignContent = 33,
 }
 
 impl Prop {
-    pub const COUNT: usize = 32;
+    pub const COUNT: usize = 33;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -217,6 +228,7 @@ impl Prop {
             30 => Prop::Left,
             31 => Prop::BackgroundColor,
             32 => Prop::Opacity,
+            33 => Prop::AlignContent,
             _ => return None,
         })
     }
@@ -255,6 +267,7 @@ impl Prop {
             Prop::Left => "left",
             Prop::BackgroundColor => "backgroundColor",
             Prop::Opacity => "opacity",
+            Prop::AlignContent => "alignContent",
         }
     }
 
@@ -292,6 +305,7 @@ impl Prop {
             Prop::Left => ValueKind::Length,
             Prop::BackgroundColor => ValueKind::Color,
             Prop::Opacity => ValueKind::F32,
+            Prop::AlignContent => ValueKind::Enum(7),
         }
     }
 
@@ -312,6 +326,15 @@ impl Prop {
             Prop::AlignItems => &["stretch", "start", "end", "center", "baseline"],
             Prop::AlignSelf => &["auto", "stretch", "start", "end", "center", "baseline"],
             Prop::Position => &["relative", "absolute"],
+            Prop::AlignContent => &[
+                "stretch",
+                "start",
+                "end",
+                "center",
+                "spaceBetween",
+                "spaceAround",
+                "spaceEvenly",
+            ],
             _ => &[],
         }
     }

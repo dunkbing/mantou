@@ -1,5 +1,6 @@
 // Window self-test (runs in the app Worker). Checks the exit criteria of
-// M0 and M1 (DESIGN.md §13, §12.5) and writes m0-report.json; exit code 0 = all pass.
+// the design (website: design/testing §12.5) and writes selftest-report.json;
+// exit code 0 = all pass.
 //
 // Rules from §12.1: wait for conditions, not for time; assert counts, not
 // durations (CPU % is reported for information and checked loosely).
@@ -123,19 +124,19 @@ async function main() {
     });
   }
 
-  // 6. M1: the counter's tree is laid out by the core and drawn as quads.
+  // 6. The counter's tree is laid out by the core and drawn as quads.
   const c = counter(core.ui);
   {
     const before = core.stats();
     await until("the counter's first frame", () => core.stats().quads >= 5 && core.stats().frames > before.frames, 5_000);
     const s = core.stats();
     const plus = core.nodeRect(c.plus.id);
-    check("M1: ops → tree → layout → quads", s.quads === 5 && s.opErrors === 0 && plus !== null && plus[2] - plus[0] === 88, {
+    check("ops → tree → layout → quads", s.quads === 5 && s.opErrors === 0 && plus !== null && plus[2] - plus[0] === 88, {
       quads: s.quads, nodes: s.nodes, opErrors: s.opErrors, ops: s.ops, plusRect: plus, firstCommitOps: core.ui.lastCommitOps,
     });
   }
 
-  // 7. M1: a press hit-tested by the core reaches the handler, whose commit is drawn.
+  // 7. A press hit-tested by the core reaches the handler, whose commit is drawn.
   {
     const [x0, y0, x1, y1] = core.nodeRect(c.plus.id)!;
     const before = core.stats();
@@ -145,7 +146,7 @@ async function main() {
     await until("the new square is drawn", () => core.stats().quads === 6 && core.stats().frames > before.frames, 5_000);
     const ms = performance.now() - sent;
     const d = delta(before, core.stats());
-    check("M1: press → handler → one commit → frame", c.count() === 1 && d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 4, {
+    check("press → handler → one commit → frame", c.count() === 1 && d.presses === 1 && d.commits === 1 && core.ui.lastCommitOps === 4, {
       count: c.count(), presses: d.presses, commits: d.commits, opsInCommit: core.ui.lastCommitOps, msPressToFrame: +ms.toFixed(1),
     });
     // A press that misses every listener reaches nobody.
@@ -154,10 +155,10 @@ async function main() {
     core.testPointer("down", board[0] + 4, board[1] + 4);
     core.testPointer("up", board[0] + 4, board[1] + 4);
     await sleep(100);
-    check("M1: no press without a listener", core.stats().presses === missBefore && c.count() === 1, { presses: core.stats().presses - missBefore });
+    check("no press without a listener", core.stats().presses === missBefore && c.count() === 1, { presses: core.stats().presses - missBefore });
   }
 
-  // 8. M1: resizes lay out on the main thread while the Worker is blocked.
+  // 8. Resizes lay out on the main thread while the Worker is blocked.
   {
     await sleep(200);
     const before = core.stats();
@@ -165,7 +166,7 @@ async function main() {
     const spinUntil = performance.now() + 800;
     while (performance.now() < spinUntil) {}
     const d = delta(before, core.stats());
-    check("M1: relayout without JS", d.layouts >= 4 && d.commits === 0 && d.frames >= 4, {
+    check("relayout without JS", d.layouts >= 4 && d.commits === 0 && d.frames >= 4, {
       layoutsWhileBlocked: d.layouts, commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
     });
   }

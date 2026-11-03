@@ -1,4 +1,4 @@
-// M1: one instance per rectangle. Positions arrive in normalised device
+// One instance per rectangle. Positions arrive in normalised device
 // coordinates; colours are linear and premultiplied when they reach the blend.
 
 struct Instance {

@@ -1,4 +1,4 @@
-//! The shadow tree (DESIGN.md §5.1, §8): nodes created by the Worker's ops,
+//! The shadow tree (design §5.1, §8): nodes created by the Worker's ops,
 //! laid out with Taffy, turned into a scene of rectangles, and hit-tested.
 
 use std::collections::{BTreeMap, HashMap};
@@ -25,6 +25,22 @@ pub struct Scene {
     pub quads: Vec<Quad>,
     /// Physical size it was laid out for.
     pub size_px: (u32, u32),
+}
+
+impl Scene {
+    /// A stable text form, one line per item, for snapshots and debugging.
+    pub fn dump(&self) -> String {
+        let hex = |c: [f32; 4]| {
+            let b = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+            format!("#{:02x}{:02x}{:02x}{:02x}", b(c[0]), b(c[1]), b(c[2]), b(c[3]))
+        };
+        let mut out = format!("size {}x{}\nclear {}\n", self.size_px.0, self.size_px.1, hex(self.clear));
+        for q in &self.quads {
+            let [x0, y0, x1, y1] = q.rect;
+            out.push_str(&format!("quad {x0} {y0} {x1} {y1} {}\n", hex(q.color)));
+        }
+        out
+    }
 }
 
 /// What applying a batch did.
@@ -247,7 +263,7 @@ impl Tree {
         if before != 0 && self.nodes.get(&before).and_then(|b| b.parent) != Some(parent) {
             return Err(format!("INSERT: {before} is not a child of {parent}"));
         }
-        // A node already in place is left alone (DESIGN.md §5.2 invariant 5).
+        // A node already in place is left alone (design §5.2 invariant 5).
         if self.nodes[&child].parent == Some(parent) {
             let siblings = &self.nodes[&parent].children;
             let i = siblings.iter().position(|&c| c == child).expect("listed");
@@ -412,6 +428,68 @@ impl Tree {
         None
     }
 
+    /// Every node id, sorted.
+    pub fn ids(&self) -> Vec<u32> {
+        let mut ids: Vec<u32> = self.nodes.keys().copied().collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// The root node, if any.
+    pub fn root(&self) -> Option<u32> {
+        self.root
+    }
+
+    /// Checks the tree's internal consistency: parent and child links agree,
+    /// Taffy's tree mirrors ours, there are no cycles, and the root and the
+    /// laid-out boxes name live nodes. For tests and fuzzing.
+    pub fn check(&self) -> Result<(), String> {
+        for (&id, n) in &self.nodes {
+            if let Some(p) = n.parent {
+                let pn = self.nodes.get(&p).ok_or(format!("{id}'s parent {p} doesn't exist"))?;
+                if !pn.children.contains(&id) {
+                    return Err(format!("{id} names {p} as parent, but {p} doesn't list it"));
+                }
+            }
+            for &c in &n.children {
+                let cn = self.nodes.get(&c).ok_or(format!("{id} lists missing child {c}"))?;
+                if cn.parent != Some(id) {
+                    return Err(format!("{id} lists {c}, whose parent is {:?}", cn.parent));
+                }
+            }
+            let mut sorted = n.children.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            if sorted.len() != n.children.len() {
+                return Err(format!("{id} lists a child twice"));
+            }
+            let theirs = self.taffy.children(n.taffy).map_err(|e| e.to_string())?;
+            let ours: Vec<NodeId> = n.children.iter().map(|c| self.nodes[c].taffy).collect();
+            if theirs != ours {
+                return Err(format!("Taffy's children of {id} differ from Mantou's"));
+            }
+            let (mut a, mut steps) = (n.parent, 0);
+            while let Some(x) = a {
+                steps += 1;
+                if steps > self.nodes.len() {
+                    return Err(format!("cycle above {id}"));
+                }
+                a = self.nodes.get(&x).and_then(|n| n.parent);
+            }
+        }
+        if let Some(r) = self.root
+            && !self.nodes.contains_key(&r)
+        {
+            return Err(format!("root {r} doesn't exist"));
+        }
+        if !self.layout_dirty
+            && let Some((id, _)) = self.boxes.iter().find(|(id, _)| !self.nodes.contains_key(id))
+        {
+            return Err(format!("laid-out box of missing node {id}"));
+        }
+        Ok(())
+    }
+
     /// Scale factor of the last viewport.
     pub fn scale(&self) -> f32 {
         self.scale
@@ -516,5 +594,17 @@ fn set_prop(s: &mut Style, background: &mut u32, opacity: &mut f32, prop: Prop, 
             }
         }
         Prop::Opacity => *opacity = num().clamp(0.0, 1.0),
+        Prop::AlignContent => {
+            use crate::protocol::align_content as ac;
+            s.align_content = match e {
+                ac::START => AlignContent::START,
+                ac::END => AlignContent::END,
+                ac::CENTER => AlignContent::CENTER,
+                ac::SPACE_BETWEEN => AlignContent::SPACE_BETWEEN,
+                ac::SPACE_AROUND => AlignContent::SPACE_AROUND,
+                ac::SPACE_EVENLY => AlignContent::SPACE_EVENLY,
+                _ => AlignContent::STRETCH,
+            }
+        }
     }
 }

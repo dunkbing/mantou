@@ -174,3 +174,12 @@ fn shared_styles_apply_and_own_properties_override_them() {
     assert_eq!(t.rect(2).map(|r| r[3] - r[1]), Some(25.0));
     assert_eq!(t.scene().quads.len(), 0, "the new definition has no background");
 }
+
+#[test]
+fn a_huge_style_def_count_is_an_error_not_an_abort() {
+    // Found by tests/random.rs: the count was used to reserve memory before it was checked.
+    let mut t = Tree::new();
+    let bytes: Vec<u8> = [7u32 | 2 << 16, 1, u32::MAX].iter().flat_map(|w| w.to_le_bytes()).collect();
+    let e = t.apply(&bytes).unwrap_err();
+    assert!(e.message.contains("claims"), "{e}");
+}

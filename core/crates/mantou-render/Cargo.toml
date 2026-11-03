@@ -1,10 +1,11 @@
 [package]
 name = "mantou-render"
-description = "Mantou's wgpu renderer. M1: instanced solid rectangles."
+description = "Mantou's wgpu renderer: instanced quads."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 wgpu = "30"
+pollster = "1"
 mantou-tree = { path = "../mantou-tree" }

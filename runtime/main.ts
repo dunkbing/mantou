@@ -1,6 +1,6 @@
 // Bootstrap. Runs on Bun's main thread: starts the app in a Worker, waits until
 // the Worker has registered its wake-up callback, then hands this thread to the
-// native event loop for the rest of the process (DESIGN.md §4, §7.1).
+// native event loop for the rest of the process (design §4, §7.1).
 //
 //   bun runtime/main.ts <app entry> [--width N] [--height N] [--title T]
 import { resolve } from "node:path";

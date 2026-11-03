@@ -1,4 +1,4 @@
-// Interactive M0 demo (runs in the app Worker).
+// Interactive demo of the threading model (runs in the app Worker).
 //   click        → new background colour
 //   any key      → shows the key in the title
 //   Escape/close → quit
@@ -18,7 +18,7 @@ const hue = (h: number): [number, number, number] => {
   };
   return [f(0), f(8), f(4)];
 };
-const show = (extra = "") => core.title(`Mantou M0 · clicks ${clicks} · fetches ${fetches} · ticks ${ticks}${extra}`);
+const show = (extra = "") => core.title(`Mantou demo · clicks ${clicks} · fetches ${fetches} · ticks ${ticks}${extra}`);
 
 core.onEvent = (e) => {
   switch (e.type) {

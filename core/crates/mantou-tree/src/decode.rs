@@ -1,4 +1,4 @@
-//! Decodes op batches (DESIGN.md §8.1). A batch is validated whole before
+//! Decodes op batches (design §8.1). A batch is validated whole before
 //! anything is applied: a malformed batch changes nothing.
 
 use crate::protocol::{Prop, ValueKind, op, unit};
@@ -135,6 +135,11 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::STYLE_DEF => {
                 if n < 2 {
                     return err(i, "STYLE_DEF needs a style id and a count");
+                }
+                // Each property takes at least two words: check the count
+                // before reserving for it (a fuzzed count of 2^32 would abort).
+                if a[1] as usize > (n - 2) / 2 {
+                    return err(i, format!("STYLE_DEF claims {} properties in {} words", a[1], n - 2));
                 }
                 let mut props = Vec::with_capacity(a[1] as usize);
                 let mut j = 2;

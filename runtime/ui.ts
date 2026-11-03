@@ -1,6 +1,6 @@
 // The Worker's mirror of the UI tree. Every mutation updates the mirror and
-// appends an op; the batch is committed once per JS turn (DESIGN.md §7, §8).
-// This is the layer the Solid renderer will sit on in M4; for now apps use it
+// appends an op; the batch is committed once per JS turn (design §7, §8).
+// This is the layer the Solid renderer will sit on; for now apps use it
 // directly.
 import { EventMask, NodeKind, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
@@ -77,7 +77,7 @@ export class Node {
     if (child === before) return this;
     if (child.parent === this) {
       const i = this.children.indexOf(child);
-      if ((this.children[i + 1] ?? null) === before) return this; // already in place (DESIGN.md §5.2 invariant 5)
+      if ((this.children[i + 1] ?? null) === before) return this; // already in place (design §5.2 invariant 5)
       this.children.splice(i, 1);
     } else {
       child.parent?.detach(child);
@@ -207,7 +207,7 @@ export class Ui {
     this.schedule();
   }
 
-  /** One commit per JS turn (DESIGN.md §5.2 invariant 3). */
+  /** One commit per JS turn (design §5.2 invariant 3). */
   schedule() {
     if (this.scheduled) return;
     this.scheduled = true;

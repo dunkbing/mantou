@@ -1,4 +1,4 @@
-// The M1 counter: no text yet (that's M3), so the count is shown as squares and
+// The counter: there's no text yet, so the count is shown as squares and
 // in the window title. Press + to add a square, − to remove one, ⟲ to clear.
 // It takes a Ui, so the same code runs in the window (main.ts) and against the
 // mock core in tests (counter.test.ts).
@@ -21,7 +21,7 @@ export function counter(ui: Ui): Counter {
   const plus = ui.view(button, { backgroundColor: "#16a34a" });
   const minus = ui.view(button, { backgroundColor: "#dc2626" });
   const reset = ui.view(button, { backgroundColor: "#4b5563" });
-  const board = ui.view({ flexGrow: 1, flexDirection: "row", flexWrap: "wrap", gap: 8, padding: 12, backgroundColor: "#1f2430" });
+  const board = ui.view({ flexGrow: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "start", gap: 8, padding: 12, backgroundColor: "#1f2430" });
 
   toolbar.append(plus).append(minus).append(reset);
   root.append(toolbar).append(board);

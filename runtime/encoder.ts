@@ -1,4 +1,4 @@
-// Encodes ops into one buffer per commit (DESIGN.md §8.1). Each op is
+// Encodes ops into one buffer per commit (design §8.1). Each op is
 // `code | operandWords << 16` followed by its operands, all little-endian u32.
 import { Op, StyleProp, type StylePropName } from "./gen/protocol";
 import { encodeValue, f32bits } from "./style";

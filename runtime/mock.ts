@@ -1,4 +1,4 @@
-// A mock core for tests (DESIGN.md §12.4): records every committed batch,
+// A mock core for tests (design §12.4): records every committed batch,
 // decoded, and lets tests deliver presses. No FFI, no window.
 import { decodeOps, type DecodedOp } from "./decode";
 import { Ui } from "./ui";

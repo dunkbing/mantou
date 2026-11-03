@@ -2,7 +2,7 @@
 // ops, node kinds, style properties and events. This file is the single source
 // of truth. `bun run gen` writes runtime/gen/protocol.ts and
 // core/crates/mantou-tree/src/protocol.rs from it; `bun run gen --check` fails
-// when either is stale (DESIGN.md §8.1).
+// when either is stale (design §8.1).
 //
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
@@ -81,6 +81,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "left", code: 30, type: length, default: "auto" },
   { name: "backgroundColor", code: 31, type: "color", default: "transparent" },
   { name: "opacity", code: 32, type: "f32", default: "1" },
+  { name: "alignContent", code: 33, type: { enum: ["stretch", "start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly"] }, default: "stretch" },
 ];
 
 /** Events: fixed 16-byte records `[type, a, b, c]` (u32 words; floats as bits). */
