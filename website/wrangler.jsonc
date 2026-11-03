@@ -1,0 +1,14 @@
+// Cloudflare deploys the docs as static files. With this file present,
+// Cloudflare's build doesn't add the @astrojs/cloudflare adapter (which
+// prerenders inside Miniflare, and that fails under the Bun runtime).
+// Build command: bun run build. Deploy command: npx wrangler deploy.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "mantou-docs",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  }
+}
