@@ -135,8 +135,9 @@ jobs:
   publish:
     name: Publish to npm
     needs: smoke
-    if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
     runs-on: ubuntu-24.04
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     permissions:
       contents: read
       id-token: write # provenance
@@ -150,17 +151,24 @@ jobs:
           name: packages
           path: packages
       - name: Publish (platform packages first, then mantou-ui)
+        id: publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Dry runs go through `npm publish --dry-run`, so this step is tested too.
+          REAL: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
         run: |
           VERSION="${VERSION#v}"
+          if [ "$REAL" = "true" ]; then flags="--provenance"; else flags="--dry-run"; fi
           while read -r name; do
-            npm publish "packages/$name-$VERSION.tgz" --access public --provenance
+            # "./": without it, npm reads "packages/x.tgz" as a GitHub repo.
+            npm publish "./packages/$name-$VERSION.tgz" --access public $flags
           done < packages/order.txt
+          echo "published=$REAL" >> "$GITHUB_OUTPUT"
 
   verify:
     name: From npm · ${{ matrix.os }}
     needs: publish
+    if: ${{ needs.publish.outputs.published == 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
