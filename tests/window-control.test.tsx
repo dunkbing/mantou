@@ -35,7 +35,7 @@ test("state changes from the core reach onState", () => {
   const seen: unknown[] = [];
   win.onState((s) => seen.push(s));
   h.ui.dispatchWindowState(1 | 4, 10, -20);
-  expect(seen).toEqual([{ focused: true, minimized: false, maximized: true, fullscreen: false, x: 10, y: -20 }]);
+  expect(seen).toEqual([{ focused: true, minimized: false, maximized: true, fullscreen: false, dark: false, x: 10, y: -20 }]);
 });
 
 test("pressing a dragRegion asks to move the window", () => {
