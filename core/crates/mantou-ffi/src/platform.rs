@@ -448,13 +448,17 @@ mod mac {
             fill(v["items"].as_array()?, |i| {
                 let _ = menu.append(i);
             });
-            let (x, y) = (v["x"].as_f64().unwrap_or(0.0), v["y"].as_f64().unwrap_or(0.0));
+            // The view's coordinates start at its bottom left; the app's at the top left.
+            let height = window.inner_size().to_logical::<f64>(window.scale_factor()).height;
+            let (x, y) = (v["x"].as_f64().unwrap_or(0.0), height - v["y"].as_f64().unwrap_or(0.0));
             // Drop what an earlier menu left, so the next event is this menu's.
             let rx = MenuEvent::receiver();
             while rx.try_recv().is_ok() {}
             // SAFETY: the view belongs to the window, which is alive and on this (the main) thread.
             unsafe { menu.show_context_menu_for_nsview(h.ns_view.as_ptr(), Some(muda::dpi::LogicalPosition::new(x, y).into())) };
-            // The menu is modal: the chosen item's event is queued by the time it returns.
+            // The menu is modal: the chosen item's event is queued by the time it returns, and the button
+            // that opened it was let go while it ran, unseen by the window.
+            _inst.release_buttons();
             rx.try_recv().ok().map(|e| json!(e.id.0))
         }
     }

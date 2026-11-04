@@ -480,6 +480,18 @@ impl Instance {
         self.node_pointer(kind, button, x, y, 1);
     }
 
+    /// Lets go of every button the core thinks is held, at the pointer: after a modal menu, whose button-up never
+    /// reaches the window, so a captured press doesn't keep every later press.
+    pub fn release_buttons(&self) {
+        let (held, (x, y)) = {
+            let p = lock(&self.pointer);
+            (p.buttons, p.position)
+        };
+        for b in (0..32).filter(|b| held & (1 << b) != 0) {
+            self.pointer_button(1, b, x, y);
+        }
+    }
+
     /// Queues a NODE_POINTER event for the node a pointer handler listens on (see the event's doc).
     /// `kind`: 0 = down, 1 = up, 2 = move.
     fn node_pointer(&self, kind: u32, button: u32, x: f32, y: f32, clicks: u32) {
