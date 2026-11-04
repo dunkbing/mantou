@@ -485,7 +485,9 @@ pub unsafe extern "C" fn mt_service(inst: u32, req: u32, ptr: *const u8, len: u3
     // SAFETY: guaranteed by the caller.
     let body = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
     with(inst, 1, |i| {
-        if i.headless {
+        if i.clipboard_service(req, &body) {
+            0
+        } else if i.headless {
             *lock(&i.last_service) = body;
             match i.next_answer() {
                 Some(Some(a)) => i.push_service_result(req, Some(&a)),

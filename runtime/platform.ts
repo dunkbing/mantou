@@ -63,6 +63,14 @@ export interface MenuItem {
   role?: string;
 }
 
+/** The system clipboard's text. Images aren't supported yet. */
+export const clipboard = {
+  /** The text on the clipboard, or null when there is none. */
+  readText: () => ui().service<string>({ kind: "clipboardRead" }),
+  /** Puts text on the clipboard. */
+  writeText: async (text: string): Promise<void> => void (await ui().service<boolean>({ kind: "clipboardWrite", text })),
+};
+
 /** Choose files (or folders); the paths, or null when cancelled. */
 export function openFile(options: OpenFileOptions = {}): Promise<string[] | null> {
   return ui().service<string[]>({ kind: "openFile", ...options });

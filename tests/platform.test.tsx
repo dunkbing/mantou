@@ -1,7 +1,7 @@
 // Platform services against the real core, headless: requests reach the core as
 // JSON, answers come back as events and resolve the promises (design §10).
 import { afterEach, expect, test } from "bun:test";
-import { mount, View, openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
+import { mount, View, clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -65,4 +65,14 @@ test("menu items reach onMenu, and setMenu sends the menus", async () => {
   expect((h.lastService() as unknown as { menu: { label: string }[] }).menu[0].label).toBe("File");
   h.chooseMenu("open").chooseMenu("save");
   expect(chosen).toEqual(["open", "save"]);
+});
+
+test("the clipboard writes and reads text, in the same instance", async () => {
+  const h = app();
+  const w = clipboard.writeText("héllo");
+  h.step();
+  await w;
+  const r = clipboard.readText();
+  h.step();
+  expect(await r).toBe("héllo");
 });

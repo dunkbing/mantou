@@ -6,18 +6,23 @@ description: "File dialogs, message boxes, the app menu and context menus as asy
 [#21](https://github.com/dunkbing/mantou/issues/21). Platform services are async functions from `mantou-ui`. Each sends a JSON request through `mt_service`; the core runs it on the main thread and answers with a `SERVICE_RESULT` event, which resolves the promise (`null` when the user cancels). Chosen app-menu items arrive as `MENU` events.
 
 ```tsx
-import { openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
+import { clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
 
 const paths = await openFile({ multiple: true, filters: [{ name: "Images", extensions: ["png", "jpg"] }] }); // string[] | null
 const path = await saveFile({ name: "notes.txt" });                                                          // string | null
 const button = await message({ message: "Delete this message?", level: "warning", buttons: ["Delete", "Cancel"] }); // index | null
 const id = await showMenu([{ id: "reply", label: "Reply" }, { separator: true }, { role: "copy" }], { x, y }); // string | null
 
+await clipboard.writeText(url);        // the system clipboard
+const text = await clipboard.readText(); // string | null
+
 setMenu([{ label: "File", items: [{ id: "open", label: "Open…", accelerator: "cmd+o" }, { separator: true }, { role: "quit" }] }]);
 onMenu((id) => { if (id === "open") { /* … */ } });
 ```
 
 Dialogs are native through `rfd`, menus through `muda` (macOS so far). A dialog is modal: the window stops drawing while it is open. On macOS the window starts with the standard App (About, Hide, Quit), Edit and Window menus; Quit asks the window to close, like its close button, so the app can veto it.
+
+The clipboard is text only for now (images are not done) and is answered on the calling thread, so it works the same in a headless instance (a private in-memory clipboard).
 
 ## In tests
 

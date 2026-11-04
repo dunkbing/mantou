@@ -148,6 +148,24 @@ impl Instance {
         f(cb.as_mut())
     }
 
+    /// The `clipboardRead` / `clipboardWrite` services, answered on the caller's thread (the system
+    /// clipboard needs no main thread, and headless instances use their own). False for other requests.
+    pub fn clipboard_service(&self, req: u32, body: &str) -> bool {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else { return false };
+        match v["kind"].as_str() {
+            Some("clipboardRead") => {
+                let text = self.with_clipboard(|cb| cb.get());
+                self.push_service_result(req, text.map(|t| serde_json::json!(t).to_string()).as_deref());
+            }
+            Some("clipboardWrite") => {
+                self.with_clipboard(|cb| cb.set(v["text"].as_str().unwrap_or("")));
+                self.push_service_result(req, Some("true"));
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// Milliseconds on the instance's clock (the manual one for headless instances).
     fn now_ms(&self) -> f64 {
         if self.headless { *lock(&self.clock_ms) } else { self.started.elapsed().as_secs_f64() * 1000.0 }

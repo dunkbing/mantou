@@ -2,7 +2,7 @@
 export { View, Text, Input, Image, Scroll, List, useWindowSize, For, Index, Show, Switch, Match, useUi, onKey } from "./solid/components";
 export { mount } from "./solid/mount";
 export {
-  openFile, saveFile, message, showMenu, setMenu, onMenu,
+  clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu,
   type OpenFileOptions, type SaveFileOptions, type MessageOptions, type MenuItem, type FileFilter,
 } from "./platform";
 export { run, type RunOptions } from "./run";
