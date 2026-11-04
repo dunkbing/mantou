@@ -9,7 +9,7 @@ pub fn value_words(v: Value) -> Vec<u32> {
     match v {
         Value::F32(f) => vec![f.to_bits()],
         Value::Color(c) => vec![c],
-        Value::Enum(e) => vec![e],
+        Value::Enum(e) | Value::Family(e) => vec![e],
         Value::Length(Length::Px(f)) => vec![unit::PX, f.to_bits()],
         Value::Length(Length::Percent(f)) => vec![unit::PERCENT, f.to_bits()],
         Value::Length(Length::Auto) => vec![unit::AUTO, 0],
@@ -106,6 +106,18 @@ impl Ops {
     }
     pub fn focus(&mut self, id: u32) -> &mut Self {
         self.op(op::FOCUS, &[id])
+    }
+    pub fn font(&mut self, data: &[u8]) -> &mut Self {
+        let mut padded = data.to_vec();
+        padded.resize(data.len().div_ceil(4) * 4, 0);
+        let mut w = vec![data.len() as u32];
+        w.extend(padded.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+        self.op(op::FONT, &w)
+    }
+    pub fn font_family(&mut self, family: u32, names: &str) -> &mut Self {
+        let mut w = vec![family];
+        w.extend(string_words(names));
+        self.op(op::FONT_FAMILY, &w)
     }
     pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
         self.op(op::FOCUS_SCOPE, &[id, flags])

@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 7;
+pub const PROTOCOL_VERSION: u32 = 8;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -43,6 +43,10 @@ pub mod op {
     pub const SCROLL_TO: u32 = 19;
     /// Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout.
     pub const SCROLL_INTO_VIEW: u32 = 20;
+    /// Register a font file (TTF, OTF or a collection) with the instance; text uses it by its family name.
+    pub const FONT: u32 = 21;
+    /// Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts.
+    pub const FONT_FAMILY: u32 = 22;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -68,6 +72,8 @@ pub fn op_name(code: u32) -> &'static str {
         17 => "FOCUS",
         19 => "SCROLL_TO",
         20 => "SCROLL_INTO_VIEW",
+        21 => "FONT",
+        22 => "FONT_FAMILY",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -263,6 +269,8 @@ pub enum ValueKind {
     F32,
     Color,
     Length,
+    /// A FONT_FAMILY id.
+    Family,
     /// An enum with this many values.
     Enum(u32),
 }
@@ -319,10 +327,11 @@ pub enum Prop {
     SelectionColor = 47,
     Scrollbar = 48,
     ScrollbarColor = 49,
+    FontFamily = 50,
 }
 
 impl Prop {
-    pub const COUNT: usize = 49;
+    pub const COUNT: usize = 50;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -375,6 +384,7 @@ impl Prop {
             47 => Prop::SelectionColor,
             48 => Prop::Scrollbar,
             49 => Prop::ScrollbarColor,
+            50 => Prop::FontFamily,
             _ => return None,
         })
     }
@@ -430,6 +440,7 @@ impl Prop {
             Prop::SelectionColor => "selectionColor",
             Prop::Scrollbar => "scrollbar",
             Prop::ScrollbarColor => "scrollbarColor",
+            Prop::FontFamily => "fontFamily",
         }
     }
 
@@ -484,6 +495,7 @@ impl Prop {
             Prop::SelectionColor => ValueKind::Color,
             Prop::Scrollbar => ValueKind::Enum(2),
             Prop::ScrollbarColor => ValueKind::Color,
+            Prop::FontFamily => ValueKind::Family,
         }
     }
 

@@ -36,7 +36,7 @@ function ts(): string {
   L.push("export const Event = {");
   for (const e of events) L.push(`  /** ${e.doc}${e.fields ? ` ${e.fields}.` : ""} */\n  ${e.name}: ${e.code},`);
   L.push("} as const;", "");
-  L.push("export type ValueKind = \"f32\" | \"color\" | \"length\" | \"enum\";");
+  L.push("export type ValueKind = \"f32\" | \"color\" | \"length\" | \"family\" | \"enum\";");
   L.push("export const StyleProp = {");
   for (const p of styleProps) {
     const values = typeof p.type === "string" ? "" : `, values: ${JSON.stringify(p.type.enum)}`;
@@ -52,7 +52,7 @@ function ts(): string {
   L.push("/** Style properties as the core understands them (one wire property each). */");
   L.push("export interface WireStyle {");
   for (const p of styleProps) {
-    const t = p.type === "f32" ? "number" : p.type === "color" ? "Color" : p.type === "length" ? "Length" : p.type.enum.map((v) => `"${v}"`).join(" | ");
+    const t = p.type === "f32" ? "number" : p.type === "color" ? "Color" : p.type === "length" ? "Length" : p.type === "family" ? "string | readonly string[]" : p.type.enum.map((v) => `"${v}"`).join(" | ");
     L.push(`  /** Default: ${p.default}. */\n  ${p.name}?: ${t};`);
   }
   L.push("}", "");
@@ -95,7 +95,7 @@ function rs(): string {
     p.type.enum.forEach((v, i) => L.push(`    pub const ${screaming(v)}: u32 = ${i};`));
     L.push("}", "");
   }
-  L.push("#[derive(Clone, Copy, Debug, PartialEq, Eq)]", "pub enum ValueKind {", "    F32,", "    Color,", "    Length,", "    /// An enum with this many values.", "    Enum(u32),", "}", "");
+  L.push("#[derive(Clone, Copy, Debug, PartialEq, Eq)]", "pub enum ValueKind {", "    F32,", "    Color,", "    Length,", "    /// A FONT_FAMILY id.", "    Family,", "    /// An enum with this many values.", "    Enum(u32),", "}", "");
   L.push("#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]", "#[repr(u32)]", "pub enum Prop {");
   for (const p of styleProps) L.push(`    ${camelToPascal(p.name)} = ${p.code},`);
   L.push("}", "", "impl Prop {", `    pub const COUNT: usize = ${styleProps.length};`, "");
@@ -107,7 +107,7 @@ function rs(): string {
   L.push("        }", "    }", "");
   L.push("    pub fn kind(self) -> ValueKind {", "        match self {");
   for (const p of styleProps) {
-    const k = p.type === "f32" ? "ValueKind::F32" : p.type === "color" ? "ValueKind::Color" : p.type === "length" ? "ValueKind::Length" : `ValueKind::Enum(${p.type.enum.length})`;
+    const k = p.type === "f32" ? "ValueKind::F32" : p.type === "color" ? "ValueKind::Color" : p.type === "length" ? "ValueKind::Length" : p.type === "family" ? "ValueKind::Family" : `ValueKind::Enum(${p.type.enum.length})`;
     L.push(`            Prop::${camelToPascal(p.name)} => ${k},`);
   }
   L.push("        }", "    }", "");

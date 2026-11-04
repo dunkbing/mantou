@@ -65,6 +65,12 @@ export class OpEncoder {
   placeholder(id: number, s: string) { this.op(Op.PLACEHOLDER, [id, ...stringWords(s)]); }
   inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
   focus(id: number) { this.op(Op.FOCUS, [id]); }
+  font(data: Uint8Array) {
+    const words = new Uint32Array(Math.ceil(data.length / 4));
+    new Uint8Array(words.buffer).set(data);
+    this.op(Op.FONT, [data.length, ...words]);
+  }
+  fontFamily(family: number, names: string) { this.op(Op.FONT_FAMILY, [family, ...stringWords(names)]); }
   focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
   scrollTo(id: number, x: number, y: number, flags: number) { this.op(Op.SCROLL_TO, [id, f32bits(x), f32bits(y), flags]); }
   scrollIntoView(id: number, block: number) { this.op(Op.SCROLL_INTO_VIEW, [id, block]); }

@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, type StylePropName } from "./gen/protocol";
+import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { expandStyle, type Style } from "./style";
@@ -347,7 +347,7 @@ export class Node {
       const prev = this.own.get(prop);
       if (prev !== undefined && JSON.stringify(prev) === JSON.stringify(value)) continue;
       this.own.set(prop, value);
-      this.ui.enc.style(this.id, prop, value);
+      this.ui.enc.style(this.id, prop, this.ui.wireValue(prop, value));
     }
     this.ui.schedule();
     return this;
@@ -749,13 +749,41 @@ export class Ui {
     return shared;
   }
 
+  /**
+   * Registers a font file (TTF, OTF or a collection) with this Ui's core.
+   * Text then uses it by its family name: `fontFamily: "Lucide"`. Text laid
+   * out before is laid out again, in case the font changes its fallback.
+   */
+  registerFont(data: Uint8Array): this {
+    this.enc.font(data);
+    this.schedule();
+    return this;
+  }
+
+  private families = new Map<string, number>();
+
+  /** @internal A style value as the wire wants it: font family names become a FONT_FAMILY id. */
+  wireValue(prop: StylePropName, value: unknown): unknown {
+    if (StyleProp[prop].kind !== "family") return value;
+    const names = (Array.isArray(value) ? value : [value]).map((n) => String(n).trim()).filter(Boolean).join(", ");
+    if (!names) return 0;
+    let id = this.families.get(names);
+    if (id === undefined) {
+      id = this.families.size + 1;
+      this.families.set(names, id);
+      this.enc.fontFamily(id, names);
+    }
+    return id;
+  }
+
   /** @internal The id of a shared style in this Ui, sending its definition the first time. */
   styleId(shared: SharedStyle): number {
     let id = this.styleIds.get(shared);
     if (id === undefined) {
       id = this.nextStyleId++;
       this.styleIds.set(shared, id);
-      this.enc.styleDef(id, expandStyle(shared.style));
+      const props = [...expandStyle(shared.style)].map(([p, v]): [StylePropName, unknown] => [p, this.wireValue(p, v)]);
+      this.enc.styleDef(id, props);
       this.schedule();
     }
     return id;

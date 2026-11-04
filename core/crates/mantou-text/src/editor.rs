@@ -82,7 +82,7 @@ impl Editor {
             size: [0.0; 2],
             real: None,
         };
-        e.apply_style();
+        e.apply_style(FAMILY.to_owned());
         e
     }
 
@@ -142,10 +142,10 @@ impl Editor {
         real.replace_range(a..b, inserted);
     }
 
-    fn apply_style(&mut self) {
+    fn apply_style(&mut self, family: String) {
         let s = self.style;
         let styles = self.ed.edit_styles();
-        styles.insert(StyleProperty::FontFamily(FontFamily::Source(Cow::Borrowed(FAMILY))));
+        styles.insert(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(family))));
         styles.insert(StyleProperty::FontSize(s.size));
         styles.insert(StyleProperty::FontWeight(FontWeight::new(s.weight)));
         styles.insert(StyleProperty::FontStyle(if s.italic { FontStyle::Italic } else { FontStyle::Normal }));
@@ -156,11 +156,16 @@ impl Editor {
         }));
     }
 
-    pub fn set_style(&mut self, style: &TextStyle) {
+    pub fn set_style(&mut self, engine: &TextEngine, style: &TextStyle) {
         if *style != self.style {
             self.style = *style;
-            self.apply_style();
+            self.apply_style(engine.family_source(style.family).to_owned());
         }
+    }
+
+    /// The engine's fonts or families changed: lay the text out again with them.
+    pub fn fonts_changed(&mut self, engine: &TextEngine) {
+        self.apply_style(engine.family_source(self.style.family).to_owned());
     }
 
     /// Sets the content box size; multiline text wraps at its width.

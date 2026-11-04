@@ -15,6 +15,7 @@ function decodeValue(prop: string, w: Uint32Array, i: number): [unknown, number]
       return [unit === Unit.auto ? "auto" : unit === Unit.percent ? `${v}%` : v, 2];
     }
     case "enum": return [(def as { values: readonly string[] }).values[w[i]] ?? `#${w[i]}`, 1];
+    case "family": return [w[i], 1];
   }
 }
 
@@ -64,6 +65,8 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "VALUE": o = { op: name, id: w[a], rev: w[a + 1], text: str(w, a + 2) }; break;
       case "INPUT_OPTIONS": o = { op: name, id: w[a], flags: w[a + 1], maxLength: w[a + 2] }; break;
       case "FOCUS": o = { op: name, id: w[a] }; break;
+      case "FONT": o = { op: name, bytes: w[a] }; break;
+      case "FONT_FAMILY": o = { op: name, family: w[a], names: str(w, a + 1) }; break;
       case "FOCUS_SCOPE": o = { op: name, id: w[a], flags: w[a + 1] }; break;
       case "SCROLL_TO": o = { op: name, id: w[a], x: bitsf32(w[a + 1]), y: bitsf32(w[a + 2]), flags: w[a + 3] }; break;
       case "SCROLL_INTO_VIEW": o = { op: name, id: w[a], block: w[a + 1] }; break;

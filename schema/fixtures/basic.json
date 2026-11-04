@@ -255,5 +255,20 @@
     "op": "SCROLL_INTO_VIEW",
     "id": 4,
     "block": 0
+  },
+  {
+    "op": "FONT_FAMILY",
+    "family": 1,
+    "names": "Lucide, monospace"
+  },
+  {
+    "op": "STYLE",
+    "id": 4,
+    "prop": "fontFamily",
+    "value": 1
+  },
+  {
+    "op": "FONT",
+    "bytes": 6
   }
 ]

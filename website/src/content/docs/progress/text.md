@@ -61,3 +61,20 @@ For information (Linux, headless, this machine; not part of the tests), per comm
 | 8,000 | 22.6 ms | 11.6 ms | 0 ms |
 
 The issue measured 208 ms, 212 ms and 98 ms at 4,200 rows before. What remains grows with the list because a negative margin re-lays it out; a `<Scroll>` ([Scrolling and dialogs](/progress/scrolling/)) scrolls without a relayout.
+
+## App fonts
+
+Apps bring their own fonts: icon fonts, brand fonts, monospace for code ([#8](https://github.com/dunkbing/mantou/issues/8), [#14](https://github.com/dunkbing/mantou/issues/14)).
+
+```tsx
+run(() => <App />, { fonts: ["./fonts/Lucide.ttf"] }); // or ui.registerFont(bytes) at any time
+
+<Text style={{ fontFamily: "lucide", fontSize: 16, color: muted }}>{ICONS.archive}</Text>
+<Input style={{ fontFamily: ["JetBrains Mono", "monospace"] }} />
+```
+
+- `fontFamily` takes a family name or a list, tried in order, then Inter and the system's fonts, so a glyph a font lacks still draws. The name is the one in the font file (`fc-scan`, Font Book or the font's docs show it).
+- Fonts are registered with one instance's core (a TTF, an OTF or a collection, as bytes), and text laid out before is laid out again, in case the new font changes its fallback.
+- On the wire a family list is sent once (`FONT_FAMILY`, an id), and styles refer to the id, like shared styles.
+- Tested with a monospace test font (`tests/fonts/`, an ASCII subset of Liberation Mono under the OFL): `core/crates/mantou-tree/tests/fonts.rs` and `tests/fonts.test.tsx`, with a reference image.
+

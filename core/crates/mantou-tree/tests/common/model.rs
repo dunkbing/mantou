@@ -102,6 +102,8 @@ pub fn value(p: Prop, src: &mut impl Source) -> Value {
             _ => Length::Auto,
         }),
         ValueKind::Enum(n) => Value::Enum(src.below(n)),
+        // Families other than the default need a FONT_FAMILY first; the model keeps to it.
+        ValueKind::Family => Value::Family(0),
     }
 }
 

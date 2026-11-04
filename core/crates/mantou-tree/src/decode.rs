@@ -19,6 +19,8 @@ pub enum Value {
     Length(Length),
     /// Index into the property's enum values.
     Enum(u32),
+    /// A FONT_FAMILY id (0 = the default fonts).
+    Family(u32),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -41,6 +43,8 @@ pub enum Op {
     InputOptions { id: u32, flags: u32, max_length: u32 },
     Focus { id: u32 },
     FocusScope { id: u32, flags: u32 },
+    Font(Vec<u8>),
+    FontFamily { family: u32, names: String },
     /// x or y NaN: keep that axis.
     ScrollTo { id: u32, x: f32, y: f32, flags: u32 },
     ScrollIntoView { id: u32, block: u32 },
@@ -77,6 +81,7 @@ fn value(prop: Prop, w: &[u32], at: usize) -> Result<(Value, usize), DecodeError
     let v = match prop.kind() {
         ValueKind::F32 => Value::F32(finite(f32::from_bits(w[0]))?),
         ValueKind::Color => Value::Color(w[0]),
+        ValueKind::Family => Value::Family(w[0]),
         ValueKind::Enum(n) => {
             if w[0] >= n {
                 return err(at, format!("{} has no value {}", prop.name(), w[0]));
@@ -219,6 +224,21 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUS => {
                 fixed(1)?;
                 Op::Focus { id: a[0] }
+            }
+            op::FONT => {
+                let Some(&len) = a.first() else { return err(i, "FONT needs a length") };
+                let len = len as usize;
+                if len.div_ceil(4) != n - 1 {
+                    return err(i, "FONT length does not match its words");
+                }
+                let from = (i + 2) * 4;
+                Op::Font(bytes[from..from + len].to_vec())
+            }
+            op::FONT_FAMILY => {
+                if n < 2 {
+                    return err(i, "FONT_FAMILY needs a family id and a length");
+                }
+                Op::FontFamily { family: a[0], names: string(bytes, a, i + 1, 1, "FONT_FAMILY")? }
             }
             op::FOCUS_SCOPE => {
                 fixed(2)?;

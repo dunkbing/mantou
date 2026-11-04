@@ -7,10 +7,10 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
-export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "styleValue" | "styleList";
+export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
 
 export interface OpDef {
   name: string;
@@ -39,6 +39,8 @@ export const ops: OpDef[] = [
   { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow." },
   { name: "SCROLL_TO", code: 19, operands: [["id", "id"], ["x", "f32"], ["y", "f32"], ["flags", "u32"]], doc: "Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout." },
   { name: "SCROLL_INTO_VIEW", code: 20, operands: [["id", "id"], ["block", "u32"]], doc: "Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout." },
+  { name: "FONT", code: 21, operands: [["data", "bytes"]], doc: "Register a font file (TTF, OTF or a collection) with the instance; text uses it by its family name." },
+  { name: "FONT_FAMILY", code: 22, operands: [["family", "u32"], ["names", "string"]], doc: "Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
@@ -64,6 +66,7 @@ export type ValueType =
   | "f32" // 1 word
   | "color" // 1 word: RGBA8, r in the low byte
   | "length" // 2 words: unit (Unit), f32
+  | "family" // 1 word: a FONT_FAMILY id (0 = Mantou's default fonts)
   | { enum: readonly string[] }; // 1 word: index into the list
 
 export const units = ["px", "percent", "auto"] as const;
@@ -124,6 +127,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   // Scroll views (overflow: "scroll"): a thumb drawn over the content while it overflows, which can be dragged.
   { name: "scrollbar", code: 48, type: { enum: ["auto", "none"] }, default: "auto" },
   { name: "scrollbarColor", code: 49, type: "color", default: "#8080808c" },
+  // Text and inputs: a family name or a list of them (registered fonts, or the system's), then Inter.
+  { name: "fontFamily", code: 50, type: "family", default: "Inter, then the system's fonts" },
 ];
 
 /**

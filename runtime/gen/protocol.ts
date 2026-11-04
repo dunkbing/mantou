@@ -1,6 +1,6 @@
 // Written by schema/gen.ts from schema/protocol.ts. Don't edit it; change the schema and run `bun run gen`.
 
-export const PROTOCOL_VERSION = 7;
+export const PROTOCOL_VERSION = 8;
 
 export const Op = {
   /** Create a node; it starts detached. */
@@ -41,11 +41,15 @@ export const Op = {
   SCROLL_TO: 19,
   /** Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout. */
   SCROLL_INTO_VIEW: 20,
+  /** Register a font file (TTF, OTF or a collection) with the instance; text uses it by its family name. */
+  FONT: 21,
+  /** Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts. */
+  FONT_FAMILY: 22,
   /** Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen. */
   FOCUS_SCOPE: 18,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 18: "FOCUS_SCOPE" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 18: "FOCUS_SCOPE" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4} as const;
@@ -98,7 +102,7 @@ export const Event = {
   MENU: 19,
 } as const;
 
-export type ValueKind = "f32" | "color" | "length" | "enum";
+export type ValueKind = "f32" | "color" | "length" | "family" | "enum";
 export const StyleProp = {
   display: { code: 1, kind: "enum", values: ["flex","none"] },
   flexDirection: { code: 2, kind: "enum", values: ["row","column","rowReverse","columnReverse"] },
@@ -149,9 +153,10 @@ export const StyleProp = {
   selectionColor: { code: 47, kind: "color" },
   scrollbar: { code: 48, kind: "enum", values: ["auto","none"] },
   scrollbarColor: { code: 49, kind: "color" },
+  fontFamily: { code: 50, kind: "family" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -258,4 +263,6 @@ export interface WireStyle {
   scrollbar?: "auto" | "none";
   /** Default: #8080808c. */
   scrollbarColor?: Color;
+  /** Default: Inter, then the system's fonts. */
+  fontFamily?: string | readonly string[];
 }

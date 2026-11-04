@@ -51,17 +51,20 @@ pub struct TextStyle {
     /// 0 = no limit. A cut-off last line ends in an ellipsis.
     pub max_lines: u32,
     pub italic: bool,
+    /// A font family id (TextEngine::set_family); 0 = the default fonts.
+    pub family: u32,
 }
 
 impl Default for TextStyle {
     fn default() -> Self {
-        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false }
+        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false, family: 0 }
     }
 }
 
 impl TextStyle {
-    fn key(&self) -> [u32; 6] {
+    fn key(&self) -> [u32; 7] {
         [
+            self.family,
             self.size.to_bits(),
             self.weight.to_bits(),
             self.line_height.to_bits(),
@@ -194,7 +197,7 @@ impl Atlas {
     }
 }
 
-type LayoutKey = (String, [u32; 6], u32);
+type LayoutKey = (String, [u32; 7], u32);
 
 /// Text layout and glyph rasterization for one tree.
 pub struct TextEngine {
@@ -209,7 +212,9 @@ pub struct TextEngine {
     /// than the limit keeps most of its hits instead of losing them all.
     cache: HashMap<LayoutKey, Arc<TextLayout>>,
     older: HashMap<LayoutKey, Arc<TextLayout>>,
-    ellipses: HashMap<[u32; 6], Vec<PlacedGlyph>>,
+    ellipses: HashMap<[u32; 7], Vec<PlacedGlyph>>,
+    /// Font family lists by id, each ending in the default ones (FAMILY).
+    families: HashMap<u32, String>,
     /// Layouts computed (cache misses), for tests and stats.
     uncached: u64,
 }
@@ -244,8 +249,40 @@ impl TextEngine {
             cache: HashMap::new(),
             older: HashMap::new(),
             ellipses: HashMap::new(),
+            families: HashMap::new(),
             uncached: 0,
         }
+    }
+
+    /// Defines a family id for TextStyle::family: names tried in order, then Mantou's own fonts.
+    pub fn set_family(&mut self, id: u32, names: &str) {
+        let source = format!("{names}, {FAMILY}");
+        if self.families.get(&id) != Some(&source) {
+            self.families.insert(id, source);
+            self.forget_layouts();
+        }
+    }
+
+    /// The family list a style's text is set in.
+    pub(crate) fn family_source(&self, id: u32) -> &str {
+        self.families.get(&id).map_or(FAMILY, String::as_str)
+    }
+
+    /// Registers a font file (TTF, OTF or a collection) with this engine.
+    /// Returns the family names it holds; none means it wasn't a font.
+    pub fn register_font(&mut self, data: Vec<u8>) -> Vec<String> {
+        let added = self.fcx.collection.register_fonts(Blob::new(Arc::new(data)), None);
+        let names: Vec<String> = added.iter().filter_map(|(id, _)| self.fcx.collection.family_name(*id).map(str::to_owned)).collect();
+        if !names.is_empty() {
+            self.forget_layouts(); // a family, or the fallback for some text, may have changed
+        }
+        names
+    }
+
+    fn forget_layouts(&mut self) {
+        self.cache.clear();
+        self.older.clear();
+        self.ellipses.clear();
     }
 
     /// How many layouts were computed rather than found in the cache.
@@ -265,8 +302,9 @@ impl TextEngine {
     }
 
     fn shape(&mut self, text: &str, style: &TextStyle) -> Layout<()> {
+        let family = self.family_source(style.family).to_owned();
         let mut b = self.lcx.ranged_builder(&mut self.fcx, text, 1.0, false);
-        b.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Borrowed(FAMILY))));
+        b.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(family))));
         b.push_default(StyleProperty::FontSize(style.size));
         b.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
         b.push_default(StyleProperty::FontStyle(if style.italic { FontStyle::Italic } else { FontStyle::Normal }));

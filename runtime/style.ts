@@ -81,6 +81,10 @@ export function encodeValue(prop: StylePropName, value: unknown): number[] {
       if (typeof v === "string" && /^-?\d+(\.\d+)?%$/.test(v)) return [Unit.percent, f32bits(parseFloat(v))];
       throw new Error(`mantou: ${prop} must be a number, "N%" or "auto" (got ${JSON.stringify(v)})`);
     }
+    case "family":
+      // The Ui turns family names into a FONT_FAMILY id before encoding.
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 0) throw new Error(`mantou: ${prop} must be interned by the Ui first`);
+      return [value];
     case "enum": {
       const i = (def as { values: readonly string[] }).values.indexOf(value as string);
       if (i < 0) throw new Error(`mantou: ${prop} must be one of ${(def as { values: readonly string[] }).values.join(", ")}`);

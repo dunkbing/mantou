@@ -482,6 +482,20 @@ impl Tree {
                 self.node(id)?;
                 self.request_into_view(id, block);
             }
+            Op::Font(data) => {
+                let engine = self.text.get_or_insert_with(TextEngine::new);
+                if engine.register_font(data).is_empty() {
+                    return Err("FONT: no font in the data".into());
+                }
+                self.fonts_changed();
+            }
+            Op::FontFamily { family, names } => {
+                if family == 0 {
+                    return Err("FONT_FAMILY: family id 0 is the default".into());
+                }
+                self.text.get_or_insert_with(TextEngine::new).set_family(family, &names);
+                self.fonts_changed();
+            }
             Op::FocusScope { id, flags } => {
                 self.node(id)?.scope = flags;
                 self.layout_dirty = true; // scopes open and close at layout
@@ -572,8 +586,8 @@ impl Tree {
         let taffy = node.taffy;
         let _ = self.taffy.set_style(taffy, style);
         let node = self.nodes.get_mut(&id).expect("exists");
-        if let Some(inp) = node.input.as_mut() {
-            inp.editor.get_mut().set_style(&v.text);
+        if let (Some(inp), Some(engine)) = (node.input.as_mut(), self.text.as_ref()) {
+            inp.editor.get_mut().set_style(engine, &v.text);
         }
         *node.drawn.get_mut() = None; // the text style may have changed
         if v.scrolls != node.scroll.is_some() {
@@ -702,6 +716,21 @@ impl Tree {
                 node.reported = None;
             }
         }
+    }
+
+    /// Fonts or font families changed: every text and input is measured and drawn again.
+    fn fonts_changed(&mut self) {
+        let Some(engine) = self.text.as_ref() else { return };
+        for node in self.nodes.values_mut() {
+            if node.kind == p::node_kind::TEXT || node.input.is_some() {
+                *node.drawn.get_mut() = None;
+                if let Some(inp) = node.input.as_mut() {
+                    inp.editor.get_mut().fonts_changed(engine);
+                }
+                let _ = self.taffy.mark_dirty(node.taffy);
+            }
+        }
+        self.layout_dirty = true;
     }
 
     /// Events for JS since the last call.
@@ -1145,6 +1174,11 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         }
         Prop::MaxLines => v.text.max_lines = num().clamp(0.0, 10_000.0) as u32,
         Prop::FontStyle => v.text.italic = e == p::font_style::ITALIC,
+        Prop::FontFamily => {
+            if let Value::Family(f) = value {
+                v.text.family = f
+            }
+        }
         Prop::Overflow => {
             v.clips = e == p::overflow::HIDDEN || e == p::overflow::SCROLL;
             v.scrolls = e == p::overflow::SCROLL;
