@@ -6,6 +6,7 @@ import { KeyModifier, WindowStateFlag } from "./gen/protocol";
 import { AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
+import { createComputed, createRoot, untrack } from "./solid/solid";
 import { expandStyle, f32bits, parseColor, type Style } from "./style";
 import type { Color } from "./gen/protocol";
 
@@ -236,11 +237,15 @@ type InputHandlers = {
  * isn't tied to a Ui: each Ui sends its definition the first time a node uses it.
  */
 export class SharedStyle {
-  constructor(readonly style: Style) {}
+  /** A function is read reactively: when what it reads changes (a theme's values), the style is defined again. */
+  constructor(readonly style: Style | (() => Style)) {}
 }
 
-/** Defines a shared style; nodes then reference it with one op each. */
-export function defineStyle(style: Style): SharedStyle {
+/**
+ * Defines a shared style; nodes then reference it with one op each. Give a function
+ * (`defineStyle(() => ({ backgroundColor: theme.bg }))`) for values that change, like a theme's.
+ */
+export function defineStyle(style: Style | (() => Style)): SharedStyle {
   return new SharedStyle(style);
 }
 
@@ -1078,6 +1083,13 @@ export class Ui {
   /** Commits sent, and ops in the last one. */
   commits = 0;
   lastCommitOps = 0;
+  /** Reactive roots owned by this Ui (shared styles that follow what they read); `dispose` ends them. */
+  private roots: (() => void)[] = [];
+
+  /** Stops what this Ui keeps running by itself, before its core goes away. */
+  dispose() {
+    for (const d of this.roots.splice(0)) d();
+  }
 
   private scheduled = false;
   private nextId = 1;
@@ -1333,7 +1345,7 @@ export class Ui {
   }
 
   /** Defines a style and sends its definition now. */
-  defineStyle(style: Style): SharedStyle {
+  defineStyle(style: Style | (() => Style)): SharedStyle {
     const shared = new SharedStyle(style);
     this.styleId(shared);
     return shared;
@@ -1372,9 +1384,19 @@ export class Ui {
     if (id === undefined) {
       id = this.nextStyleId++;
       this.styleIds.set(shared, id);
-      const props = [...expandStyle(shared.style)].filter(([, v]) => v !== undefined).map(([p, v]): [StylePropName, unknown] => [p, this.wireValue(p, v)]);
-      this.enc.styleDef(id, props);
-      this.schedule();
+      const send = (style: Style) => {
+        const props = [...expandStyle(style)].filter(([, v]) => v !== undefined).map(([p, v]): [StylePropName, unknown] => [p, this.wireValue(p, v)]);
+        this.enc.styleDef(id!, props);
+        this.schedule();
+      };
+      const s = shared.style;
+      if (typeof s === "function") {
+        // Defined again (the core restyles its users) whenever what the function reads changes.
+        untrack(() => createRoot((dispose) => {
+          this.roots.push(dispose);
+          createComputed(() => send(s())); // now, not after the batch: the style must exist before its users
+        }));
+      } else send(s);
     }
     return id;
   }

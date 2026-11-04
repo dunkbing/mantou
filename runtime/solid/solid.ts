@@ -14,6 +14,7 @@ export const {
   createSignal,
   createMemo,
   createEffect,
+  createComputed,
   createRenderEffect,
   createRoot,
   createContext,

@@ -133,6 +133,12 @@ const theme = defineTheme({
 setColorScheme("dark");   // an in-app setting; "system" goes back to following the OS
 ```
 
+A theme can be made at module load, before the window exists. Values written into a plain object are read once, so a shared style that uses a theme takes a function, which is read again when the scheme changes:
+
+```tsx
+const card = defineStyle(() => ({ backgroundColor: theme.bg, padding: 12 }));
+```
+
 ## Hover
 
 ```tsx

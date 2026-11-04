@@ -21,7 +21,11 @@ function follow() {
 /** The colour scheme in use, as a signal: the system's, unless `setColorScheme` chose one. */
 export function useColorScheme(): () => ColorScheme {
   follow();
-  return () => forced() ?? system();
+  // A theme made before the window exists looks for one on each read (cheap once it has).
+  return () => {
+    follow();
+    return forced() ?? system();
+  };
 }
 
 /** Forces "light" or "dark" (an in-app setting), or "system" to follow the OS again. */

@@ -337,6 +337,7 @@ export class HeadlessCore {
   free() {
     if (this.freed) return;
     this.freed = true;
+    this.ui.dispose();
     this.lib.symbols.mt_headless_free(this.handle);
   }
 }
