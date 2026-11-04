@@ -1,3 +1,4 @@
 core/target/
 node_modules/
 selftest-report.json
+tests/images/__failures__/

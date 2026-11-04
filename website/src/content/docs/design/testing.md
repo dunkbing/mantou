@@ -48,6 +48,8 @@ uint32_t mt_stats(uint32_t inst, uint64_t* out, uint32_t cap);            // cou
 
 The real threading model is covered by the window-mode tests ([§12.5](/design/testing/#125-window-mode-the-real-threading-model-and-platform-layer)).
 
+**Reference images** (`mantou-ui/images`, [#11](https://github.com/dunkbing/mantou/issues/11)): `import "mantou-ui/images"` registers a `toMatchImage(name, { threshold, maxDiffRatio })` matcher for `bun test`, which compares a capture with `tests/images/<name>.png` (or under `MANTOU_IMAGES`). A pixel differs when a channel is off by more than `threshold` (default 24 of 255), and the image matches while at most `maxDiffRatio` of its pixels differ (default 0.2%): enough for the edge differences between lavapipe, WARP and Metal, not for a shape moved by a pixel. Run with `MANTOU_UPDATE_IMAGES=1` to write or refresh the goldens, then look at them before committing. A missing golden is written locally and fails in CI. On a mismatch the matcher writes `<name>.actual.png` and `<name>.diff.png` (differences in red) under `tests/images/__failures__/`, which CI uploads as an artifact. `tests/images.test.tsx` covers the counter, the to-do example, a text sampler and boxes (radii, borders, opacity, clipping, a scrollbar), at scale 1 and 2; growing every rounded edge by one pixel in the shader fails it.
+
 ### 12.3 The app test API (`mantou-ui/test`)
 
 It's built on **`bun:test`**: Jest-compatible, with `describe`, hooks, `expect.extend`, snapshots and `--coverage` included. We don't have to write our own test runner, matchers or value equality.

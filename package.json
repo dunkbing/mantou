@@ -32,6 +32,7 @@
     "./headless": "./runtime/headless.ts",
     "./mock": "./runtime/mock.ts",
     "./preload": "./runtime/solid/preload.ts",
+    "./images": "./runtime/images.ts",
     "./package.json": "./package.json"
   },
   "files": [

@@ -39,6 +39,20 @@ jobs:
         run: cargo build --release --manifest-path core/Cargo.toml
       - name: Headless tests on the real core
         run: bun run test:headless
+      - name: Reference images that didn't match (actual and diff)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-failures-${{ runner.os }}
+          path: tests/images/__failures__
+          if-no-files-found: ignore
+      - name: Reference images that didn't match (actual and diff)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-failures-linux-checks
+          path: tests/images/__failures__
+          if-no-files-found: ignore
 
   selftest:
     strategy:
