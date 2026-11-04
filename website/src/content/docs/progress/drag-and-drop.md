@@ -14,4 +14,13 @@ onFileDrop((kind, e) => {}); // kind 0 over, 1 left, 2 dropped: only when no vie
 - `onDragOver` hears `null` when the files move to another view or leave the window.
 - Tests: `tests/drop.test.tsx` (`HeadlessCore.dropFiles`).
 
-**Not done yet:** dragging out of the app, in-app drags with drop targets, and a check of a real drop in a window (needs a person or Finder automation).
+## Dragging a view inside the app
+
+```tsx
+<View draggable={{ id: mail.id }} />                       // after 4 px with the primary button held
+<View onDragOver={(e) => setOver(e !== null)} onDrop={(e) => move(e.data.id)} />
+```
+
+Targets get the same `onDragOver` / `onDrop` as for files; `e.data` is the dragged view's value (and `files` is empty). The target is found with a hit test at the pointer, so the dragged view itself and its children are never one. Nothing is drawn for the drag itself: style the source and targets from state.
+
+**Not done yet:** dragging files or text out of the app, a drag image, and a check of a real drop in a window (needs a person or Finder automation).

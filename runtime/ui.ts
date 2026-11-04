@@ -20,6 +20,8 @@ export interface Sink {
   selection?(id: number): [number, number] | null;
   /** Sends a platform service request (JSON); the answer comes back through `Ui.dispatchService`. */
   service?(req: number, json: string): void;
+  /** The id of the topmost node at logical (x, y), or 0, if the sink lays out. */
+  hit?(x: number, y: number): number;
 }
 
 /** Properties the core can animate (design §9.4). */
@@ -161,8 +163,10 @@ export interface DropEvent {
   currentTarget: Node | null;
   x: number;
   y: number;
-  /** Absolute paths. */
+  /** Absolute paths (files from the OS; empty for a drag inside the app). */
   files: string[];
+  /** What a dragged view carries (its `draggable` value); undefined for files from the OS. */
+  data?: unknown;
   stopPropagation(): void;
 }
 
@@ -892,6 +896,40 @@ export class Node {
     return this.addDrop("over", handler);
   }
 
+  private dragData: { value: unknown } | null = null;
+  private dragOff: (() => void)[] = [];
+
+  /**
+   * Makes the node draggable inside the app: after the pointer moves a few px with the primary button held,
+   * views under it hear `onDragOver` (an event with `data: value`, null when it leaves) and, on release, `onDrop`.
+   * `undefined` turns it off. Nothing is drawn for the drag; show it with `onDragOver` on the target and state on the source.
+   */
+  draggable(value: unknown): void {
+    this.alive();
+    const was = this.dragData !== null;
+    this.dragData = value === undefined ? null : { value };
+    if (was === (value !== undefined)) return;
+    if (value === undefined) {
+      this.dragOff.splice(0).forEach((f) => f());
+      return;
+    }
+    let from: { x: number; y: number } | null = null;
+    this.dragOff.push(
+      this.onPointerDown((e) => {
+        if (e.button === 0 && e.target === this.ui.nodes.get(e.target.id) && e.currentTarget === this) from = { x: e.x, y: e.y };
+      }),
+      this.onPointerMove((e) => {
+        if (!from || !(e.buttons & 1)) return;
+        if (!this.ui.dragging && Math.hypot(e.x - from.x, e.y - from.y) < 4) return;
+        this.ui.dragMove(this, this.dragData!.value, e.x, e.y, 0);
+      }),
+      this.onPointerUp((e) => {
+        if (from && this.ui.dragging) this.ui.dragMove(this, this.dragData!.value, e.x, e.y, 2);
+        from = null;
+      }),
+    );
+  }
+
   /** @internal */
   handleDrop(kind: 0 | 1 | 2, e: Omit<DropEvent, "currentTarget" | "stopPropagation"> | null): { stopped: boolean; ran: boolean } {
     let stopped = false;
@@ -1051,6 +1089,24 @@ export class Ui {
     }
     // A drop that no view took goes to the window listeners.
     if (!ran) for (const h of [...this.dropListeners]) h(kind, e);
+  }
+
+  /** True while a view of the app is being dragged. */
+  dragging = false;
+
+  /** @internal The dragged view moved (kind 0) or was released (2) at (x, y). */
+  dragMove(source: Node, data: unknown, x: number, y: number, kind: 0 | 2) {
+    this.dragging = kind === 0;
+    const id = this.sink.hit?.(x, y) ?? 0;
+    let target = this.nodes.get(id) ?? null;
+    if (target === source) target = null; // the dragged view itself isn't a target (nor is its inside)
+    for (let n = target; n; n = n.parent) if (n === source) target = null;
+    const e = { target, x, y, files: [], data };
+    const was = this.dragOver;
+    if (kind === 0 && target === was) return; // still over the same view
+    this.dragOver = kind === 0 ? target : null;
+    if (was && was !== target) for (let n: Node | null = was; n; n = n.parent) n.handleDrop(1, null);
+    for (let n: Node | null = target; n; n = n.parent) if (n.handleDrop(kind, e).stopped) break;
   }
 
   private dragOver: Node | null = null;

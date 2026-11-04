@@ -32,7 +32,9 @@ export interface PointerProps {
   onContextMenu?: (e: PointerEvent) => void;
   /** The primary button went down for the second time in a row at one spot. */
   onDoubleClick?: (e: PointerEvent) => void;
-  /** Files were dropped on the node or inside it. Needs the OS to report the pointer's position, so the target is where it last was. */
+  /** Makes the view draggable inside the app, carrying this value: views under it get `onDragOver` and `onDrop` events with `data` set to it. */
+  draggable?: unknown;
+  /** Files (or a dragged view) were dropped on the node or inside it. Needs the OS to report the pointer's position, so the target is where it last was. */
   onDrop?: (e: DropEvent) => void;
   /** Files are held over the node (the event), or left it or the window (null): the place for a highlight. */
   onDragOver?: (e: DropEvent | null) => void;

@@ -68,6 +68,7 @@ export class HeadlessCore {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
+      hit: (x, y) => this.lib.symbols.mt_test_hit(this.handle, x, y),
       service: (req, json) => {
         const b = utf8.encode(json);
         this.lib.symbols.mt_service(this.handle, req, b, b.byteLength);
