@@ -40,6 +40,22 @@ await clipboard.writeText(url);
 const text = await clipboard.readText(); // string | null
 ```
 
+## Notifications, links, tray and badge
+
+```tsx
+import { notify, openExternal, reveal, setBadge, createTray, onMenu } from "mantou-ui";
+
+await notify({ title: "New mail", body: subject });   // true once it has been sent to the system
+await openExternal("https://example.com");             // the default browser (or app, for a file)
+await reveal("/Users/me/report.pdf");                  // show it in Finder / Explorer / the file manager
+await setBadge(unread);                                 // the dock icon's count (macOS); 0 or null clears it
+
+await createTray({ icon: "icon.png", tooltip: "My app", menu: [{ id: "open", label: "Open" }, { role: "quit" }] });
+onMenu((id) => id === "open" && show());                // tray items arrive here, like the app menu's
+```
+
+`setBadge` and `createTray` work on macOS only for now (they resolve `false` elsewhere). A notification can't tell you it was clicked yet. Notifications from a program that isn't an app bundle show up under another name on macOS; `mantou package` apps use their own.
+
 ## The window
 
 Open it the way you want with `run`:

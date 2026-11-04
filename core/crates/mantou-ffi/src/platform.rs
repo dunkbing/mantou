@@ -24,6 +24,12 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         Some("saveFile") => save_file(&v, window),
         Some("message") => message(&v, window),
         Some("window") => window_op(&v, window),
+        Some("openExternal") => v["url"].as_str().map(|u| json!(open_external(u))),
+        Some("reveal") => v["path"].as_str().map(|p| json!(reveal(p))),
+        Some("notify") => Some(json!(notify(&v))),
+        Some("setBadge") => Some(json!(set_badge(v["text"].as_str().unwrap_or("")))),
+        Some("createTray") => Some(json!(menus.create_tray(&v))),
+        Some("removeTray") => Some(json!(menus.remove_tray())),
         Some("setMenu") => menus.set(inst, &v["menu"]).then(|| json!(true)),
         Some("showMenu") => menus.popup(inst, window, &v),
         other => {
@@ -32,6 +38,72 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         }
     };
     inst.push_service_result(req, answer.map(|a| a.to_string()).as_deref());
+}
+
+/// Runs a program without waiting for it; whether it started.
+fn spawn(program: &str, args: &[&str]) -> bool {
+    std::process::Command::new(program).args(args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn().is_ok()
+}
+
+/// Opens a URL (or a file) with the system's default app.
+fn open_external(url: &str) -> bool {
+    // A request from JS can name anything: let a leading "-" be a file name, not an option.
+    if url.starts_with('-') {
+        return false;
+    }
+    if cfg!(target_os = "macos") {
+        spawn("open", &[url])
+    } else if cfg!(target_os = "windows") {
+        spawn("explorer", &[url])
+    } else {
+        spawn("xdg-open", &[url])
+    }
+}
+
+/// Shows a file in the system's file manager.
+fn reveal(path: &str) -> bool {
+    if path.starts_with('-') {
+        return false;
+    }
+    if cfg!(target_os = "macos") {
+        spawn("open", &["-R", path])
+    } else if cfg!(target_os = "windows") {
+        spawn("explorer", &[&format!("/select,{path}")])
+    } else {
+        let dir = std::path::Path::new(path).parent().map_or(".".to_owned(), |d| d.to_string_lossy().into_owned());
+        spawn("xdg-open", &[&dir])
+    }
+}
+
+/// A desktop notification: `{title, body}`. It is shown from its own thread (the system call can block on
+/// the main thread, which must keep running the window); the answer only says it was started.
+fn notify(v: &Value) -> bool {
+    let (title, body) = (v["title"].as_str().unwrap_or("").to_owned(), v["body"].as_str().unwrap_or("").to_owned());
+    std::thread::Builder::new()
+        .name("mantou-notify".into())
+        .spawn(move || {
+            if let Err(e) = notify_rust::Notification::new().summary(&title).body(&body).show() {
+                log!("cannot show a notification: {e}");
+            }
+        })
+        .is_ok()
+}
+
+/// The dock icon's badge (macOS); an empty text clears it. Other platforms: false.
+#[cfg(target_os = "macos")]
+fn set_badge(text: &str) -> bool {
+    use objc2_app_kit::NSApplication;
+    use objc2_foundation::{MainThreadMarker, NSString};
+    let Some(mtm) = MainThreadMarker::new() else { return false };
+    let tile = NSApplication::sharedApplication(mtm).dockTile();
+    let label = (!text.is_empty()).then(|| NSString::from_str(text));
+    tile.setBadgeLabel(label.as_deref());
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_badge(_text: &str) -> bool {
+    false
 }
 
 /// (WindowStateFlag bits, outer x, outer y in logical px).
@@ -178,6 +250,8 @@ fn message(v: &Value, window: Option<&Arc<Window>>) -> Option<Value> {
 pub struct Menus {
     #[cfg(target_os = "macos")]
     app_menu: Option<muda::Menu>,
+    #[cfg(target_os = "macos")]
+    tray: Option<tray_icon::TrayIcon>,
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -190,6 +264,13 @@ impl Menus {
     fn popup(&mut self, _inst: &Instance, _window: Option<&Arc<Window>>, _v: &Value) -> Option<Value> {
         log!("context menus aren't supported on this platform yet");
         None
+    }
+    fn create_tray(&mut self, _v: &Value) -> bool {
+        log!("the tray icon isn't supported on this platform yet");
+        false
+    }
+    fn remove_tray(&mut self) -> bool {
+        false
     }
 }
 
@@ -308,6 +389,38 @@ mod mac {
             self.app_menu = Some(m);
             self.listen(inst);
             true
+        }
+
+        /// A tray (menu bar) icon: `{icon: path to an image, tooltip, menu: [items]}`. Its menu items reach JS like the app menu's.
+        pub(super) fn create_tray(&mut self, v: &Value) -> bool {
+            let Some(icon) = v["icon"].as_str().and_then(|p| std::fs::read(p).ok()).and_then(|b| mantou_image::Image::decode(&b).ok()).and_then(|i| i.pixels(64, 64)) else {
+                log!("the tray icon's image couldn't be read");
+                return false;
+            };
+            let Ok(icon) = tray_icon::Icon::from_rgba(icon.rgba.clone(), icon.width, icon.height) else { return false };
+            let menu = Menu::new();
+            fill(v["menu"].as_array().map_or(&[][..], |a| a.as_slice()), |i| {
+                let _ = menu.append(i);
+            });
+            let mut b = tray_icon::TrayIconBuilder::new().with_icon(icon).with_menu(Box::new(menu));
+            if let Some(t) = v["tooltip"].as_str() {
+                b = b.with_tooltip(t);
+            }
+            match b.build() {
+                Ok(t) => {
+                    self.tray = Some(t);
+                    self.listen(&crate::app());
+                    true
+                }
+                Err(e) => {
+                    log!("cannot create the tray icon: {e}");
+                    false
+                }
+            }
+        }
+
+        pub(super) fn remove_tray(&mut self) -> bool {
+            self.tray.take().is_some()
         }
 
         /// Chosen items arrive on the main thread, in the event loop; hand them to JS.

@@ -1,7 +1,7 @@
 // Platform services against the real core, headless: requests reach the core as
 // JSON, answers come back as events and resolve the promises (design §10).
 import { afterEach, expect, test } from "bun:test";
-import { mount, View, clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
+import { mount, View, clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, openExternal, reveal, notify, setBadge, createTray } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -75,4 +75,37 @@ test("the clipboard writes and reads text, in the same instance", async () => {
   const r = clipboard.readText();
   h.step();
   expect(await r).toBe("héllo");
+});
+
+test("openExternal, reveal, notify, setBadge and the tray send their requests", async () => {
+  const h = app();
+  h.answer(true);
+  const a = openExternal("https://example.com");
+  h.step();
+  expect(await a).toBe(true);
+  expect(h.lastService()).toEqual({ kind: "openExternal", url: "https://example.com" });
+  h.answer(true);
+  const b = reveal("/tmp/a.txt");
+  h.step();
+  await b;
+  expect(h.lastService()).toEqual({ kind: "reveal", path: "/tmp/a.txt" });
+  h.answer(true);
+  const c = notify({ title: "New mail", body: "Hello" });
+  h.step();
+  await c;
+  expect(h.lastService()).toEqual({ kind: "notify", title: "New mail", body: "Hello" });
+  h.answer(true);
+  const d = setBadge(3);
+  h.step();
+  await d;
+  expect(h.lastService()).toEqual({ kind: "setBadge", text: "3" });
+  const e = setBadge(0);
+  h.step();
+  expect(await e).toBe(false); // nothing answered: not done
+  expect(h.lastService()).toEqual({ kind: "setBadge", text: "" });
+  h.answer(true);
+  const f = createTray({ icon: "icon.png", menu: [{ id: "quit", label: "Quit" }] });
+  h.step();
+  await f;
+  expect(h.lastService()).toEqual({ kind: "createTray", icon: "icon.png", menu: [{ id: "quit", label: "Quit" }] });
 });

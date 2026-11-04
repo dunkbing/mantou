@@ -144,3 +144,47 @@ export const win = {
   /** Hears focus, moves, minimize, maximize and full screen changes; returns a function that stops. */
   onState: (handler: (s: WindowState) => void) => ui().onWindowState(handler),
 };
+
+/** Opens a URL (or a file) in the default app. Resolves whether it could be started. */
+export async function openExternal(url: string): Promise<boolean> {
+  return (await ui().service<boolean>({ kind: "openExternal", url })) === true;
+}
+
+/** Shows a file in Finder, Explorer or the file manager. */
+export async function reveal(path: string): Promise<boolean> {
+  return (await ui().service<boolean>({ kind: "reveal", path })) === true;
+}
+
+export interface NotifyOptions {
+  title: string;
+  body?: string;
+}
+
+/** Shows a desktop notification. Resolves whether it was shown (not whether it was clicked). */
+export async function notify(options: NotifyOptions): Promise<boolean> {
+  return (await ui().service<boolean>({ kind: "notify", ...options })) === true;
+}
+
+/** The count (or text) on the dock icon; 0, "" or null clears it. macOS only: resolves false elsewhere. */
+export async function setBadge(badge: number | string | null): Promise<boolean> {
+  const text = badge === null || badge === 0 ? "" : String(badge);
+  return (await ui().service<boolean>({ kind: "setBadge", text })) === true;
+}
+
+export interface TrayOptions {
+  /** A PNG, JPEG, WebP or SVG file. */
+  icon: string;
+  tooltip?: string;
+  /** Items as for `setMenu`; chosen ones reach `onMenu`. */
+  menu?: MenuItem[];
+}
+
+/** Adds an icon to the menu bar (macOS; false elsewhere for now). */
+export async function createTray(options: TrayOptions): Promise<boolean> {
+  return (await ui().service<boolean>({ kind: "createTray", ...options })) === true;
+}
+
+/** Removes the tray icon. */
+export async function removeTray(): Promise<boolean> {
+  return (await ui().service<boolean>({ kind: "removeTray" })) === true;
+}

@@ -2,7 +2,7 @@
 export { View, Text, Input, Image, Scroll, List, useWindowSize, For, Index, Show, Switch, Match, useUi, onKey } from "./solid/components";
 export { mount } from "./solid/mount";
 export {
-  clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, onFileDrop, win, type WindowInfo,
+  clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, onFileDrop, win, type WindowInfo, openExternal, reveal, notify, setBadge, createTray, removeTray, type NotifyOptions, type TrayOptions,
   type OpenFileOptions, type SaveFileOptions, type MessageOptions, type MenuItem, type FileFilter,
 } from "./platform";
 export { useColorScheme, setColorScheme, defineTheme, type ColorScheme } from "./theme";
