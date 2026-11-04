@@ -20,3 +20,4 @@ export {
   onCleanup,
   onMount,
 } from "./solid/solid";
+export { dumpTree } from "./debug";

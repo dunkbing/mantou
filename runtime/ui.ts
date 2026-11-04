@@ -1097,6 +1097,11 @@ export class Ui {
   private nextStyleId = 1;
   private styleIds = new WeakMap<SharedStyle, number>();
   private root: Node | null = null;
+
+  /** The root of the tree (for debugging tools). */
+  get rootNode(): Node | null {
+    return this.root;
+  }
   private pendingNodes = new Set<Node>();
   private keyHandlers = new Set<(e: KeyEvent) => void>();
   private warnedText = false;
