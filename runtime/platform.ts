@@ -10,6 +10,11 @@ export function setActiveUi(ui: Ui | null) {
   active = ui;
 }
 
+/** The Ui the services talk to, if an app is mounted. */
+export function activeUi(): Ui | null {
+  return active;
+}
+
 function ui(): Ui {
   if (!active) throw new Error("mantou: no window yet: mount an app before using platform services");
   return active;

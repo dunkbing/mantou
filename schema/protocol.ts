@@ -64,7 +64,7 @@ export const animateFlags = { Alternate: 1 } as const;
 export const windowFlags = { NotResizable: 1, Frameless: 2, AlwaysOnTop: 4, Fullscreen: 8, Maximized: 16, HasPosition: 32 } as const;
 
 /** WINDOW_STATE flags. */
-export const windowStateFlags = { Focused: 1, Minimized: 2, Maximized: 4, Fullscreen: 8 } as const;
+export const windowStateFlags = { Focused: 1, Minimized: 2, Maximized: 4, Fullscreen: 8, Dark: 16 } as const;
 
 /** FOCUS_SCOPE flags. */
 /** ACCESS roles. 0 (Auto) is the default for the node's kind: Text is a label, an Input a text field, an Image an image, a View with a press handler a button, a scroll view a scroll area, any other View a plain container. None hides the node itself from assistive technology (its children stay). */
@@ -214,7 +214,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "SERVICE_RESULT", code: 18, fields: "a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words", doc: "A platform service (dialog, context menu) finished." },
   { name: "MENU", code: 19, fields: "c = byte length; then the UTF-8 id of the menu item, padded to words", doc: "The user chose an item of the app menu." },
   { name: "NODE_POINTER", code: 25, fields: "a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot)", doc: "The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch." },
-  { name: "WINDOW_STATE", code: 27, fields: "a = WindowStateFlag bits (focused, minimized, maximized, fullscreen), b = x, c = y (i32 as u32: the window's outer position, logical px)", doc: "The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen." },
+  { name: "WINDOW_STATE", code: 27, fields: "a = WindowStateFlag bits (focused, minimized, maximized, fullscreen, dark system theme), b = x, c = y (i32 as u32: the window's outer position, logical px)", doc: "The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen." },
   { name: "FILE_DROP", code: 26, fields: "a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words", doc: "Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path." },
 ];
 

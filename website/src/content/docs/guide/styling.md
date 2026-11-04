@@ -78,6 +78,25 @@ Animation runs in the core, not in your code. Say which properties animate and s
 
 Animatable: `opacity`, `translateX`, `translateY`, `scale`, `backgroundColor`, `borderColor`, `color`. For a one-off, `node.animate({ opacity: 0 }, { duration: 300 })`.
 
+## Light and dark
+
+`useColorScheme()` is a signal of the system's scheme (`"light"` or `"dark"`) that follows the OS. `defineTheme` gives each scheme its values; what it returns changes with the scheme wherever it is used, so nothing else needs to read the signal.
+
+```tsx
+import { defineTheme, useColorScheme, setColorScheme } from "mantou-ui";
+
+const theme = defineTheme({
+  light: { bg: "#ffffff", text: "#111827" },
+  dark: { bg: "#111827", text: "#f9fafb" },
+});
+
+<View style={{ backgroundColor: theme.bg }}>
+  <Text style={{ color: theme.text }}>Hello</Text>
+</View>
+
+setColorScheme("dark");   // an in-app setting; "system" goes back to following the OS
+```
+
 ## Hover
 
 ```tsx

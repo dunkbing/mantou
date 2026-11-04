@@ -483,7 +483,7 @@ impl App {
         }
         let inst = self.inst.clone();
         match event {
-            WindowEvent::Moved(_) => self.sync_state(),
+            WindowEvent::Moved(_) | WindowEvent::ThemeChanged(_) => self.sync_state(),
             WindowEvent::CloseRequested => inst.push_event([ev::CLOSE_REQUESTED, 0, 0, 0]),
             WindowEvent::Resized(size) => {
                 if let Some(gpu) = self.gpu.as_mut() {

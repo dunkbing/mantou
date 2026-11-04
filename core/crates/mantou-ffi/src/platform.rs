@@ -42,7 +42,8 @@ pub fn window_state(w: &Window) -> (u32, i32, i32) {
         // winit finds out by trial-resizing a window without a title bar or a resizable frame, which fires
         // a resize event, which asks again, forever (macOS): those windows never report it.
         | ((w.is_decorated() && w.is_resizable() && w.is_maximized()) as u32 * f::MAXIMIZED)
-        | (w.fullscreen().is_some() as u32 * f::FULLSCREEN);
+        | (w.fullscreen().is_some() as u32 * f::FULLSCREEN)
+        | ((w.theme() == Some(winit::window::Theme::Dark)) as u32 * f::DARK);
     let (x, y) = w.outer_position().map(|p| p.to_logical::<f64>(w.scale_factor())).map_or((0, 0), |p| (p.x.round() as i32, p.y.round() as i32));
     (flags, x, y)
 }
@@ -77,7 +78,7 @@ fn window_op(v: &Value, window: Option<&Arc<Window>>) -> Option<Value> {
     Some(json!({
         "x": x, "y": y, "width": size.width.round(), "height": size.height.round(),
         "focused": flags & f::FOCUSED != 0, "minimized": flags & f::MINIMIZED != 0,
-        "maximized": flags & f::MAXIMIZED != 0, "fullscreen": flags & f::FULLSCREEN != 0,
+        "maximized": flags & f::MAXIMIZED != 0, "fullscreen": flags & f::FULLSCREEN != 0, "dark": flags & f::DARK != 0,
     }))
 }
 

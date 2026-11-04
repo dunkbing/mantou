@@ -162,6 +162,8 @@ export interface WindowState {
   minimized: boolean;
   maximized: boolean;
   fullscreen: boolean;
+  /** The system is using its dark appearance. */
+  dark: boolean;
   x: number;
   y: number;
 }
@@ -1130,7 +1132,7 @@ export class Ui {
 
   private stateHandlers = new Set<(s: WindowState) => void>();
   /** The window's state as last reported by the core (before the first report: not focused, nowhere). */
-  windowState: WindowState = { focused: false, minimized: false, maximized: false, fullscreen: false, x: 0, y: 0 };
+  windowState: WindowState = { focused: false, minimized: false, maximized: false, fullscreen: false, dark: false, x: 0, y: 0 };
 
   /** Listens for the window's focus, position, minimized, maximized and full screen state changing. */
   onWindowState(handler: (s: WindowState) => void): () => void {
@@ -1144,6 +1146,7 @@ export class Ui {
       minimized: !!(flags & WindowStateFlag.Minimized),
       maximized: !!(flags & WindowStateFlag.Maximized),
       fullscreen: !!(flags & WindowStateFlag.Fullscreen),
+      dark: !!(flags & WindowStateFlag.Dark),
       x,
       y,
     };
