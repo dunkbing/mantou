@@ -31,7 +31,23 @@ The window self-test sends five wheel turns to a scroll view while the Worker sp
 
 **Flexbox, as in CSS:** a scroll view in a flex column needs `minHeight: 0` on it and on its ancestors up to the one with a fixed size; otherwise they grow to fit the content and there's nothing to scroll.
 
-**Not yet:** keyboard scrolling (PageUp/PageDown when a view has the focus; views can't take the focus yet), rubber-banding, smooth (animated) `scrollTo`, and virtualized lists (`List`).
+**Not yet:** keyboard scrolling (PageUp/PageDown when a view has the focus; views can't take the focus yet), rubber-banding and smooth (animated) `scrollTo`.
+
+## Virtualized lists
+
+```tsx
+let list!: ListHandle;
+
+<List each={messages()} itemHeight={84} overscan={6} ref={(l) => (list = l)} style={{ flexGrow: 1, minHeight: 0 }}>
+  {(m) => <Row message={m()} />}
+</List>;
+
+list.scrollToIndex(selected(), { block: "nearest" });
+```
+
+Only the rows in view, and `overscan` more on each side, exist ([#19](https://github.com/dunkbing/mantou/issues/19)). The list is a scroll view whose content is as tall as all the rows; the core scrolls it with no JS, and the rows come and go as its `onScroll` tells the list where it is (rows that stay in view are untouched). Rows are absolutely positioned at `index × itemHeight`, so `scrollToIndex` reaches rows that don't exist yet. A row's `item` is an accessor, so rows follow changes to `each`. If the app is busy while the user scrolls fast, the core keeps scrolling and the rows past the overscan fill in once JS runs again.
+
+`tests/list.test.tsx` uses 100,000 rows: under 60 nodes exist; each 40 px of scrolling is one row in and one out, with the same ops as for a 1,000-row list; `scrollToIndex` reaches the middle and the end. Rows have one fixed height for now; variable heights come later.
 
 ## Focus scopes
 

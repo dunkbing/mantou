@@ -1,9 +1,9 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { ImageProps, InputProps, JSX, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
+import type { ImageProps, InputProps, JSX, ListHandle, ListProps, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
-import { createElement, currentUi, spread } from "./renderer";
-import { createSignal, onCleanup } from "./solid";
+import { createElement, currentUi, insert, spread } from "./renderer";
+import { createEffect, createMemo, createRoot, createSignal, getOwner, onCleanup } from "./solid";
 
 /** A box: flexbox layout, a background, press handling. */
 export function View(props: ViewProps): JSX.Element {
@@ -76,6 +76,95 @@ export function Scroll(props: ScrollProps): JSX.Element {
     false,
   );
   outer.append(inner);
+  return outer;
+}
+
+/**
+ * A virtualized list: only the rows in view (and `overscan` more on each
+ * side) exist, so a list of 100,000 items costs what one screenful does. The
+ * core scrolls it like any scroll view; rows come and go as `onScroll` tells
+ * the list where it is. Rows are `itemHeight` px tall; `ref` gets a handle
+ * with `scrollToIndex`, which works for rows that don't exist yet.
+ */
+export function List<T>(props: ListProps<T>): JSX.Element {
+  const owner = getOwner();
+  const [offset, setOffset] = createSignal(0);
+  const [viewport, setViewport] = createSignal(0);
+  const outer = createElement("view") as Node;
+  const inner = createElement("view") as Node;
+  const rows = new Map<number, () => void>();
+  const height = () => Math.max(1, props.itemHeight);
+  const range = createMemo<[number, number]>(
+    () => {
+      const n = props.each.length, h = height(), over = props.overscan ?? 4;
+      const first = Math.max(0, Math.floor(offset() / h) - over);
+      const last = Math.min(n, Math.ceil((offset() + Math.max(viewport(), h)) / h) + over);
+      return [first, Math.max(first, last)];
+    },
+    [0, 0],
+    { equals: (a, b) => a[0] === b[0] && a[1] === b[1] },
+  );
+  const handle: ListHandle = {
+    get node() {
+      return outer;
+    },
+    range: () => range(),
+    scrollToIndex(index, options = {}) {
+      const h = height(), vp = viewport(), y = offset();
+      const top = Math.max(0, Math.min(index, props.each.length - 1)) * h, bottom = top + h;
+      const to = { start: top, end: bottom - vp, center: top + h / 2 - vp / 2, nearest: top < y ? top : bottom > y + vp ? bottom - vp : y }[options.block ?? "nearest"];
+      outer.scrollTo({ y: to });
+    },
+  };
+  spread(
+    outer,
+    {
+      get style() {
+        return [{ overflow: "scroll", ...(props.scrollbar ? { scrollbar: props.scrollbar } : {}) }, props.style];
+      },
+      onScroll: (o: { x: number; y: number }) => {
+        setOffset(o.y);
+        props.onScroll?.(o);
+      },
+      onLayout: (r: { height: number }) => setViewport(r.height),
+    },
+    true,
+  );
+  spread(
+    inner,
+    {
+      get style() {
+        return [{ flexShrink: 0, height: props.each.length * height() }, props.contentStyle];
+      },
+    },
+    true,
+  );
+  outer.append(inner);
+  // Rows in range exist; the others are disposed (their nodes released).
+  createEffect(() => {
+    const [first, last] = range();
+    for (const [i, dispose] of rows) {
+      if (i < first || i >= last) {
+        dispose();
+        rows.delete(i);
+      }
+    }
+    for (let i = first; i < last; i++) {
+      if (rows.has(i)) continue;
+      createRoot((dispose) => {
+        const row = createElement("view") as Node;
+        row.style({ position: "absolute", left: 0, right: 0, top: i * height(), height: height() });
+        insert(row, () => props.children(() => props.each[i], i));
+        inner.append(row);
+        rows.set(i, dispose);
+      }, owner ?? undefined);
+    }
+  });
+  onCleanup(() => {
+    for (const dispose of rows.values()) dispose();
+    rows.clear();
+  });
+  props.ref?.(handle);
   return outer;
 }
 

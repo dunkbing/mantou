@@ -25,6 +25,31 @@ export interface ViewProps {
   children?: JSX.Element;
 }
 
+/** A virtualized list (see `List`). */
+export interface ListProps<T> {
+  each: readonly T[];
+  /** Every row's height, in px. */
+  itemHeight: number;
+  /** Rows kept beyond each edge of the view (default 4). */
+  overscan?: number;
+  style?: StyleProp;
+  contentStyle?: StyleProp;
+  scrollbar?: "auto" | "none";
+  onScroll?: (offset: ScrollOffset) => void;
+  /** A row: `item` reads the current item at `index` (it follows changes to `each`). */
+  children: (item: () => T, index: number) => JSX.Element;
+  ref?: (list: ListHandle) => void;
+}
+
+export interface ListHandle {
+  /** The scroll view. */
+  readonly node: Node;
+  /** The rows that exist now: [first, last). */
+  range(): [number, number];
+  /** Scrolls so the row shows ("nearest" by default, also "start", "center", "end"), rendered or not. */
+  scrollToIndex(index: number, options?: { block?: "nearest" | "start" | "center" | "end" }): void;
+}
+
 /** An image (see `Image`). */
 export interface ImageProps {
   /** A PNG, JPEG, WebP or SVG: a path (relative to the working directory) or the file's bytes. */
