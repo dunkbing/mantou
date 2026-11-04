@@ -73,7 +73,8 @@ export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
 export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,"Radio":5,"Link":6,"Heading":7,"List":8,"ListItem":9,"Dialog":10,"Tab":11,"TabList":12,"Menu":13,"MenuItem":14,"Image":15,"Group":16,"Status":17,"Alert":18} as const;
 export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16} as const;
-export const WindowFlag = {"NotResizable":1} as const;
+export const WindowFlag = {"NotResizable":1,"Frameless":2,"AlwaysOnTop":4,"Fullscreen":8,"Maximized":16,"HasPosition":32} as const;
+export const WindowStateFlag = {"Focused":1,"Minimized":2,"Maximized":4,"Fullscreen":8} as const;
 export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4} as const;
 export const AnimateFlag = {"Alternate":1} as const;
 export const ScrollFlag = {"By":1} as const;
@@ -133,6 +134,8 @@ export const Event = {
   MENU: 19,
   /** The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch. a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot). */
   NODE_POINTER: 25,
+  /** The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen. a = WindowStateFlag bits (focused, minimized, maximized, fullscreen), b = x, c = y (i32 as u32: the window's outer position, logical px). */
+  WINDOW_STATE: 27,
   /** Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words. */
   FILE_DROP: 26,
 } as const;

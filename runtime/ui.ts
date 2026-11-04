@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { KeyModifier } from "./gen/protocol";
+import { KeyModifier, WindowStateFlag } from "./gen/protocol";
 import { AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
@@ -155,6 +155,16 @@ export interface PointerEvent {
 }
 
 const isMac = process.platform === "darwin";
+
+/** The window's state (logical px for the position: the window's outer top left on the screen). */
+export interface WindowState {
+  focused: boolean;
+  minimized: boolean;
+  maximized: boolean;
+  fullscreen: boolean;
+  x: number;
+  y: number;
+}
 
 /** Files dragged over the window or dropped on it. */
 export interface DropEvent {
@@ -1116,6 +1126,28 @@ export class Ui {
   onFileDrop(handler: (kind: 0 | 1 | 2, e: { target: Node | null; x: number; y: number; files: string[] }) => void): () => void {
     this.dropListeners.add(handler);
     return () => this.dropListeners.delete(handler);
+  }
+
+  private stateHandlers = new Set<(s: WindowState) => void>();
+  /** The window's state as last reported by the core (before the first report: not focused, nowhere). */
+  windowState: WindowState = { focused: false, minimized: false, maximized: false, fullscreen: false, x: 0, y: 0 };
+
+  /** Listens for the window's focus, position, minimized, maximized and full screen state changing. */
+  onWindowState(handler: (s: WindowState) => void): () => void {
+    this.stateHandlers.add(handler);
+    return () => this.stateHandlers.delete(handler);
+  }
+
+  dispatchWindowState(flags: number, x: number, y: number) {
+    this.windowState = {
+      focused: !!(flags & WindowStateFlag.Focused),
+      minimized: !!(flags & WindowStateFlag.Minimized),
+      maximized: !!(flags & WindowStateFlag.Maximized),
+      fullscreen: !!(flags & WindowStateFlag.Fullscreen),
+      x,
+      y,
+    };
+    for (const h of [...this.stateHandlers]) h(this.windowState);
   }
 
   dispatchMenu(id: string) {

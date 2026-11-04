@@ -32,14 +32,17 @@ pub struct Config {
     pub height: u32,
     pub title: String,
     pub limits: WindowLimits,
+    /// `window_flag` bits.
+    pub flags: u32,
+    pub position: Option<(i32, i32)>,
 }
 
 impl Config {
-    /// `[width, height, titleLen, minWidth, minHeight, maxWidth, maxHeight, flags]`
+    /// `[width, height, titleLen, minWidth, minHeight, maxWidth, maxHeight, flags, x, y]`
     /// as u32 words (sizes in logical px, 0 = no limit; flags: `window_flag`),
     /// then the title's UTF-8 bytes.
     pub fn parse(b: &[u8]) -> Config {
-        const WORDS: usize = 8;
+        const WORDS: usize = 10;
         let w: Vec<u32> = b[..b.len().min(WORDS * 4)].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
         let get = |i: usize, d: u32| w.get(i).copied().unwrap_or(d);
         let n = get(2, 0) as usize;
@@ -49,7 +52,9 @@ impl Config {
             max: [get(5, 0) as f32, get(6, 0) as f32],
             resizable: get(7, 0) & window_flag::NOT_RESIZABLE == 0,
         };
-        Config { width: get(0, 800).max(1), height: get(1, 600).max(1), title: title.to_owned(), limits }
+        let flags = get(7, 0);
+        let position = (flags & window_flag::HAS_POSITION != 0).then(|| (get(8, 0) as i32, get(9, 0) as i32));
+        Config { width: get(0, 800).max(1), height: get(1, 600).max(1), title: title.to_owned(), limits, flags, position }
     }
 }
 
@@ -182,6 +187,7 @@ pub struct App {
     secure_keys: bool,
     /// Files held over the window, and how many more DroppedFile events belong to the drop already sent.
     dragging: Vec<String>,
+    last_state: Option<(u32, i32, i32)>,
     skip_drops: usize,
     /// The cursor shown (protocol `cursor`).
     cursor: u32,
@@ -212,7 +218,7 @@ fn cursor_icon(c: u32) -> CursorIcon {
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, focused: true, secure_keys: false, dragging: Vec::new(), skip_drops: 0, cursor: cursor::DEFAULT }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, focused: true, secure_keys: false, dragging: Vec::new(), last_state: None, skip_drops: 0, cursor: cursor::DEFAULT }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -377,10 +383,21 @@ impl App {
         if self.window.is_some() {
             return;
         }
-        let attrs = Window::default_attributes()
+        let mut attrs = Window::default_attributes()
             .with_visible(false) // the AccessKit adapter must exist before the window is shown
             .with_title(self.config.title.clone())
-            .with_inner_size(LogicalSize::new(self.config.width, self.config.height));
+            .with_inner_size(LogicalSize::new(self.config.width, self.config.height))
+            .with_decorations(self.config.flags & window_flag::FRAMELESS == 0)
+            .with_maximized(self.config.flags & window_flag::MAXIMIZED != 0);
+        if self.config.flags & window_flag::ALWAYS_ON_TOP != 0 {
+            attrs = attrs.with_window_level(winit::window::WindowLevel::AlwaysOnTop);
+        }
+        if self.config.flags & window_flag::FULLSCREEN != 0 {
+            attrs = attrs.with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+        }
+        if let Some((x, y)) = self.config.position {
+            attrs = attrs.with_position(winit::dpi::LogicalPosition::new(x, y));
+        }
         let window = match el.create_window(attrs) {
             Ok(w) => {
                 apply_limits(&w, &self.config.limits);
@@ -413,7 +430,18 @@ impl App {
         self.inst.relayout(size.width, size.height, scale);
         self.menus.install_default(&self.inst);
         self.inst.push_event([ev::WINDOW_READY, size.width, size.height, scale.to_bits()]);
+        self.sync_state();
         window.request_redraw();
+    }
+
+    /// Tells JS when the window's focus, position or minimized, maximized or full screen state changed.
+    fn sync_state(&mut self) {
+        let Some(w) = &self.window else { return };
+        let s = crate::platform::window_state(w);
+        if self.last_state != Some(s) {
+            self.last_state = Some(s);
+            self.inst.push_event([ev::WINDOW_STATE, s.0, s.1 as u32, s.2 as u32]);
+        }
     }
 
     fn on_user_event(&mut self, el: &ActiveEventLoop, event: UserEvent) {
@@ -442,7 +470,10 @@ impl App {
                 accesskit_winit::WindowEvent::ActionRequested(req) => self.redraw_if(self.inst.access_action(req)),
                 accesskit_winit::WindowEvent::AccessibilityDeactivated => {}
             },
-            UserEvent::Service(req, body) => guard((), || crate::platform::handle(&self.inst, self.window.as_ref(), &mut self.menus, req, &body)),
+            UserEvent::Service(req, body) => {
+                guard((), || crate::platform::handle(&self.inst, self.window.as_ref(), &mut self.menus, req, &body));
+                self.sync_state();
+            }
         }
     }
 
@@ -452,6 +483,7 @@ impl App {
         }
         let inst = self.inst.clone();
         match event {
+            WindowEvent::Moved(_) => self.sync_state(),
             WindowEvent::CloseRequested => inst.push_event([ev::CLOSE_REQUESTED, 0, 0, 0]),
             WindowEvent::Resized(size) => {
                 if let Some(gpu) = self.gpu.as_mut() {
@@ -461,6 +493,7 @@ impl App {
                 inst.relayout(size.width, size.height, self.scale());
                 bump(&inst.stats.resizes);
                 inst.push_event([ev::RESIZED, size.width, size.height, self.scale().to_bits()]);
+                self.sync_state();
                 if let Some(w) = &self.window {
                     w.request_redraw();
                 }
@@ -545,6 +578,7 @@ impl App {
             WindowEvent::Focused(f) => {
                 self.focused = f;
                 self.sync_secure_keys();
+                self.sync_state();
             }
             WindowEvent::RedrawRequested => self.draw(),
             WindowEvent::Occluded(false) => self.redraw_if(true),

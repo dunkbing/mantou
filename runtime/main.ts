@@ -17,6 +17,14 @@ export interface WindowOptions {
   maxWidth?: number;
   maxHeight?: number;
   resizable?: boolean;
+  /** No title bar or border (draw your own, with a `dragRegion` view to move the window). */
+  frameless?: boolean;
+  alwaysOnTop?: boolean;
+  fullscreen?: boolean;
+  maximized?: boolean;
+  /** The window's outer position, logical px from the screen's top left. */
+  x?: number;
+  y?: number;
 }
 
 /**
@@ -68,8 +76,9 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
     return Number.isFinite(v) && v >= 0 ? Math.round(v) : d;
   };
   const title = new TextEncoder().encode(flag("title") ?? "Mantou");
-  const cfg = new Uint8Array(32 + title.length);
-  new Uint32Array(cfg.buffer, 0, 8).set([
+  const cfg = new Uint8Array(40 + title.length);
+  const placed = asked.x !== undefined && asked.y !== undefined;
+  new Uint32Array(cfg.buffer, 0, 10).set([
     num("width", asked.width, 640),
     num("height", asked.height, 400),
     title.length,
@@ -77,9 +86,16 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
     num("min-height", asked.minHeight, 0),
     num("max-width", asked.maxWidth, 0),
     num("max-height", asked.maxHeight, 0),
-    asked.resizable === false ? WindowFlag.NotResizable : 0,
+    (asked.resizable === false ? WindowFlag.NotResizable : 0) |
+      (asked.frameless ? WindowFlag.Frameless : 0) |
+      (asked.alwaysOnTop ? WindowFlag.AlwaysOnTop : 0) |
+      (asked.fullscreen ? WindowFlag.Fullscreen : 0) |
+      (asked.maximized ? WindowFlag.Maximized : 0) |
+      (placed ? WindowFlag.HasPosition : 0),
+    placed ? asked.x! | 0 : 0,
+    placed ? asked.y! | 0 : 0,
   ]);
-  cfg.set(title, 32);
+  cfg.set(title, 40);
   const code = core.symbols.mt_run(cfg, cfg.byteLength);
   process.exit(code);
 }

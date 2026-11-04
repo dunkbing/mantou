@@ -110,6 +110,10 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "onDoubleClick":
       setHandler(node, name, value, (f: (e: PointerEvent) => void) => node.onDoubleClick(f));
       return;
+    case "dragRegion":
+      // Pressing the primary button here moves the window.
+      setHandler(node, name, value ? (e: PointerEvent) => void (e.button === 0 && e.currentTarget.ui.service({ kind: "window", op: "drag" })) : undefined, (f: (e: PointerEvent) => void) => node.onPointerDown(f));
+      return;
     case "selectable":
       node.style({ userSelect: value ? "text" : "none" });
       return;

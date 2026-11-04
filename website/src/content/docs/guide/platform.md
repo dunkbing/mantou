@@ -40,6 +40,32 @@ await clipboard.writeText(url);
 const text = await clipboard.readText(); // string | null
 ```
 
+## The window
+
+Open it the way you want with `run`:
+
+```tsx
+run(App, { title: "Notes", width: 900, height: 600, frameless: true, alwaysOnTop: false, x: 120, y: 80 });
+```
+
+(`fullscreen`, `maximized`, `resizable`, `minWidth`… too.) Change it later with `win`:
+
+```tsx
+import { win } from "mantou-ui";
+
+await win.setFullscreen(true);
+await win.setMaximized(true);
+win.minimize();
+win.setAlwaysOnTop(true);
+win.setPosition(120, 80);                         // logical px, outer top left
+win.onState((s) => save(s));                      // { focused, minimized, maximized, fullscreen, x, y }
+
+// A custom title bar: a frameless window with a view that moves it.
+<View dragRegion style={{ height: 32 }}>…</View>
+```
+
+Each call answers with the window's state right after asking; the OS may take a moment (full screen animates), so use `onState` for the result. A window without a title bar or a resizable frame doesn't report `maximized`. A transparent window and the window icon aren't supported yet.
+
 ## Accessibility
 
 Screen readers (VoiceOver, Narrator, Orca) see a tree built from your views. Text is a label, an `Input` a text field, and a view with `onPress` a button. Add the rest with props:

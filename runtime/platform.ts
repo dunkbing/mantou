@@ -1,7 +1,7 @@
 // Platform services (design §10) as async functions: file dialogs, message
 // boxes, the app menu and context menus. They go through the core, which shows
 // the native UI; a headless instance answers from what the test queued.
-import type { Ui } from "./ui";
+import type { Ui, WindowState } from "./ui";
 
 let active: Ui | null = null;
 
@@ -109,3 +109,33 @@ export function onMenu(handler: (id: string) => void): () => void {
 export function onFileDrop(handler: (kind: 0 | 1 | 2, e: { x: number; y: number; files: string[] }) => void): () => void {
   return ui().onFileDrop(handler);
 }
+
+/** The window's size and state, as the core answers a window request. */
+export interface WindowInfo extends WindowState {
+  width: number;
+  height: number;
+}
+
+const windowOp = (op: string, extra: object = {}) => ui().service<WindowInfo>({ kind: "window", op, ...extra });
+
+/**
+ * The window. Each call asks the OS, which may take a moment (full screen animates), so the answer is the
+ * state right after asking; `onState` hears the change when it happens. Resolve to null when there's no window.
+ */
+export const win = {
+  setFullscreen: (on = true) => windowOp("fullscreen", { value: on }),
+  setMaximized: (on = true) => windowOp("maximize", { value: on }),
+  minimize: () => windowOp("minimize", { value: true }),
+  setAlwaysOnTop: (on = true) => windowOp("alwaysOnTop", { value: on }),
+  /** Remove (or restore) the title bar and border. */
+  setFrameless: (on = true) => windowOp("frameless", { value: on }),
+  /** The outer position, logical px from the screen's top left. */
+  setPosition: (x: number, y: number) => windowOp("position", { x, y }),
+  /** The content size, logical px. */
+  setSize: (width: number, height: number) => windowOp("size", { width, height }),
+  focus: () => windowOp("focus"),
+  /** Asks for the window's size and state. */
+  state: () => windowOp("state"),
+  /** Hears focus, moves, minimize, maximize and full screen changes; returns a function that stops. */
+  onState: (handler: (s: WindowState) => void) => ui().onWindowState(handler),
+};

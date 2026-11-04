@@ -25,7 +25,7 @@ export function run(app: () => JSX.Element, options: RunOptions = {}): MantouCor
       if (e.type === "closeRequested") core.quit(0);
     };
   }
-  const { width, height, minWidth, minHeight, maxWidth, maxHeight, resizable } = options;
-  core.ready({ width, height, minWidth, minHeight, maxWidth, maxHeight, resizable });
+  const { width, height, minWidth, minHeight, maxWidth, maxHeight, resizable, frameless, alwaysOnTop, fullscreen, maximized, x, y } = options;
+  core.ready({ width, height, minWidth, minHeight, maxWidth, maxHeight, resizable, frameless, alwaysOnTop, fullscreen, maximized, x, y });
   return core;
 }

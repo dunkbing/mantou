@@ -53,10 +53,11 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
 /// 7: the window config (mt_run) carries size limits and flags.
 /// 8: mt_input_selection; hover (POINTER_ENTER, POINTER_LEAVE), mt_test_input kind 3 (the pointer leaves), mt_test_cursor.
+/// 12: the window config has x and y words and more flags; the WINDOW_STATE event; the "window" service.
 /// 11: FILE_DROP and the Drop listener bit; mt_test_drop.
 /// 10: pointer events on nodes: the NODE_POINTER event and Pointer listener bit; mt_test_button.
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
-pub const ABI_VERSION: u32 = 11;
+pub const ABI_VERSION: u32 = 12;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -227,7 +228,7 @@ pub unsafe extern "C" fn mt_info(dst: *mut u8, cap: u32) -> u32 {
 
 /// Runs the window's event loop on the calling thread, which must be the
 /// process's main thread, until `mt_quit`. Config: `[width, height, titleLen,
-/// minWidth, minHeight, maxWidth, maxHeight, flags]` as u32 words (logical px,
+/// minWidth, minHeight, maxWidth, maxHeight, flags, x, y]` as u32 words (logical px,
 /// 0 = no limit), then the title's UTF-8 bytes.
 ///
 /// # Safety

@@ -21,6 +21,7 @@ export type CoreEvent =
   | { type: "pointerEnter" | "pointerLeave"; target: number }
   | { type: "serviceResult"; req: number; cancelled: boolean; json: string }
   | { type: "menu"; id: string }
+  | { type: "windowState"; flags: number; x: number; y: number }
   | { type: "fileDrop"; kind: 0 | 1 | 2; target: number; json: string }
   | { type: "nodePointer"; target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }
   | InputCoreEvent;
@@ -101,6 +102,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
     case Event.SERVICE_RESULT: return { type: "serviceResult", req: w[i + 1], cancelled: w[i + 2] !== 0, json: text(w, i, w[i + 3]) };
     case Event.NODE_POINTER: return { type: "nodePointer", target: w[i + 1], x: f[i + 2], y: f[i + 3], kind: w[i + 4] as 0 | 1 | 2, button: w[i + 5], buttons: w[i + 6], mods: w[i + 7], clicks: w[i + 8] };
+    case Event.WINDOW_STATE: return { type: "windowState", flags: w[i + 1], x: w[i + 2] | 0, y: w[i + 3] | 0 };
     case Event.FILE_DROP: return { type: "fileDrop", kind: w[i + 1] as 0 | 1 | 2, target: w[i + 2], json: text(w, i, w[i + 3]) };
     case Event.MENU: return { type: "menu", id: text(w, i, w[i + 3]) };
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
@@ -151,6 +153,7 @@ export function route(
     dispatchHover(t: number, hovered: boolean): void;
     dispatchService(req: number, cancelled: boolean, json: string): void;
     dispatchMenu(id: string): void;
+    dispatchWindowState(flags: number, x: number, y: number): void;
     dispatchDrop(kind: 0 | 1 | 2, target: number, json: string): void;
     dispatchPointer(e: { target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }): void;
     readonly windowSize: { scale: number } | null;
@@ -165,6 +168,7 @@ export function route(
   else if (e.type === "pointerEnter" || e.type === "pointerLeave") ui.dispatchHover(e.target, e.type === "pointerEnter");
   else if (e.type === "serviceResult") ui.dispatchService(e.req, e.cancelled, e.json);
   else if (e.type === "menu") ui.dispatchMenu(e.id);
+  else if (e.type === "windowState") ui.dispatchWindowState(e.flags, e.x, e.y);
   else if (e.type === "fileDrop") ui.dispatchDrop(e.kind, e.target, e.json);
   else if (e.type === "nodePointer") ui.dispatchPointer(e);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });

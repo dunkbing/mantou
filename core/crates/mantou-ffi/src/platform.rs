@@ -23,6 +23,7 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         Some("openFile") => open_file(&v, window),
         Some("saveFile") => save_file(&v, window),
         Some("message") => message(&v, window),
+        Some("window") => window_op(&v, window),
         Some("setMenu") => menus.set(inst, &v["menu"]).then(|| json!(true)),
         Some("showMenu") => menus.popup(inst, window, &v),
         other => {
@@ -31,6 +32,53 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         }
     };
     inst.push_service_result(req, answer.map(|a| a.to_string()).as_deref());
+}
+
+/// (WindowStateFlag bits, outer x, outer y in logical px).
+pub fn window_state(w: &Window) -> (u32, i32, i32) {
+    use mantou_tree::protocol::window_state_flag as f;
+    let flags = (w.has_focus() as u32 * f::FOCUSED)
+        | (w.is_minimized().unwrap_or(false) as u32 * f::MINIMIZED)
+        // winit finds out by trial-resizing a window without a title bar or a resizable frame, which fires
+        // a resize event, which asks again, forever (macOS): those windows never report it.
+        | ((w.is_decorated() && w.is_resizable() && w.is_maximized()) as u32 * f::MAXIMIZED)
+        | (w.fullscreen().is_some() as u32 * f::FULLSCREEN);
+    let (x, y) = w.outer_position().map(|p| p.to_logical::<f64>(w.scale_factor())).map_or((0, 0), |p| (p.x.round() as i32, p.y.round() as i32));
+    (flags, x, y)
+}
+
+/// A window request: `{kind: "window", op, value, x, y, width, height}`. Answers with the window's state,
+/// which for a change the OS makes slowly (full screen) is still the old one: WINDOW_STATE follows.
+fn window_op(v: &Value, window: Option<&Arc<Window>>) -> Option<Value> {
+    use winit::dpi::{LogicalPosition, LogicalSize};
+    use winit::window::{Fullscreen, WindowLevel};
+    let w = window?;
+    let on = v["value"].as_bool().unwrap_or(true);
+    match v["op"].as_str()? {
+        "fullscreen" => w.set_fullscreen(on.then_some(Fullscreen::Borderless(None))),
+        "maximize" => w.set_maximized(on),
+        "minimize" => w.set_minimized(on),
+        "alwaysOnTop" => w.set_window_level(if on { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal }),
+        "frameless" => w.set_decorations(!on),
+        "position" => w.set_outer_position(LogicalPosition::new(v["x"].as_f64()?, v["y"].as_f64()?)),
+        "size" => {
+            let _ = w.request_inner_size(LogicalSize::new(v["width"].as_f64()?.max(1.0), v["height"].as_f64()?.max(1.0)));
+        }
+        "focus" => w.focus_window(),
+        "drag" => {
+            let _ = w.drag_window();
+        }
+        "state" => {}
+        _ => return None,
+    }
+    let (flags, x, y) = window_state(w);
+    let size = w.inner_size().to_logical::<f64>(w.scale_factor());
+    use mantou_tree::protocol::window_state_flag as f;
+    Some(json!({
+        "x": x, "y": y, "width": size.width.round(), "height": size.height.round(),
+        "focused": flags & f::FOCUSED != 0, "minimized": flags & f::MINIMIZED != 0,
+        "maximized": flags & f::MAXIMIZED != 0, "fullscreen": flags & f::FULLSCREEN != 0,
+    }))
 }
 
 fn filters(v: &Value) -> Vec<(String, Vec<String>)> {
