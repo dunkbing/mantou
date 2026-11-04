@@ -14,7 +14,33 @@ Layout is **flexbox**, as in CSS, with these defaults: `flexDirection: "column"`
 | Flex | `flexDirection`, `flexWrap`, `flexGrow`, `flexShrink`, `flexBasis`, `justifyContent`, `alignItems`, `alignSelf`, `alignContent`, `gap`/`rowGap`/`columnGap` |
 | Size | `width`, `height`, `minWidth`, `minHeight`, `maxWidth`, `maxHeight` |
 | Space | `padding*`, `margin*` |
-| Position | `position: "relative" \| "absolute"`, `top`, `right`, `bottom`, `left` |
+| Position | `position: "relative" \| "absolute" \| "fixed" \| "sticky"`, `top`, `right`, `bottom`, `left` |
+| Grid | `display: "grid"`, `gridColumns`, `gridMinColumnWidth`, `gridColumnSpan`, `gridRowSpan` |
+| Other | `aspectRatio`, `pointerEvents` |
+
+`absolute` is placed against the parent, `fixed` against the window (it stays put while content scrolls), and `sticky` stays at the given distance from the top, bottom, left or right of its scroll view while its parent is in view.
+
+```tsx
+<Scroll>
+  <View style={{ position: "sticky", top: 0, backgroundColor: "#fff" }}>Section A</View>
+  …
+</Scroll>
+```
+
+## Grid
+
+```tsx
+<View style={{ display: "grid", gridColumns: 3, gap: 8 }}>          {/* three equal columns */}
+  <Image style={{ aspectRatio: 1 }} />                                {/* square */}
+  <View style={{ gridColumnSpan: 2 }} />                              {/* two columns wide */}
+</View>
+
+<View style={{ display: "grid", gridMinColumnWidth: 160, gap: 8 }}>  {/* as many columns as fit */}
+```
+
+Columns are equal-width; there is no way to mix fixed and flexible tracks yet. `aspectRatio` is width ÷ height for a box where one of them is known. `pointerEvents: "none"` makes a view invisible to the pointer: presses, hover and the cursor go to what is below it.
+
+## Layout gotchas
 
 Two things catch people out:
 

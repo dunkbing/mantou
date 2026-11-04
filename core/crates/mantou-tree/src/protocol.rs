@@ -290,6 +290,7 @@ pub mod event {
 pub mod display {
     pub const FLEX: u32 = 0;
     pub const NONE: u32 = 1;
+    pub const GRID: u32 = 2;
 }
 
 pub mod flex_direction {
@@ -333,6 +334,8 @@ pub mod align_self {
 pub mod position {
     pub const RELATIVE: u32 = 0;
     pub const ABSOLUTE: u32 = 1;
+    pub const FIXED: u32 = 2;
+    pub const STICKY: u32 = 3;
 }
 
 pub mod align_content {
@@ -431,6 +434,11 @@ pub mod user_select {
     pub const TEXT: u32 = 1;
 }
 
+pub mod pointer_events {
+    pub const AUTO: u32 = 0;
+    pub const NONE: u32 = 1;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -512,10 +520,16 @@ pub enum Prop {
     TextOverflow = 65,
     WordBreak = 66,
     UserSelect = 67,
+    GridColumns = 68,
+    GridMinColumnWidth = 69,
+    GridColumnSpan = 70,
+    GridRowSpan = 71,
+    AspectRatio = 72,
+    PointerEvents = 73,
 }
 
 impl Prop {
-    pub const COUNT: usize = 67;
+    pub const COUNT: usize = 73;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -586,6 +600,12 @@ impl Prop {
             65 => Prop::TextOverflow,
             66 => Prop::WordBreak,
             67 => Prop::UserSelect,
+            68 => Prop::GridColumns,
+            69 => Prop::GridMinColumnWidth,
+            70 => Prop::GridColumnSpan,
+            71 => Prop::GridRowSpan,
+            72 => Prop::AspectRatio,
+            73 => Prop::PointerEvents,
             _ => return None,
         })
     }
@@ -659,12 +679,18 @@ impl Prop {
             Prop::TextOverflow => "textOverflow",
             Prop::WordBreak => "wordBreak",
             Prop::UserSelect => "userSelect",
+            Prop::GridColumns => "gridColumns",
+            Prop::GridMinColumnWidth => "gridMinColumnWidth",
+            Prop::GridColumnSpan => "gridColumnSpan",
+            Prop::GridRowSpan => "gridRowSpan",
+            Prop::AspectRatio => "aspectRatio",
+            Prop::PointerEvents => "pointerEvents",
         }
     }
 
     pub fn kind(self) -> ValueKind {
         match self {
-            Prop::Display => ValueKind::Enum(2),
+            Prop::Display => ValueKind::Enum(3),
             Prop::FlexDirection => ValueKind::Enum(4),
             Prop::FlexWrap => ValueKind::Enum(2),
             Prop::JustifyContent => ValueKind::Enum(6),
@@ -689,7 +715,7 @@ impl Prop {
             Prop::MarginLeft => ValueKind::Length,
             Prop::RowGap => ValueKind::Length,
             Prop::ColumnGap => ValueKind::Length,
-            Prop::Position => ValueKind::Enum(2),
+            Prop::Position => ValueKind::Enum(4),
             Prop::Top => ValueKind::Length,
             Prop::Right => ValueKind::Length,
             Prop::Bottom => ValueKind::Length,
@@ -731,13 +757,19 @@ impl Prop {
             Prop::TextOverflow => ValueKind::Enum(2),
             Prop::WordBreak => ValueKind::Enum(4),
             Prop::UserSelect => ValueKind::Enum(2),
+            Prop::GridColumns => ValueKind::F32,
+            Prop::GridMinColumnWidth => ValueKind::Length,
+            Prop::GridColumnSpan => ValueKind::F32,
+            Prop::GridRowSpan => ValueKind::F32,
+            Prop::AspectRatio => ValueKind::F32,
+            Prop::PointerEvents => ValueKind::Enum(2),
         }
     }
 
     /// Names of an enum property's values, by index.
     pub fn enum_names(self) -> &'static [&'static str] {
         match self {
-            Prop::Display => &["flex", "none"],
+            Prop::Display => &["flex", "none", "grid"],
             Prop::FlexDirection => &["row", "column", "rowReverse", "columnReverse"],
             Prop::FlexWrap => &["noWrap", "wrap"],
             Prop::JustifyContent => &[
@@ -750,7 +782,7 @@ impl Prop {
             ],
             Prop::AlignItems => &["stretch", "start", "end", "center", "baseline"],
             Prop::AlignSelf => &["auto", "stretch", "start", "end", "center", "baseline"],
-            Prop::Position => &["relative", "absolute"],
+            Prop::Position => &["relative", "absolute", "fixed", "sticky"],
             Prop::AlignContent => &[
                 "stretch",
                 "start",
@@ -792,6 +824,7 @@ impl Prop {
             Prop::TextOverflow => &["ellipsis", "clip"],
             Prop::WordBreak => &["normal", "breakAll", "keepAll", "breakWord"],
             Prop::UserSelect => &["none", "text"],
+            Prop::PointerEvents => &["auto", "none"],
             _ => &[],
         }
     }

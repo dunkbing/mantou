@@ -142,7 +142,7 @@ export const Event = {
 
 export type ValueKind = "f32" | "color" | "length" | "family" | "enum";
 export const StyleProp = {
-  display: { code: 1, kind: "enum", values: ["flex","none"] },
+  display: { code: 1, kind: "enum", values: ["flex","none","grid"] },
   flexDirection: { code: 2, kind: "enum", values: ["row","column","rowReverse","columnReverse"] },
   flexWrap: { code: 3, kind: "enum", values: ["noWrap","wrap"] },
   justifyContent: { code: 4, kind: "enum", values: ["start","end","center","spaceBetween","spaceAround","spaceEvenly"] },
@@ -167,7 +167,7 @@ export const StyleProp = {
   marginLeft: { code: 23, kind: "length" },
   rowGap: { code: 24, kind: "length" },
   columnGap: { code: 25, kind: "length" },
-  position: { code: 26, kind: "enum", values: ["relative","absolute"] },
+  position: { code: 26, kind: "enum", values: ["relative","absolute","fixed","sticky"] },
   top: { code: 27, kind: "length" },
   right: { code: 28, kind: "length" },
   bottom: { code: 29, kind: "length" },
@@ -209,9 +209,15 @@ export const StyleProp = {
   textOverflow: { code: 65, kind: "enum", values: ["ellipsis","clip"] },
   wordBreak: { code: 66, kind: "enum", values: ["normal","breakAll","keepAll","breakWord"] },
   userSelect: { code: 67, kind: "enum", values: ["none","text"] },
+  gridColumns: { code: 68, kind: "f32" },
+  gridMinColumnWidth: { code: 69, kind: "length" },
+  gridColumnSpan: { code: 70, kind: "f32" },
+  gridRowSpan: { code: 71, kind: "f32" },
+  aspectRatio: { code: 72, kind: "f32" },
+  pointerEvents: { code: 73, kind: "enum", values: ["auto","none"] },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -221,7 +227,7 @@ export type Color = string | readonly [number, number, number] | readonly [numbe
 /** Style properties as the core understands them (one wire property each). */
 export interface WireStyle {
   /** Default: flex. */
-  display?: "flex" | "none";
+  display?: "flex" | "none" | "grid";
   /** Default: column. */
   flexDirection?: "row" | "column" | "rowReverse" | "columnReverse";
   /** Default: noWrap. */
@@ -270,8 +276,8 @@ export interface WireStyle {
   rowGap?: Length;
   /** Default: 0. */
   columnGap?: Length;
-  /** Default: relative. */
-  position?: "relative" | "absolute";
+  /** Default: relative (absolute: against the parent; fixed: against the window; sticky: stays within the nearest scroll view at the top/right/bottom/left distance given, inside its parent). */
+  position?: "relative" | "absolute" | "fixed" | "sticky";
   /** Default: auto. */
   top?: Length;
   /** Default: auto. */
@@ -354,4 +360,16 @@ export interface WireStyle {
   wordBreak?: "normal" | "breakAll" | "keepAll" | "breakWord";
   /** Default: none. */
   userSelect?: "none" | "text";
+  /** Default: 0 (use gridMinColumnWidth, or one column): this many equal columns. */
+  gridColumns?: number;
+  /** Default: auto: as many columns as fit, each at least this wide and sharing the rest. */
+  gridMinColumnWidth?: Length;
+  /** Default: 1: columns an item covers. */
+  gridColumnSpan?: number;
+  /** Default: 1: rows an item covers. */
+  gridRowSpan?: number;
+  /** Default: 0 (none): width / height, for a box with one of them set. */
+  aspectRatio?: number;
+  /** Default: auto (none: the node is not under the pointer: presses, hover and the cursor go to what is below it). */
+  pointerEvents?: "auto" | "none";
 }

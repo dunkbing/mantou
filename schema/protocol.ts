@@ -102,7 +102,7 @@ export const units = ["px", "percent", "auto"] as const;
 
 const length = "length" as const;
 export const styleProps: { name: string; code: number; type: ValueType; default: string }[] = [
-  { name: "display", code: 1, type: { enum: ["flex", "none"] }, default: "flex" },
+  { name: "display", code: 1, type: { enum: ["flex", "none", "grid"] }, default: "flex" },
   { name: "flexDirection", code: 2, type: { enum: ["row", "column", "rowReverse", "columnReverse"] }, default: "column" },
   { name: "flexWrap", code: 3, type: { enum: ["noWrap", "wrap"] }, default: "noWrap" },
   { name: "justifyContent", code: 4, type: { enum: ["start", "end", "center", "spaceBetween", "spaceAround", "spaceEvenly"] }, default: "start" },
@@ -127,7 +127,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "marginLeft", code: 23, type: length, default: "0" },
   { name: "rowGap", code: 24, type: length, default: "0" },
   { name: "columnGap", code: 25, type: length, default: "0" },
-  { name: "position", code: 26, type: { enum: ["relative", "absolute"] }, default: "relative" },
+  { name: "position", code: 26, type: { enum: ["relative", "absolute", "fixed", "sticky"] }, default: "relative (absolute: against the parent; fixed: against the window; sticky: stays within the nearest scroll view at the top/right/bottom/left distance given, inside its parent)" },
   { name: "top", code: 27, type: length, default: "auto" },
   { name: "right", code: 28, type: length, default: "auto" },
   { name: "bottom", code: 29, type: length, default: "auto" },
@@ -181,6 +181,13 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "wordBreak", code: 66, type: { enum: ["normal", "breakAll", "keepAll", "breakWord"] }, default: "normal (breakAll: break anywhere; keepAll: never inside a word; breakWord: only a word too long for the line breaks anywhere)" },
   // A Text node whose text the user can select and copy (the selection is the core's, like an input's).
   { name: "userSelect", code: 67, type: { enum: ["none", "text"] }, default: "none" },
+  // Grid (display: "grid"): equal columns, or as many as fit; items may span several.
+  { name: "gridColumns", code: 68, type: "f32", default: "0 (use gridMinColumnWidth, or one column): this many equal columns" },
+  { name: "gridMinColumnWidth", code: 69, type: length, default: "auto: as many columns as fit, each at least this wide and sharing the rest" },
+  { name: "gridColumnSpan", code: 70, type: "f32", default: "1: columns an item covers" },
+  { name: "gridRowSpan", code: 71, type: "f32", default: "1: rows an item covers" },
+  { name: "aspectRatio", code: 72, type: "f32", default: "0 (none): width / height, for a box with one of them set" },
+  { name: "pointerEvents", code: 73, type: { enum: ["auto", "none"] }, default: "auto (none: the node is not under the pointer: presses, hover and the cursor go to what is below it)" },
 ];
 
 /**

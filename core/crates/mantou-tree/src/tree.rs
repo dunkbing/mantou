@@ -171,6 +171,11 @@ pub struct TreeStats {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Visual {
+    /// 0 relative, 1 absolute, 2 fixed, 3 sticky.
+    position: u8,
+    /// top, right, bottom, left in px, as set (None: auto or a percentage).
+    inset: [Option<f32>; 4],
+    no_pointer: bool,
     /// `userSelect: text`.
     user_select: bool,
     background: u32,
@@ -848,7 +853,8 @@ impl Tree {
         self.boxes.clear();
         self.thumbs.clear();
         if let Some(root) = self.root {
-            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY], Xf { k: 1.0, o: [0.0; 2] });
+            let (vw, vh) = self.viewport_logical();
+            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY], Xf { k: 1.0, o: [0.0; 2] }, None, [0.0, 0.0, vw, vh]);
         }
     }
 
@@ -901,13 +907,51 @@ impl Tree {
     /// Places a node and its subtree. `px, py` is its parent's origin in
     /// layout coordinates (scroll offsets applied); `xf` maps layout
     /// coordinates to the window's, with the ancestors' transforms.
-    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4], xf: Xf) {
+    /// `view`: the nearest scroll view's box and `pbox` the parent's content area, both in layout coordinates
+    /// (for sticky nodes).
+    #[allow(clippy::too_many_arguments)]
+    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4], xf: Xf, view: Option<[f32; 4]>, pbox: [f32; 4]) {
         let node = &self.nodes[&id];
         if node.v.hidden {
             return;
         }
         let Ok(l) = self.taffy.layout(node.taffy) else { return };
-        let (x, y) = (px + l.location.x, py + l.location.y);
+        let (mut x, mut y) = (px + l.location.x, py + l.location.y);
+        let (mut clip, mut xf) = (clip, xf);
+        let [it, ir, ib, il] = node.v.inset;
+        match node.v.position {
+            2 => {
+                // Fixed: against the window, whatever the ancestors scroll, clip or transform.
+                let (vw, vh) = self.viewport_logical();
+                x = il.or(ir.map(|r| vw - r - l.size.width)).unwrap_or(x);
+                y = it.or(ib.map(|b| vh - b - l.size.height)).unwrap_or(y);
+                clip = [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY];
+                xf = Xf { k: 1.0, o: [0.0; 2] };
+            }
+            3 => {
+                // Sticky: taffy moved it by its insets as for a relative node; undo that, then keep it
+                // within `view` at the distances given, and inside its parent.
+                x += if il.is_some() { -il.unwrap_or(0.0) } else { ir.unwrap_or(0.0) };
+                y += if it.is_some() { -it.unwrap_or(0.0) } else { ib.unwrap_or(0.0) };
+                let vw = view.unwrap_or_else(|| {
+                    let (w, h) = self.viewport_logical();
+                    [0.0, 0.0, w, h]
+                });
+                let stick = |pos: f32, size: f32, lo: Option<f32>, hi: Option<f32>, v: (f32, f32), p: (f32, f32)| {
+                    let mut pos = pos;
+                    if let Some(lo) = lo {
+                        pos = pos.max(v.0 + lo);
+                    }
+                    if let Some(hi) = hi {
+                        pos = pos.min(v.1 - hi - size);
+                    }
+                    pos.min(p.1 - size).max(p.0)
+                };
+                x = stick(x, l.size.width, il, ir, (vw[0], vw[2]), (pbox[0], pbox[2]));
+                y = stick(y, l.size.height, it, ib, (vw[1], vw[3]), (pbox[1], pbox[3]));
+            }
+            _ => {}
+        }
         let rect = [x, y, x + l.size.width, y + l.size.height];
         let (pd, bd) = (l.padding, l.border);
         let content = [x + pd.left + bd.left, y + pd.top + bd.top, rect[2] - pd.right - bd.right, rect[3] - pd.bottom - bd.bottom];
@@ -944,8 +988,14 @@ impl Tree {
         }
         let node = &self.nodes[&id];
         let offset = node.scroll.map_or([0.0; 2], |s| s.offset);
+        let (child_view, child_box) = if node.scroll.is_some() {
+            let v = [rect[0] + border[0], rect[1] + border[1], rect[2] - border[2], rect[3] - border[3]];
+            (Some(v), [x - offset[0], y - offset[1], x - offset[0] + extent[0].max(rect[2] - rect[0]), y - offset[1] + extent[1].max(rect[3] - rect[1])])
+        } else {
+            (view, rect)
+        };
         for c in node.children.clone() {
-            self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf);
+            self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf, child_view, child_box);
         }
         let node = &self.nodes[&id];
         if let Some(st) = node.scroll
@@ -1168,7 +1218,7 @@ impl Tree {
     /// The topmost node under a point (logical px), ignoring what its ancestors clip away.
     pub fn hit(&self, x: f32, y: f32) -> Option<u32> {
         let inside = |r: &[f32; 4]| x >= r[0] && x < r[2] && y >= r[1] && y < r[3];
-        self.boxes.iter().rev().find(|b| inside(&b.rect) && inside(&b.clip)).map(|b| b.id)
+        self.boxes.iter().rev().find(|b| inside(&b.rect) && inside(&b.clip) && !self.nodes[&b.id].v.no_pointer).map(|b| b.id)
     }
 
     /// The text of a text node (for tests and debugging).
@@ -1368,7 +1418,30 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         _ => AlignItems::STRETCH,
     };
     match prop {
-        Prop::Display => s.display = if e == p::display::NONE { Display::None } else { Display::Flex },
+        Prop::Display => {
+            s.display = match e {
+                p::display::NONE => Display::None,
+                p::display::GRID => Display::Grid,
+                _ => Display::Flex,
+            }
+        }
+        Prop::GridColumns => {
+            let n = num().clamp(0.0, 1000.0) as u16;
+            s.grid_template_columns = if n > 0 { taffy::style_helpers::evenly_sized_tracks(n) } else { Vec::new() };
+        }
+        Prop::GridMinColumnWidth => {
+            s.grid_template_columns = match len() {
+                Length::Px(w) if w > 0.0 => {
+                    let track: taffy::style::TrackSizingFunction = taffy::style_helpers::minmax(taffy::style_helpers::length(w), taffy::style_helpers::fr(1.0));
+                    vec![taffy::style_helpers::repeat("auto-fill", vec![track])]
+                }
+                _ => Vec::new(),
+            };
+        }
+        Prop::GridColumnSpan => s.grid_column = taffy::Line { start: taffy::style_helpers::auto(), end: taffy::style_helpers::span(num().clamp(1.0, 1000.0) as u16) },
+        Prop::GridRowSpan => s.grid_row = taffy::Line { start: taffy::style_helpers::auto(), end: taffy::style_helpers::span(num().clamp(1.0, 1000.0) as u16) },
+        Prop::AspectRatio => s.aspect_ratio = (num() > 0.0 && num().is_finite()).then(|| num()),
+        Prop::PointerEvents => v.no_pointer = e == p::pointer_events::NONE,
         Prop::FlexDirection => {
             s.flex_direction = match e {
                 fd::ROW => FlexDirection::Row,
@@ -1409,11 +1482,27 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::MarginLeft => s.margin.left = lpa(len()),
         Prop::RowGap => s.gap.height = lp(len()),
         Prop::ColumnGap => s.gap.width = lp(len()),
-        Prop::Position => s.position = if e == p::position::ABSOLUTE { Position::Absolute } else { Position::Relative },
-        Prop::Top => s.inset.top = lpa(len()),
-        Prop::Right => s.inset.right = lpa(len()),
-        Prop::Bottom => s.inset.bottom = lpa(len()),
-        Prop::Left => s.inset.left = lpa(len()),
+        Prop::Position => {
+            v.position = e as u8;
+            // Fixed is placed by the core against the window, sticky by it against its scroll view; taffy only sizes them.
+            s.position = if e == p::position::ABSOLUTE || e == p::position::FIXED { Position::Absolute } else { Position::Relative };
+        }
+        Prop::Top => {
+            s.inset.top = lpa(len());
+            v.inset[0] = if let Length::Px(px) = len() { Some(px) } else { None };
+        }
+        Prop::Right => {
+            s.inset.right = lpa(len());
+            v.inset[1] = if let Length::Px(px) = len() { Some(px) } else { None };
+        }
+        Prop::Bottom => {
+            s.inset.bottom = lpa(len());
+            v.inset[2] = if let Length::Px(px) = len() { Some(px) } else { None };
+        }
+        Prop::Left => {
+            s.inset.left = lpa(len());
+            v.inset[3] = if let Length::Px(px) = len() { Some(px) } else { None };
+        }
         Prop::BackgroundColor => {
             if let Value::Color(c) = value {
                 v.background = c
