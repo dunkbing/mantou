@@ -1,8 +1,8 @@
 # Mantou
 
-Native desktop apps in TypeScript, on Bun. Your app runs in a Bun Worker; a Rust core loaded with `bun:ffi` owns the window and draws the UI on the GPU with wgpu. No webview.
+Native desktop apps in TypeScript, on Bun. You write Solid-style JSX; a Rust core draws it on the GPU in a real window. No browser, no webview.
 
-> **Early development.** The threading model works on Linux, macOS and Windows. Solid-style JSX, flexbox layout, text and app fonts, text input, scrolling, rounded corners, borders and shadows, clipping, presses, keys and the wheel work.
+![A Mantou app: a scrolling inbox, a compose form with a password field, buttons with shadows, and a code card](docs/images/showcase.png)
 
 ```tsx
 import { Text, View, createSignal, run } from "mantou-ui";
@@ -19,25 +19,11 @@ function App() {
 run(() => <App />);
 ```
 
-## Try it
+> **Early development.** Works on Linux, macOS and Windows: flexbox layout, text and custom fonts, text input (with IME), scrolling, rounded corners, borders and shadows. Images, animations and accessibility are next.
 
-Needs [Bun](https://bun.sh) 1.4.4 and [Rust](https://rustup.rs).
+## Use it
 
-```bash
-bun install
-```
-
-```bash
-bun run build:core
-```
-
-```bash
-bun run counter
-```
-
-For a bigger app, [Mantou Mail](https://github.com/dunkbing/mantou-mail) is a three-pane mail client built on Mantou as a package.
-
-## Use it in an app
+Needs [Bun](https://bun.sh) 1.4.4.
 
 ```bash
 bun add mantou-ui
@@ -47,16 +33,24 @@ bun add mantou-ui
 bunx mantou run src/main.tsx
 ```
 
-The native core comes prebuilt for Linux (x64, arm64), macOS (arm64, x64) and Windows (x64). Elsewhere, or with mantou-ui from GitHub (`bun add github:dunkbing/mantou`), build it once with `bunx mantou build-core` (needs Rust).
+In `tsconfig.json`, set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; for `bun test`, preload `mantou-ui/preload` in `bunfig.toml`. The native core comes prebuilt for Linux, macOS and Windows.
 
-Set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"` in `tsconfig.json`, and preload `mantou-ui/preload` for `bun test` (`bunfig.toml`). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose).
+## Examples
 
-## Docs
-
-The design, the protocol and test results are in [`website/`](website/) (Astro + Starlight, on Bun):
+From a clone of this repo (`bun install`, then `bun run build:core`, which needs [Rust](https://rustup.rs)):
 
 ```bash
-bun run docs
+bun run todos
 ```
 
-Working on the code, as a person or an agent? Start with [AGENTS.md](AGENTS.md).
+```bash
+bun run showcase
+```
+
+<img src="docs/images/todos.png" alt="The to-do example: a focused text field, items ticked off, and a notes field" width="320">
+
+For a real app, see [Mantou Mail](https://github.com/dunkbing/mantou-mail): an email app with mailboxes, a message list, a reader and keyboard shortcuts. It uses Mantou from npm, like any app would.
+
+## Docs and contributing
+
+The design, the protocol and test results are at [mantou.dunkbing.dev](https://mantou.dunkbing.dev) (source in [`website/`](website/)). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose). Working on the code, as a person or an agent? Start with [AGENTS.md](AGENTS.md).

@@ -1,6 +1,6 @@
 ---
 title: Text and Mantou Mail
-description: Text rendering, rounded corners, borders, clipping, keys and the wheel — and Mantou Mail, a three-pane mail client built with them.
+description: Text rendering, rounded corners, borders, clipping, keys and the wheel, and Mantou Mail, an email app built with them.
 ---
 
 ![Mantou Mail: a sidebar of mailboxes and labels, the message list, and the reader with quick replies](../../../assets/mail.png)
