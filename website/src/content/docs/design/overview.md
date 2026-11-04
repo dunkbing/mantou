@@ -3,12 +3,9 @@ title: "Overview"
 description: "What Mantou is, its goals and non-goals, and the design principles it builds on."
 ---
 
-_Architecture & design_
+**Name:** Mantou (馒头), the plain steamed bun: a plain base, and the app supplies the filling. **Packages:** npm `mantou-ui`, CLI `mantou`, Rust crates `mantou-*`. **Scope:** desktop (macOS, Windows, Linux).
 
-**Status:** Draft v0.7 · 2026-11-03 (v0.7: implementation status pages · v0.2: testing design, [§12](/design/testing/#12-testing) · v0.3: named Mantou · v0.4: open questions decided, [§16](/design/decisions/#16-decisions-formerly-open-questions) · v0.5: threading spike results, [§4](/design/threading/#4-the-defining-constraint-who-owns-the-main-thread))
-**Name:** Mantou (馒头), the plain Chinese steamed bun: Mantou provides a plain, unstyled base, and the app supplies the filling ([§7.3](/design/runtime/#73-public-api-sketch)).
-**Packages:** npm `mantou-ui` (the bare `mantou` is taken, see [Q1](/design/decisions/#16-decisions-formerly-open-questions)) · CLI `mantou` · Rust crates `mantou-*` · C ABI prefix `mt_`
-**Scope of this draft:** desktop (macOS, Windows, Linux). Mobile and web are out of scope for v1.
+This section is background for people working on Mantou itself. To build an app, start with the [guide](/guide/getting-started/).
 
 ---
 
@@ -48,20 +45,11 @@ The main thread never runs app JavaScript and never waits for it. That keeps scr
 | UI model | Compiled JSX + Solid signals (in JS) |
 | Tree, layout, text | Rust: Taffy, parley |
 | Drawing | wgpu, instanced quads |
-| Web/Node APIs | Provided by Bun |
 
 ### Design principles
 
-- **Rendering:**
-  - Frames are drawn only when asked for, so an idle window costs nothing.
-  - The scene is a flat list of operations.
-  - The renderer draws one instanced quad per operation with a signed-distance-field (SDF) shader for rounded rects, borders and shadows, plus glyph atlases.
-  - Layout results are cached and reused when an element hasn't changed.
-- **Threads and the tree:**
-  - The app UI never waits for JS. One JS turn produces one commit.
-  - The core keeps a shadow tree; JS only sends mutations.
-  - Text is measured off the main thread and cached by content hash plus width.
-  - Removing a node only detaches it; freeing it is a separate step.
-  - A node already in place is never re-inserted.
-  - During a resize, the app waits a bounded time for the new layout.
-  - Layout rounds to device pixels, not whole points.
+- Frames are drawn only when asked for, so an idle window costs nothing.
+- One JS turn produces one commit. The core keeps a shadow tree; JS only sends mutations.
+- Removing a node only detaches it; freeing it is a separate step. A node already in place is never re-inserted.
+- The renderer draws one instanced quad per operation (rounded rects, borders and shadows by a distance-field shader, plus glyph atlases).
+- Layout is cached and reused when an element hasn't changed, and rounds to device pixels.
