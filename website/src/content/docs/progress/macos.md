@@ -24,7 +24,7 @@ The secure field is also exposed to assistive technology as a secure text field.
 
 ## Dead keys and Option characters
 
-Option+S gives ß. **Dead keys leave a stray letter**: Option+E then E gives `eé`, Option+U then U gives `uü`, and Option+E then Space gives `e ` instead of `´`. The same events sent to TextEdit give a clean `é`, so the events are faithful. winit reports the dead key's key-down as the plain letter `e` with the text `e` and sends no IME preedit, which the core inserts. **Not yet confirmed on a real keyboard**; if it happens there too, it gets its own issue.
+Option+S gives ß, and Option+E then E gives `é` on a real keyboard (checked by hand). Driven with synthetic key events the same sequence gave `eé`, and TextEdit gave a clean `é` from those events: winit reports the key-down of a synthetic dead key as the plain letter with no IME preedit. It is an artefact of posting events, not of the keyboard, so dead keys can't be checked that way; no issue was filed.
 
 ## Text
 
@@ -42,10 +42,13 @@ The same lines at the same sizes, white on dark, Mantou (Inter) above and TextEd
 - Live resize through the accessibility API (700 × 500, 300 × 400, 900 × 700, back): the window follows, the layout adapts, no errors.
 - The default menus: App (About, Hide, Hide Others, Show All, Quit), Edit, Window (Close Window, Minimize, Zoom, Full Screen).
 
-## Needs a person
+## Checked by hand
 
-- [ ] **Dead keys on the real keyboard**: Option+E then E in the first field of `bun runtime/main.ts examples/todos/main.tsx`: `é`, or `eé`?
+- [x] Dead keys: Option+E then E gives `é`.
+- [x] Full screen, Cmd+H and Cmd+M work.
+
+## Still needs a person
+
 - [ ] **IME:** Japanese (Kotoeri) and Chinese (Pinyin) composition in an `<Input>`: the candidate window at the caret, marked text underlined, commit and cancel; Korean (2-Set) jamo; the emoji picker (Ctrl+Cmd+Space).
 - [ ] **Trackpad:** two-finger scrolling with momentum in a `<Scroll>`, horizontal scrolling, scrolling while the app is busy.
-- [ ] **Windows:** full screen, and moving between a Retina and a non-Retina display (this Mac has only a 1× display).
-- [ ] Cmd+H and Cmd+M.
+- [ ] **Moving between a Retina and a non-Retina display** (this Mac has only a 1× display).
