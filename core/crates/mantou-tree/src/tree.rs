@@ -14,11 +14,22 @@ use taffy::style::{AlignContent, AlignItems, Dimension, LengthPercentage, Length
 use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
 
+mod image;
 mod input;
 mod scroll;
 
 use input::Input;
+use image::ImageNode;
 use scroll::{Drag, Request, ScrollState, Thumb};
+
+pub use mantou_image::Pixels;
+
+/// An image quad's texture: the scene's `images[id]`; `tint` draws its alpha in the quad's colour.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ImageRef {
+    pub id: u32,
+    pub tint: bool,
+}
 pub use input::{Clipboard, MemoryClipboard};
 
 /// What the tree tells JS: about inputs, and boxes that listeners asked for.
@@ -32,6 +43,9 @@ pub enum TreeEvent {
     Layout { id: u32, rect: [f32; 4] },
     /// A scroll view with a Scroll listener scrolled to this offset.
     Scroll { id: u32, offset: [f32; 2] },
+    /// An Image's source was decoded: its natural size (logical px).
+    ImageLoad { id: u32, size: [f32; 2] },
+    ImageError { id: u32, message: String },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -57,11 +71,13 @@ pub struct Quad {
     /// blurred by this Gaussian sigma (device px); the renderer draws past
     /// `rect` as far as the blur reaches.
     pub shadow: Option<f32>,
+    /// An image: `uv` are texels of this image's pixels instead of the glyph atlas.
+    pub image: Option<ImageRef>,
 }
 
 impl Quad {
     pub fn is_glyph(&self) -> bool {
-        self.uv[2] > self.uv[0]
+        self.uv[2] > self.uv[0] && self.image.is_none()
     }
 }
 
@@ -76,6 +92,8 @@ pub struct Scene {
     pub size_px: (u32, u32),
     /// The glyph atlas the glyph quads point into.
     pub atlas: Option<Arc<AtlasImage>>,
+    /// The pixels image quads point into, by `ImageRef::id`.
+    pub images: HashMap<u32, Arc<Pixels>>,
 }
 
 impl Scene {
@@ -93,6 +111,11 @@ impl Scene {
                 continue;
             }
             let [x0, y0, x1, y1] = q.rect;
+            if let Some(img) = q.image {
+                let p = &self.images[&img.id];
+                out.push_str(&format!("image {x0} {y0} {x1} {y1} {}x{}{}\n", p.width, p.height, if img.tint { format!(" tint {}", hex(q.color)) } else { String::new() }));
+                continue;
+            }
             if let Some(sigma) = q.shadow {
                 out.push_str(&format!("shadow {x0} {y0} {x1} {y1} {} sigma {sigma}", hex(q.color)));
                 if q.radius > 0.0 {
@@ -153,6 +176,9 @@ struct Visual {
     selection_color: Option<u32>,
     /// overflow: "scroll".
     scrolls: bool,
+    /// The node's own or shared style set `color` (an Image is then tinted with it).
+    color_set: bool,
+    fit: u32,
     /// Box shadow: x, y, blur, spread (logical px) and colour (0 alpha = none).
     shadow: [f32; 4],
     shadow_color: u32,
@@ -177,6 +203,8 @@ struct Node {
     scope: u32,
     /// A scroll view's offset and limits (overflow: "scroll").
     scroll: Option<ScrollState>,
+    /// An Image node's source.
+    image: Option<Box<ImageNode>>,
     /// A Text node's layout at the width it was drawn at (its bits), reused
     /// while its text, style and width stay the same.
     drawn: RefCell<Option<(u32, Arc<TextLayout>)>>,
@@ -196,6 +224,8 @@ pub struct Tree {
     taffy: TaffyTree<u32>,
     /// Created with the first text node.
     text: Option<TextEngine>,
+    /// Decoded images by source (a path, or a hash of bytes), shared by the nodes that use them.
+    image_cache: HashMap<String, std::sync::Weak<mantou_image::Image>>,
     nodes: HashMap<u32, Node>,
     styles: HashMap<u32, Vec<(Prop, Value)>>,
     root: Option<u32>,
@@ -269,6 +299,7 @@ impl Tree {
         Tree {
             taffy,
             text: None,
+            image_cache: HashMap::new(),
             nodes: HashMap::new(),
             styles: HashMap::new(),
             root: None,
@@ -361,6 +392,7 @@ impl Tree {
                         self.text.get_or_insert_with(TextEngine::new);
                         self.taffy.new_leaf_with_context(Style::default(), id)
                     }
+                    p::node_kind::IMAGE => self.taffy.new_leaf_with_context(Style::default(), id),
                     p::node_kind::INPUT => {
                         input = Some(Box::new(Input::new(self.text.get_or_insert_with(TextEngine::new))));
                         self.taffy.new_leaf_with_context(Style::default(), id)
@@ -382,6 +414,7 @@ impl Tree {
                     reported: None,
                     scope: 0,
                     scroll: None,
+                    image: (kind == p::node_kind::IMAGE).then(Box::default),
                     drawn: RefCell::new(None),
                 });
                 self.restyle(id);
@@ -524,6 +557,14 @@ impl Tree {
             Op::WindowLimits { min, max, flags } => {
                 self.window_limits = Some(WindowLimits { min, max, resizable: flags & p::window_flag::NOT_RESIZABLE == 0 });
             }
+            Op::ImagePath { id, path } => {
+                let read = path.clone();
+                self.set_image(id, format!("path:{path}"), move || std::fs::read(&read).map_err(|e| format!("can't read {read}: {e}"))).map_err(|e| format!("IMAGE_PATH: {e}"))?;
+            }
+            Op::ImageData { id, data } => {
+                let key = image::bytes_key(&data);
+                self.set_image(id, key, move || Ok(data)).map_err(|e| format!("IMAGE_DATA: {e}"))?;
+            }
             Op::Font(data) => {
                 let engine = self.text.get_or_insert_with(TextEngine::new);
                 if engine.register_font(data).is_empty() {
@@ -558,8 +599,8 @@ impl Tree {
             return Err("INSERT: a node cannot contain itself".into());
         }
         self.node(child)?;
-        if matches!(self.node(parent)?.kind, p::node_kind::TEXT | p::node_kind::INPUT) {
-            return Err(format!("INSERT: {parent} is a text or input node, which have no children"));
+        if matches!(self.node(parent)?.kind, p::node_kind::TEXT | p::node_kind::INPUT | p::node_kind::IMAGE) {
+            return Err(format!("INSERT: {parent} is a text, input or image node, which have no children"));
         }
         // No cycles: the child must not be an ancestor of the parent.
         let mut a = Some(parent);
@@ -680,7 +721,12 @@ impl Tree {
         let (nodes, mut text) = (&self.nodes, self.text.as_mut());
         let measured = self.taffy.compute_layout_with_measure(rt, space, |inputs, _, ctx, style| {
             taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, avail| {
-                let (Some(node), Some(text)) = (ctx.and_then(|id| nodes.get(id)), text.as_deref_mut()) else { return Size::ZERO };
+                let Some(node) = ctx.and_then(|id| nodes.get(id)) else { return Size::ZERO };
+                if let Some(img) = &node.image {
+                    let (w, h) = image::measure(img.source.as_ref().map(|s| s.natural_size()), (known.width, known.height));
+                    return Size { width: w, height: h };
+                }
+                let Some(text) = text.as_deref_mut() else { return Size::ZERO };
                 if let Some(inp) = &node.input {
                     // Like a browser's: a fixed width, unless the layout gives one (and no
                     // minimum, so it can shrink); one line tall, or as tall as the text.
@@ -847,6 +893,7 @@ impl Tree {
             [ch(0), ch(8), ch(16), ch(24) * alpha]
         };
         let mut glyphs = false;
+        let mut images: HashMap<u32, Arc<Pixels>> = HashMap::new();
         let thumb_quad = |t: &Thumb, nodes: &HashMap<u32, Node>| {
             let v = &nodes[&t.view].v;
             let mut alpha = v.opacity;
@@ -867,6 +914,7 @@ impl Tree {
                 border: 0.0,
                 border_color: [0.0; 4],
                 shadow: None,
+                image: None,
             }
         };
         let mut thumbs = self.thumbs.iter().peekable();
@@ -901,11 +949,32 @@ impl Tree {
                 let reach = [shape[0] - 3.0 * sigma, shape[1] - 3.0 * sigma, shape[2] + 3.0 * sigma, shape[3] + 3.0 * sigma];
                 if shape[2] > shape[0] && shape[3] > shape[1] && overlaps(reach, clip) {
                     let radius = ((node.v.radius + spread) * s).max(0.0);
-                    quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma) });
+                    quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma), image: None });
                 }
             }
             if (bg[3] > 0.0 || border > 0.0) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
-                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: node.v.radius * s, border, border_color, shadow: None });
+                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: node.v.radius * s, border, border_color, shadow: None, image: None });
+            }
+            if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
+                let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());
+                let rect = [snap(rect_l[0]), snap(rect_l[1]), snap(rect_l[2]), snap(rect_l[3])];
+                if rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
+                    // An SVG is rasterized at the size its whole image is drawn at (bigger than the box for cover).
+                    let full = ((rect[2] - rect[0]) / (frac[2] - frac[0]), (rect[3] - rect[1]) / (frac[3] - frac[1]));
+                    let slot = &node.image.as_ref().expect("an image").drawn;
+                    let mut drawn = slot.borrow_mut();
+                    let reuse = drawn.as_ref().filter(|p| !src.is_svg() || (p.width, p.height) == (full.0.round() as u32, full.1.round() as u32)).cloned();
+                    let pixels = reuse.or_else(|| src.pixels(full.0.round() as u32, full.1.round() as u32));
+                    *drawn = pixels.clone();
+                    if let Some(px) = pixels {
+                        let (pw, ph) = (px.width as f32, px.height as f32);
+                        let uv = [frac[0] * pw, frac[1] * ph, frac[2] * pw, frac[3] * ph];
+                        let tint = node.v.color_set;
+                        let color = if tint { rgba(node.v.color, alpha) } else { [1.0, 1.0, 1.0, alpha] };
+                        quads.push(Quad { rect, color, uv, clip, radius: node.v.radius * s, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint }) });
+                        images.insert(px.id, px);
+                    }
+                }
             }
             if node.kind == p::node_kind::TEXT && !node.text.is_empty() {
                 let color = rgba(node.v.color, alpha);
@@ -955,6 +1024,7 @@ impl Tree {
                     border: 0.0,
                     border_color: [0.0; 4],
                     shadow: None,
+                    image: None,
                 };
                 if ed.text().is_empty() && !ed.is_composing() && !inp.placeholder.is_empty() {
                     let pc = node.v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
@@ -988,7 +1058,7 @@ impl Tree {
             quads.push(thumb_quad(t, &self.nodes));
         }
         let atlas = if glyphs { self.text.as_ref().map(|t| t.atlas()) } else { None };
-        Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas }
+        Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas, images }
     }
 
     /// The topmost node under a point (logical px), ignoring what its ancestors clip away.
@@ -1101,7 +1171,7 @@ fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGly
             continue;
         }
         let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
-        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None });
+        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
         any = true;
     }
     any
@@ -1215,9 +1285,11 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::Opacity => v.opacity = num().clamp(0.0, 1.0),
         Prop::Color => {
             if let Value::Color(c) = value {
-                v.color = c
+                v.color = c;
+                v.color_set = true;
             }
         }
+        Prop::ObjectFit => v.fit = e,
         Prop::FontSize => v.text.size = num().clamp(1.0, 1000.0),
         Prop::FontWeight => v.text.weight = num().clamp(1.0, 1000.0),
         Prop::LineHeight => v.text.line_height = num().clamp(0.0, 10.0),

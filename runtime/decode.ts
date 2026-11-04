@@ -66,6 +66,8 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "INPUT_OPTIONS": o = { op: name, id: w[a], flags: w[a + 1], maxLength: w[a + 2] }; break;
       case "FOCUS": o = { op: name, id: w[a] }; break;
       case "FONT": o = { op: name, bytes: w[a] }; break;
+      case "IMAGE_PATH": o = { op: name, id: w[a], path: str(w, a + 1) }; break;
+      case "IMAGE_DATA": o = { op: name, id: w[a], bytes: w[a + 1] }; break;
       case "FONT_FAMILY": o = { op: name, family: w[a], names: str(w, a + 1) }; break;
       case "WINDOW_SIZE": o = { op: name, width: bitsf32(w[a]), height: bitsf32(w[a + 1]) }; break;
       case "WINDOW_LIMITS": o = { op: name, minWidth: bitsf32(w[a]), minHeight: bitsf32(w[a + 1]), maxWidth: bitsf32(w[a + 2]), maxHeight: bitsf32(w[a + 3]), flags: w[a + 4] }; break;

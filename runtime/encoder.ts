@@ -65,6 +65,12 @@ export class OpEncoder {
   placeholder(id: number, s: string) { this.op(Op.PLACEHOLDER, [id, ...stringWords(s)]); }
   inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
   focus(id: number) { this.op(Op.FOCUS, [id]); }
+  imagePath(id: number, path: string) { this.op(Op.IMAGE_PATH, [id, ...stringWords(path)]); }
+  imageData(id: number, data: Uint8Array) {
+    const words = new Uint32Array(Math.ceil(data.length / 4));
+    new Uint8Array(words.buffer).set(data);
+    this.op(Op.IMAGE_DATA, [id, data.length, ...words]);
+  }
   font(data: Uint8Array) {
     const words = new Uint32Array(Math.ceil(data.length / 4));
     new Uint8Array(words.buffer).set(data);

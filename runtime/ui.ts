@@ -135,6 +135,9 @@ export class Node {
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
   private layoutHandlers: ((rect: Rect) => void)[] = [];
   private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
+  private imageHandlers: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] } = { load: [], error: [] };
+  /** An Image's natural size once it has loaded (logical px), or the error if it failed. */
+  imageState: { width: number; height: number } | { error: string } | null = null;
   /** A scroll view's offset, as the core last reported it to scroll handlers. */
   scrollOffset: ScrollOffset = { x: 0, y: 0 };
   /** The box the core last reported to this node's layout handlers. */
@@ -165,9 +168,46 @@ export class Node {
     return this.kind === NodeKind.Input;
   }
 
+  get isImage(): boolean {
+    return this.kind === NodeKind.Image;
+  }
+
+  /**
+   * An Image's source: a PNG, JPEG, WebP or SVG file (a path the core reads,
+   * relative to the working directory) or its bytes. onImageLoad or
+   * onImageError follows.
+   */
+  src(source: string | Uint8Array): this {
+    this.alive();
+    if (!this.isImage) throw new Error(`mantou: src is for <Image>, not <${this.kindName}>`);
+    if (typeof source === "string") this.ui.enc.imagePath(this.id, source);
+    else this.ui.enc.imageData(this.id, source);
+    this.ui.schedule();
+    return this;
+  }
+
+  /** An Image's source was decoded: its natural size. Returns a function that removes the handler. */
+  onImageLoad(handler: (size: { width: number; height: number }) => void): () => void {
+    this.imageHandlers.load.push(handler);
+    return () => void this.imageHandlers.load.splice(this.imageHandlers.load.indexOf(handler) >>> 0, 1);
+  }
+
+  /** An Image's source couldn't be read or decoded. Returns a function that removes the handler. */
+  onImageError(handler: (message: string) => void): () => void {
+    this.imageHandlers.error.push(handler);
+    return () => void this.imageHandlers.error.splice(this.imageHandlers.error.indexOf(handler) >>> 0, 1);
+  }
+
+  /** @internal */
+  handleImage(result: { width: number; height: number } | { error: string }) {
+    this.imageState = result;
+    if ("error" in result) for (const h of [...this.imageHandlers.error]) h(result.error);
+    else for (const h of [...this.imageHandlers.load]) h(result);
+  }
+
   /** A name for messages: "View", "Text" or "Input". */
   get kindName(): string {
-    return this.isText ? "Text" : this.isInput ? "Input" : "View";
+    return this.isText ? "Text" : this.isInput ? "Input" : this.isImage ? "Image" : "View";
   }
 
   private assertInput(what: string) {
@@ -379,6 +419,7 @@ export class Node {
       child.alive();
       if (this.isText) throw new Error("mantou: <Text> holds only text; put views next to it, not inside it");
       if (this.isInput) throw new Error("mantou: <Input> has no children");
+      if (this.isImage) throw new Error("mantou: <Image> has no children");
     } else if (!this.isText && child.text.trim()) {
       this.ui.warnText(child.text);
     }
@@ -663,6 +704,22 @@ export class Ui {
     const size = { width, height, scale };
     this.windowSize = size;
     for (const h of [...this.resizeHandlers]) h(size);
+  }
+
+  /** Delivers an Image's load or error to its handlers. */
+  dispatchImage(targetId: number, result: { width: number; height: number } | { error: string }) {
+    this.nodes.get(targetId)?.handleImage(result);
+  }
+
+  /** Creates an Image (set its source with `src`). */
+  image(...styles: (Style | SharedStyle)[]): Node {
+    const id = this.freeIds.pop() ?? this.nextId++;
+    const node = new Node(this, id, NodeKind.Image);
+    this.nodes.set(id, node);
+    this.enc.create(id, NodeKind.Image);
+    for (const s of styles) s instanceof SharedStyle ? node.use(s) : node.style(s);
+    this.schedule();
+    return node;
   }
 
   /** Delivers a scroll view's new offset to its scroll handlers. */

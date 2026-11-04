@@ -109,6 +109,14 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       return;
   }
   if (node.isInput && setInputProperty(node, name, value, prev)) return;
+  if (node.isImage) {
+    if (name === "src") {
+      if (value !== undefined && value !== null && value !== prev) node.src(value as string | Uint8Array);
+      return;
+    }
+    if (name === "onLoad") return setHandler(node, name, value, (f: (s: { width: number; height: number }) => void) => node.onImageLoad(f));
+    if (name === "onError") return setHandler(node, name, value, (f: (m: string) => void) => node.onImageError(f));
+  }
   throw new Error(`mantou: <${node.kindName}> has no property "${name}"`);
 }
 
@@ -128,8 +136,8 @@ export const {
 } = createRenderer<Child>({
   createElement(tag) {
     const ui = currentUi();
-    const node = tag === "view" ? ui.view() : tag === "text" ? ui.textNode() : tag === "input" ? ui.input() : null;
-    if (!node) throw new Error(`mantou: unknown element <${tag}>; use <View>, <Text> or <Input>`);
+    const node = tag === "view" ? ui.view() : tag === "text" ? ui.textNode() : tag === "input" ? ui.input() : tag === "image" ? ui.image() : null;
+    if (!node) throw new Error(`mantou: unknown element <${tag}>; use <View>, <Text>, <Input> or <Image>`);
     if (getOwner()) onCleanup(() => node.release());
     return node;
   },

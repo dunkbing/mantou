@@ -1,6 +1,6 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { InputProps, JSX, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
+import type { ImageProps, InputProps, JSX, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
 import { createElement, currentUi, spread } from "./renderer";
 import { createSignal, onCleanup } from "./solid";
@@ -15,6 +15,18 @@ export function View(props: ViewProps): JSX.Element {
 /** Text, laid out and drawn by the core. Style it with color, fontSize, fontWeight, lineHeight, textAlign, maxLines… */
 export function Text(props: TextProps): JSX.Element {
   const node = createElement("text") as Node;
+  spread(node, props, false);
+  return node;
+}
+
+/**
+ * An image: PNG, JPEG, WebP or SVG, from a file path or bytes. Without a
+ * width and height it takes its natural size (keeping its aspect ratio when
+ * one is set); `objectFit` places it in its box, `borderRadius` rounds it,
+ * and `color` tints it (its alpha, in that colour: for icons).
+ */
+export function Image(props: ImageProps): JSX.Element {
+  const node = createElement("image") as Node;
   spread(node, props, false);
   return node;
 }

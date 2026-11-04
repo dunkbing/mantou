@@ -25,6 +25,20 @@ export interface ViewProps {
   children?: JSX.Element;
 }
 
+/** An image (see `Image`). */
+export interface ImageProps {
+  /** A PNG, JPEG, WebP or SVG: a path (relative to the working directory) or the file's bytes. */
+  src: string | Uint8Array;
+  style?: StyleProp;
+  /** The source was decoded: its natural size (logical px). */
+  onLoad?: (size: { width: number; height: number }) => void;
+  /** The source couldn't be read or decoded. */
+  onError?: (message: string) => void;
+  onPress?: (e: PressEvent) => void;
+  onLayout?: (rect: Rect) => void;
+  ref?: Node | ((node: Node) => void);
+}
+
 /** A scroll view (see `Scroll`). */
 export interface ScrollProps {
   /** The scroll view's own style; `overflow: "scroll"` is set for you. */
@@ -97,6 +111,7 @@ export namespace JSX {
     view: ViewProps;
     text: TextProps;
     input: InputProps;
+    image: ImageProps;
   }
   export interface IntrinsicAttributes {}
 }

@@ -107,6 +107,21 @@ impl Ops {
     pub fn focus(&mut self, id: u32) -> &mut Self {
         self.op(op::FOCUS, &[id])
     }
+    pub fn create_image(&mut self, id: u32) -> &mut Self {
+        self.op(op::CREATE, &[id, crate::protocol::node_kind::IMAGE])
+    }
+    pub fn image_path(&mut self, id: u32, path: &str) -> &mut Self {
+        let mut w = vec![id];
+        w.extend(string_words(path));
+        self.op(op::IMAGE_PATH, &w)
+    }
+    pub fn image_data(&mut self, id: u32, data: &[u8]) -> &mut Self {
+        let mut padded = data.to_vec();
+        padded.resize(data.len().div_ceil(4) * 4, 0);
+        let mut w = vec![id, data.len() as u32];
+        w.extend(padded.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+        self.op(op::IMAGE_DATA, &w)
+    }
     pub fn font(&mut self, data: &[u8]) -> &mut Self {
         let mut padded = data.to_vec();
         padded.resize(data.len().div_ceil(4) * 4, 0);

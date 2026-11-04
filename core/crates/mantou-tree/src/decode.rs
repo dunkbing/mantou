@@ -44,6 +44,8 @@ pub enum Op {
     Focus { id: u32 },
     FocusScope { id: u32, flags: u32 },
     Font(Vec<u8>),
+    ImagePath { id: u32, path: String },
+    ImageData { id: u32, data: Vec<u8> },
     WindowSize { width: f32, height: f32 },
     /// Logical px, 0 = no limit.
     WindowLimits { min: [f32; 2], max: [f32; 2], flags: u32 },
@@ -243,6 +245,18 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "WINDOW_LIMITS needs finite sizes of 0 or more");
                 }
                 Op::WindowLimits { min: [v[0], v[1]], max: [v[2], v[3]], flags: a[4] }
+            }
+            op::IMAGE_PATH => Op::ImagePath { id: id_then_string(a, i, "IMAGE_PATH")?, path: string(bytes, a, i + 1, 1, "IMAGE_PATH")? },
+            op::IMAGE_DATA => {
+                if n < 2 {
+                    return err(i, "IMAGE_DATA needs an id and a length");
+                }
+                let len = a[1] as usize;
+                if len.div_ceil(4) != n - 2 {
+                    return err(i, "IMAGE_DATA length does not match its words");
+                }
+                let from = (i + 3) * 4;
+                Op::ImageData { id: a[0], data: bytes[from..from + len].to_vec() }
             }
             op::FONT => {
                 let Some(&len) = a.first() else { return err(i, "FONT needs a length") };

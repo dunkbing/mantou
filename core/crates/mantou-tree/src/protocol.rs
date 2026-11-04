@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 10;
+pub const PROTOCOL_VERSION: u32 = 11;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -51,6 +51,10 @@ pub mod op {
     pub const WINDOW_SIZE: u32 = 23;
     /// The window's smallest and largest content size (logical px, 0 = no limit), and WindowFlag bits.
     pub const WINDOW_LIMITS: u32 = 24;
+    /// An Image's source: a PNG, JPEG, WebP or SVG file the core reads and decodes. IMAGE_LOAD or IMAGE_ERROR follows.
+    pub const IMAGE_PATH: u32 = 25;
+    /// An Image's source as the file's bytes.
+    pub const IMAGE_DATA: u32 = 26;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -80,6 +84,8 @@ pub fn op_name(code: u32) -> &'static str {
         22 => "FONT_FAMILY",
         23 => "WINDOW_SIZE",
         24 => "WINDOW_LIMITS",
+        25 => "IMAGE_PATH",
+        26 => "IMAGE_DATA",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -89,6 +95,7 @@ pub mod node_kind {
     pub const VIEW: u32 = 1;
     pub const TEXT: u32 = 2;
     pub const INPUT: u32 = 3;
+    pub const IMAGE: u32 = 4;
 }
 
 pub mod event_mask {
@@ -186,6 +193,10 @@ pub mod event {
     pub const SUBMIT: u32 = 15;
     /// A scroll view with a Scroll listener scrolled (at most once per frame). a = scroll view, b = x, c = y (f32, logical px: the offset).
     pub const SCROLL: u32 = 17;
+    /// An Image's source was decoded. a = image node, b = natural width, c = natural height (f32, logical px).
+    pub const IMAGE_LOAD: u32 = 20;
+    /// An Image's source couldn't be read or decoded. a = image node, c = byte length; then the UTF-8 message, padded to words.
+    pub const IMAGE_ERROR: u32 = 21;
     /// A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left).
     pub const LAYOUT: u32 = 16;
     /// A platform service (dialog, context menu) finished. a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words.
@@ -274,6 +285,12 @@ pub mod scrollbar {
     pub const NONE: u32 = 1;
 }
 
+pub mod object_fit {
+    pub const FILL: u32 = 0;
+    pub const CONTAIN: u32 = 1;
+    pub const COVER: u32 = 2;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -343,10 +360,11 @@ pub enum Prop {
     ShadowBlur = 53,
     ShadowSpread = 54,
     ShadowColor = 55,
+    ObjectFit = 56,
 }
 
 impl Prop {
-    pub const COUNT: usize = 55;
+    pub const COUNT: usize = 56;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -405,6 +423,7 @@ impl Prop {
             53 => Prop::ShadowBlur,
             54 => Prop::ShadowSpread,
             55 => Prop::ShadowColor,
+            56 => Prop::ObjectFit,
             _ => return None,
         })
     }
@@ -466,6 +485,7 @@ impl Prop {
             Prop::ShadowBlur => "shadowBlur",
             Prop::ShadowSpread => "shadowSpread",
             Prop::ShadowColor => "shadowColor",
+            Prop::ObjectFit => "objectFit",
         }
     }
 
@@ -526,6 +546,7 @@ impl Prop {
             Prop::ShadowBlur => ValueKind::F32,
             Prop::ShadowSpread => ValueKind::F32,
             Prop::ShadowColor => ValueKind::Color,
+            Prop::ObjectFit => ValueKind::Enum(3),
         }
     }
 
@@ -559,6 +580,7 @@ impl Prop {
             Prop::FontStyle => &["normal", "italic"],
             Prop::Overflow => &["visible", "hidden", "scroll"],
             Prop::Scrollbar => &["auto", "none"],
+            Prop::ObjectFit => &["fill", "contain", "cover"],
             _ => &[],
         }
     }

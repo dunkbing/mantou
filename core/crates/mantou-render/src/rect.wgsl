@@ -25,6 +25,8 @@ struct VsOut {
 };
 
 @group(0) @binding(0) var atlas: texture_2d<f32>;
+@group(0) @binding(1) var image: texture_2d<f32>;
+@group(0) @binding(2) var image_sampler: sampler;
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
@@ -38,7 +40,7 @@ fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
     out.color = inst.color;
     out.uv = mix(inst.uv.xy, inst.uv.zw, c);
     out.clip = inst.clip;
-    out.glyph = select(0u, 1u, inst.uv.z > inst.uv.x);
+    out.glyph = select(0u, 1u, inst.uv.z > inst.uv.x && inst.params.w < 1.5);
     out.rect_px = inst.rect_px;
     out.border_color = inst.border_color;
     out.params = inst.params;
@@ -73,6 +75,20 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     }
     let radius = in.params.x;
     let border = in.params.y;
+    if (in.params.w > 1.5) {
+        // An image: its texels (uv, in pixels of the image) sampled with
+        // filtering, cut to the quad's rounded corners; tinted, it's drawn as
+        // its alpha in the quad's colour.
+        let dims = vec2<f32>(textureDimensions(image));
+        let tex = textureSampleLevel(image, image_sampler, in.uv / dims, 0.0);
+        var mask = 1.0;
+        if (radius > 0.0) {
+            mask = clamp(0.5 - rounded_box(p, in.rect_px.xy, in.rect_px.zw, radius), 0.0, 1.0);
+        }
+        let a = tex.a * in.color.a * mask;
+        let rgb = select(tex.rgb, in.color.rgb, in.params.z > 0.5);
+        return vec4<f32>(rgb * a, a);
+    }
     if (in.params.w > 0.5) {
         // A box shadow: the rounded box's coverage, blurred. Convolving the
         // distance with a Gaussian gives the classic erf falloff; a sharp

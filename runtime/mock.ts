@@ -37,6 +37,11 @@ export class MockCore {
     this.ui.dispatchLayout(nodeId, rect);
   }
 
+  /** The core decoded an Image's source (or failed to). */
+  image(nodeId: number, result: { width: number; height: number } | { error: string }) {
+    this.ui.dispatchImage(nodeId, result);
+  }
+
   /** The core scrolled a scroll view to an offset. */
   scroll(nodeId: number, x: number, y: number) {
     this.ui.dispatchScroll(nodeId, x, y);

@@ -193,6 +193,11 @@ impl Instance {
                     let words = mantou_tree::encode::string_words(&text);
                     self.push_record(&[ev::TEXT_CHANGED, id, rev, words[0]], &words[1..]);
                 }
+                TreeEvent::ImageLoad { id, size: [w, h] } => self.push_event([ev::IMAGE_LOAD, id, w.to_bits(), h.to_bits()]),
+                TreeEvent::ImageError { id, message } => {
+                    let words = mantou_tree::encode::string_words(&message);
+                    self.push_record(&[ev::IMAGE_ERROR, id, 0, words[0]], &words[1..]);
+                }
                 TreeEvent::Scroll { id, offset: [x, y] } => self.push_event([ev::SCROLL, id, x.to_bits(), y.to_bits()]),
                 TreeEvent::Layout { id, rect: [x, y, w, h] } => {
                     self.push_record(&[ev::LAYOUT, id, x.to_bits(), y.to_bits()], &[w.to_bits(), h.to_bits()]);

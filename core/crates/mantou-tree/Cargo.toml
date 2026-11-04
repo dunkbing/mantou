@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 mantou-text = { path = "../mantou-text" }
+mantou-image = { path = "../mantou-image" }
 # Without `calc`: Mantou never builds calc() lengths, the only ones that hold a pointer (see `unsafe impl Send for Tree`).
 taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
 

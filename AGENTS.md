@@ -15,6 +15,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `runtime/` | The rest: `main.ts` (bootstrap, main thread), `worker.ts` (Worker entry: registers the plugin, imports the app), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
 | `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`; inputs' focus, keys, pointer and IME (`src/tree/input.rs`). No platform deps |
 | `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL); the inputs' editor (`editor.rs`: caret, selection, undo, limits, scrolling) |
+| `core/crates/mantou-image` | Images: PNG/JPEG/WebP decoding and SVG rasterization (`resvg`), as RGBA pixels. No platform deps |
 | `core/crates/mantou-render` | wgpu renderer: one instanced pipeline for rectangles (SDF rounded corners, borders) and glyphs, with clip rects; to a window surface or offscreen |
 | `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`: events, the clipboard), the winit window (`window.rs`: keys, IME), headless test hooks |
 | `core/fuzz` | cargo-fuzz targets (`decode`, `apply`, `layout`); nightly only, its own workspace |

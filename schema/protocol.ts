@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 10;
+export const PROTOCOL_VERSION = 11;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
@@ -43,10 +43,12 @@ export const ops: OpDef[] = [
   { name: "FONT_FAMILY", code: 22, operands: [["family", "u32"], ["names", "string"]], doc: "Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts." },
   { name: "WINDOW_SIZE", code: 23, operands: [["width", "f32"], ["height", "f32"]], doc: "Resize the window's content area (logical px). A headless instance resizes its viewport." },
   { name: "WINDOW_LIMITS", code: 24, operands: [["minWidth", "f32"], ["minHeight", "f32"], ["maxWidth", "f32"], ["maxHeight", "f32"], ["flags", "u32"]], doc: "The window's smallest and largest content size (logical px, 0 = no limit), and WindowFlag bits." },
+  { name: "IMAGE_PATH", code: 25, operands: [["id", "id"], ["path", "string"]], doc: "An Image's source: a PNG, JPEG, WebP or SVG file the core reads and decodes. IMAGE_LOAD or IMAGE_ERROR follows." },
+  { name: "IMAGE_DATA", code: 26, operands: [["id", "id"], ["data", "bytes"]], doc: "An Image's source as the file's bytes." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
-export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
+export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4 } as const;
 
 /** WINDOW_LIMITS flags (and the window config's). */
 export const windowFlags = { NotResizable: 1 } as const;
@@ -140,6 +142,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "shadowBlur", code: 53, type: "f32", default: "0 (a blur radius, like CSS's: twice the Gaussian's sigma)" },
   { name: "shadowSpread", code: 54, type: "f32", default: "0" },
   { name: "shadowColor", code: 55, type: "color", default: "transparent (no shadow)" },
+  // Images: how the image fills its box. (`color` on an Image tints it: its alpha, in that colour.)
+  { name: "objectFit", code: 56, type: { enum: ["fill", "contain", "cover"] }, default: "fill" },
 ];
 
 /**
@@ -164,6 +168,8 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "TEXT_CHANGED", code: 14, fields: "a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words", doc: "The user changed an Input's text." },
   { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
   { name: "SCROLL", code: 17, fields: "a = scroll view, b = x, c = y (f32, logical px: the offset)", doc: "A scroll view with a Scroll listener scrolled (at most once per frame)." },
+  { name: "IMAGE_LOAD", code: 20, fields: "a = image node, b = natural width, c = natural height (f32, logical px)", doc: "An Image's source was decoded." },
+  { name: "IMAGE_ERROR", code: 21, fields: "a = image node, c = byte length; then the UTF-8 message, padded to words", doc: "An Image's source couldn't be read or decoded." },
   { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
   { name: "SERVICE_RESULT", code: 18, fields: "a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words", doc: "A platform service (dialog, context menu) finished." },
   { name: "MENU", code: 19, fields: "c = byte length; then the UTF-8 id of the menu item, padded to words", doc: "The user chose an item of the app menu." },

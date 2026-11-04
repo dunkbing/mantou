@@ -283,5 +283,26 @@
   {
     "op": "FONT",
     "bytes": 6
+  },
+  {
+    "op": "CREATE",
+    "id": 6,
+    "kind": 4
+  },
+  {
+    "op": "IMAGE_PATH",
+    "id": 6,
+    "path": "icons/archive.svg"
+  },
+  {
+    "op": "IMAGE_DATA",
+    "id": 6,
+    "bytes": 4
+  },
+  {
+    "op": "STYLE",
+    "id": 6,
+    "prop": "objectFit",
+    "value": "cover"
   }
 ]
