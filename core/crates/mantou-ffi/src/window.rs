@@ -152,6 +152,8 @@ pub struct App {
     /// Whether the window told the OS a password field has the focus.
     ime_password: bool,
     menus: crate::platform::Menus,
+    /// The AccessKit adapter: tells screen readers about the tree while one is running.
+    access: Option<accesskit_winit::Adapter>,
     /// The cursor shown (protocol `cursor`).
     cursor: u32,
 }
@@ -181,7 +183,7 @@ fn cursor_icon(c: u32) -> CursorIcon {
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), cursor: cursor::DEFAULT }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, cursor: cursor::DEFAULT }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -223,6 +225,17 @@ impl App {
         }
     }
 
+    /// Sends the accessibility tree to the adapter, if a screen reader is running and the tree may have changed.
+    fn sync_access(&mut self, force: bool) {
+        if !(self.inst.access_dirty.swap(false, Ordering::AcqRel) || force) {
+            return;
+        }
+        let inst = self.inst.clone();
+        if let Some(a) = self.access.as_mut() {
+            a.update_if_active(|| lock(&inst.tree).accessibility());
+        }
+    }
+
     fn draw(&mut self) {
         let Some(window) = self.window.clone() else { return };
         let (title, size, limits) = {
@@ -239,6 +252,7 @@ impl App {
             let _ = window.request_inner_size(LogicalSize::new(w, h));
         }
         self.sync_ime(&window);
+        self.sync_access(false);
         self.sync_cursor();
         // Animations advance once a frame, on the main thread, with no JS;
         // while any runs, the next frame is asked for (vsync paces them).
@@ -325,6 +339,7 @@ impl App {
             return;
         }
         let attrs = Window::default_attributes()
+            .with_visible(false) // the AccessKit adapter must exist before the window is shown
             .with_title(self.config.title.clone())
             .with_inner_size(LogicalSize::new(self.config.width, self.config.height));
         let window = match el.create_window(attrs) {
@@ -349,6 +364,10 @@ impl App {
                 *lock(&G.info) = format!("no GPU ({e}); {}", std::env::consts::OS);
             }
         }
+        if let Some(proxy) = lock(&G.proxy).clone() {
+            self.access = Some(accesskit_winit::Adapter::with_event_loop_proxy(el, &window, proxy));
+        }
+        window.set_visible(true);
         let size = window.inner_size();
         let scale = window.scale_factor() as f32;
         self.window = Some(window.clone());
@@ -379,11 +398,19 @@ impl App {
             UserEvent::TestWheel(x, y, dx, dy) => self.redraw_if(self.inst.wheel(x, y, dx, dy)),
             UserEvent::TestText(t) => self.redraw_if(self.inst.insert_text(&t)),
             UserEvent::TestIme(t, cursor) => self.redraw_if(self.inst.ime_preedit(&t, cursor)),
+            UserEvent::Access(e) => match e.window_event {
+                accesskit_winit::WindowEvent::InitialTreeRequested => self.sync_access(true),
+                accesskit_winit::WindowEvent::ActionRequested(req) => self.redraw_if(self.inst.access_action(req)),
+                accesskit_winit::WindowEvent::AccessibilityDeactivated => {}
+            },
             UserEvent::Service(req, body) => guard((), || crate::platform::handle(&self.inst, self.window.as_ref(), &mut self.menus, req, &body)),
         }
     }
 
     fn on_window_event(&mut self, _el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        if let (Some(a), Some(w)) = (self.access.as_mut(), self.window.as_ref()) {
+            a.process_event(w, &event);
+        }
         let inst = self.inst.clone();
         match event {
             WindowEvent::CloseRequested => inst.push_event([ev::CLOSE_REQUESTED, 0, 0, 0]),

@@ -108,6 +108,8 @@ pub struct Instance {
     answers: Mutex<VecDeque<Option<String>>>,
     /// The last service request (JSON), for tests to assert on.
     pub last_service: Mutex<String>,
+    /// Something changed that assistive technology may need to hear about; the window sends the tree and clears it.
+    pub access_dirty: AtomicBool,
 }
 
 impl Instance {
@@ -128,6 +130,7 @@ impl Instance {
             started: Instant::now(),
             answers: Mutex::new(VecDeque::new()),
             last_service: Mutex::new(String::new()),
+            access_dirty: AtomicBool::new(false),
         }
     }
 
@@ -158,6 +161,30 @@ impl Instance {
         }
         bump(&self.stats.events);
         self.wake_js();
+    }
+
+    /// Does what assistive technology asked for: focus an input, press a node, or set an input's text.
+    /// Returns whether the scene may have changed.
+    pub fn access_action(&self, req: accesskit::ActionRequest) -> bool {
+        use accesskit::{Action, ActionData};
+        let Some(id) = mantou_tree::tree::access::tree_id(req.target_node) else { return false };
+        match req.action {
+            Action::Focus => self.edit(|t| t.apply(&mantou_tree::Ops::new().focus(id).bytes()).is_ok()),
+            Action::Click => {
+                let center = lock(&self.tree).rect(id).map(|r| ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0));
+                if let Some((x, y)) = center {
+                    bump(&self.stats.presses);
+                    self.push_event([ev::PRESS, id, x.to_bits(), y.to_bits()]);
+                }
+                false
+            }
+            Action::SetValue => {
+                let Some(ActionData::Value(v)) = req.data else { return false };
+                // As if the user selected everything and typed the value: the core owns the text, so JS hears TEXT_CHANGED.
+                self.edit(|t| t.apply(&mantou_tree::Ops::new().focus(id).select(id, 0, u32::MAX).bytes()).is_ok() && t.insert_text(&v))
+            }
+            _ => false,
+        }
     }
 
     /// Queues the answer to a service request (`None`: the user cancelled).
@@ -271,6 +298,7 @@ impl Instance {
     /// Lays out if needed, publishes a new scene, and queues the tree's
     /// events (layout changes among them). Call with the tree locked.
     fn publish(&self, tree: &mut Tree) -> bool {
+        self.access_dirty.store(true, Ordering::Release);
         let ran = tree.layout();
         // An unchanged tree would draw the same scene: keep the one published.
         if ran || tree.scene_stale() {

@@ -90,6 +90,14 @@ pub(crate) enum UserEvent {
     TestIme(String, Option<(usize, usize)>),
     /// A platform service request (JSON) to run on the main thread: its id and body.
     Service(u32, String),
+    /// Assistive technology asking for the tree or an action (accesskit_winit's events).
+    Access(accesskit_winit::Event),
+}
+
+impl From<accesskit_winit::Event> for UserEvent {
+    fn from(e: accesskit_winit::Event) -> Self {
+        UserEvent::Access(e)
+    }
 }
 
 /// Process-wide state: the instances and the window's event loop.
