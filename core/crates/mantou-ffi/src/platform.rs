@@ -152,6 +152,27 @@ mod mac {
 
     /// The id of the default Quit item: it asks the window to close, like its close button, so the app can veto.
     const QUIT: &str = "mantou:quit";
+    /// The prefix of the Edit items' ids.
+    const EDIT: &str = "mantou:edit:";
+
+    /// An Edit item: choosing it (or its shortcut) presses the same keys in the core.
+    fn edit_item(name: &str, label: &str, shortcut: &str) -> Box<dyn IsMenuItem> {
+        Box::new(MenuItem::with_id(format!("{EDIT}{name}"), label, true, shortcut.parse().ok()))
+    }
+
+    /// The key (a Unicode scalar) and modifiers an Edit item stands for.
+    fn edit_keys(name: &str) -> Option<(u32, u32)> {
+        use mantou_tree::protocol::key_modifier::{META, SHIFT};
+        Some(match name {
+            "undo" => ('z' as u32, META),
+            "redo" => ('z' as u32, META | SHIFT),
+            "cut" => ('x' as u32, META),
+            "copy" => ('c' as u32, META),
+            "paste" => ('v' as u32, META),
+            "selectAll" => ('a' as u32, META),
+            _ => return None,
+        })
+    }
 
     fn accel(item: &Value) -> Option<Accelerator> {
         item["accelerator"].as_str()?.parse().ok()
@@ -165,12 +186,14 @@ mod mac {
         if let Some(role) = item["role"].as_str() {
             let label = item["label"].as_str();
             let p = match role {
-                "undo" => PredefinedMenuItem::undo(label),
-                "redo" => PredefinedMenuItem::redo(label),
-                "cut" => PredefinedMenuItem::cut(label),
-                "copy" => PredefinedMenuItem::copy(label),
-                "paste" => PredefinedMenuItem::paste(label),
-                "selectAll" => PredefinedMenuItem::select_all(label),
+                // Editing belongs to the core's inputs, not to AppKit's responder chain (nothing in the
+                // window's view answers `copy:`, and a native item would swallow Cmd+C before the input saw it).
+                "undo" => return out.push(edit_item("undo", label.unwrap_or("Undo"), "cmd+z")),
+                "redo" => return out.push(edit_item("redo", label.unwrap_or("Redo"), "cmd+shift+z")),
+                "cut" => return out.push(edit_item("cut", label.unwrap_or("Cut"), "cmd+x")),
+                "copy" => return out.push(edit_item("copy", label.unwrap_or("Copy"), "cmd+c")),
+                "paste" => return out.push(edit_item("paste", label.unwrap_or("Paste"), "cmd+v")),
+                "selectAll" => return out.push(edit_item("selectAll", label.unwrap_or("Select All"), "cmd+a")),
                 "hide" => PredefinedMenuItem::hide(label),
                 "hideOthers" => PredefinedMenuItem::hide_others(label),
                 "showAll" => PredefinedMenuItem::show_all(label),
@@ -240,7 +263,10 @@ mod mac {
         fn listen(&self, _inst: &Instance) {
             MenuEvent::set_event_handler(Some(|e: MenuEvent| {
                 let inst = crate::app();
-                if e.id.0 == QUIT {
+                if let Some((key, mods)) = e.id.0.strip_prefix(EDIT).and_then(edit_keys) {
+                    crate::send(crate::UserEvent::TestKey(key, true, mods));
+                    crate::send(crate::UserEvent::TestKey(key, false, mods));
+                } else if e.id.0 == QUIT {
                     inst.push_event([mantou_tree::protocol::event::CLOSE_REQUESTED, 0, 0, 0]);
                 } else {
                     inst.push_menu(&e.id.0);

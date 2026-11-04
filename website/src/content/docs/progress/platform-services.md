@@ -37,16 +37,21 @@ h.chooseMenu("open");                 // the user picks an app-menu item
 | | |
 |---|---|
 | Headless API and tests | Done (macOS). |
-| File dialogs, message boxes (`rfd`), app menu and context menu (`muda`) on macOS | **Written, not yet run in a window** (the Mac's screen was locked). Checklist below. |
+| App menu (`muda`) on macOS: the default menus, Cmd+Q, the Edit shortcuts | Checked in a window (below). |
+| File dialogs, message boxes (`rfd`), `setMenu`, `onMenu` and `showMenu` on macOS | **Written, not yet run in a window.** Checklist below. |
 | Windows and Linux app menu and context menus | Not started: they answer as cancelled. File dialogs and message boxes are written for every platform, but only the macOS build has been compiled. |
 
 ## macOS checklist
 
-To tick off on a Mac with an unlocked screen:
+Checked on an Apple M4 by posting real key events to the running to-do example and reading the menu bar and the field through the accessibility API:
 
-- [ ] The default menus appear: App, Edit, Window; Cmd+H hides, Cmd+M minimizes.
-- [ ] Cmd+Q and the App menu's Quit send `closeRequested` (the counter exits).
-- [ ] **Cmd+C / Cmd+V / Cmd+A / Cmd+Z in an `<Input>` still reach the core's editor** with the Edit menu installed. The Edit items have no responder in the window's view, so AppKit should leave their key equivalents alone; if it doesn't, the shortcuts are swallowed and this is a bug.
+- [x] The default menus appear: App, Edit and Window, with Undo, Redo, Cut, Copy, Paste, Select All and their shortcuts. (Cmd+H and Cmd+M not tried.)
+- [x] Cmd+Q sends `closeRequested` and the app exits.
+- [x] Cmd+A, Cmd+C, Cmd+X, Cmd+V, Cmd+Z and Cmd+Shift+Z work in an `<Input>` with the Edit menu installed.
 - [ ] `setMenu` replaces the menus; `onMenu` hears the chosen item and its accelerator.
 - [ ] `showMenu` at the pointer resolves to the chosen id, and to `null` on Escape.
 - [ ] `openFile` (one, several, folders, filters), `saveFile` and `message` (one, two and three buttons) open over the app and resolve correctly.
+
+### A bug the check found
+
+The first version used `muda`'s predefined Edit items (`copy:`, `paste:`…). Nothing in the window's view answers those selectors, and the menu still consumed Cmd+C before the input saw it: with the menu installed Cmd+A, Cmd+C and Cmd+X did nothing, and without it they worked. The Edit items (the roles `undo`, `redo`, `cut`, `copy`, `paste`, `selectAll`) are now ordinary items that press the same keys in the core, so there is one editing path and the menu items and shortcuts both work.
