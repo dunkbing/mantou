@@ -108,6 +108,10 @@ pub(crate) struct Globals {
     instances: Mutex<HashMap<u32, Arc<Instance>>>,
     next_handle: AtomicU32,
     proxy: Mutex<Option<EventLoopProxy<UserEvent>>>,
+    /// Service requests made before the event loop started (the app's first turn runs before `mt_run` is up); sent when it is.
+    early: Mutex<Vec<UserEvent>>,
+    /// Whether `mt_run` has started its loop (once; a request after it ended is refused, not queued).
+    started: AtomicBool,
     quit_requested: AtomicBool,
     pub(crate) exit_code: AtomicI32,
     pub(crate) info: Mutex<String>,
@@ -119,6 +123,8 @@ pub(crate) static G: LazyLock<Globals> = LazyLock::new(|| Globals {
     instances: Mutex::new(HashMap::new()),
     next_handle: AtomicU32::new(APP + 1),
     proxy: Mutex::new(None),
+    early: Mutex::new(Vec::new()),
+    started: AtomicBool::new(false),
     quit_requested: AtomicBool::new(false),
     exit_code: AtomicI32::new(0),
     info: Mutex::new(String::new()),
@@ -135,6 +141,19 @@ fn get(handle: u32) -> Option<Arc<Instance>> {
         return Some(app());
     }
     lock(&G.instances).get(&handle).cloned()
+}
+
+/// Sends a service request; before the event loop has started, holds it until it does.
+fn send_service(ev: UserEvent) -> bool {
+    let proxy = lock(&G.proxy);
+    match proxy.as_ref() {
+        Some(p) => p.send_event(ev).is_ok(),
+        None if !G.started.load(Ordering::Acquire) => {
+            lock(&G.early).push(ev);
+            true
+        }
+        None => false,
+    }
 }
 
 fn send(ev: UserEvent) -> bool {
@@ -247,7 +266,15 @@ pub unsafe extern "C" fn mt_run(cfg: *const u8, len: u32) -> i32 {
             }
         };
         event_loop.set_control_flow(ControlFlow::Wait);
-        *lock(&G.proxy) = Some(event_loop.create_proxy());
+        {
+            let proxy = event_loop.create_proxy();
+            let mut slot = lock(&G.proxy);
+            G.started.store(true, Ordering::Release);
+            for ev in lock(&G.early).drain(..) {
+                let _ = proxy.send_event(ev);
+            }
+            *slot = Some(proxy);
+        }
         if G.quit_requested.load(Ordering::Acquire) {
             *lock(&G.proxy) = None;
             return G.exit_code.load(Ordering::Acquire);
@@ -496,7 +523,7 @@ pub unsafe extern "C" fn mt_service(inst: u32, req: u32, ptr: *const u8, len: u3
                 _ => i.push_service_result(req, None),
             }
             0
-        } else if send(UserEvent::Service(req, body)) {
+        } else if send_service(UserEvent::Service(req, body)) {
             0
         } else {
             1
