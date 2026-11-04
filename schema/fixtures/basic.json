@@ -113,6 +113,13 @@
     "title": "Mantou ✓"
   },
   {
+    "op": "ACCESS",
+    "id": 3,
+    "role": 3,
+    "flags": 1,
+    "label": "Done ✓"
+  },
+  {
     "op": "STYLE_RESET",
     "id": 1,
     "prop": "width"

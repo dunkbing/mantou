@@ -44,3 +44,18 @@ test("Tab goes to the notes, which take several lines", () => {
   const notes = h.focused()!;
   expect(h.value(notes)).toBe("one\ntwo");
 });
+
+test("a screen reader sees a form and a list of checkboxes, and a tick changes one state", () => {
+  const h = todos();
+  h.type("Buy rice\n");
+  h.type("Call Ana\n");
+  const tree = () => h.accessibility().split("\n").map((l) => l.trim()).filter(Boolean);
+  expect(tree()).toContain('TextInput "New to-do" value=""');
+  expect(tree()).toContain('CheckBox "Buy rice" False');
+  expect(tree()).toContain('CheckBox "Call Ana" False');
+  expect(tree()).toContain('Status "2 left"');
+  h.press([...h.ui.nodes.values()].find((n) => n.isText && n.textContent === "Buy rice")!);
+  expect(tree()).toContain('CheckBox "Buy rice" True');
+  expect(tree()).toContain('CheckBox "Call Ana" False');
+  expect(tree()).toContain('Status "1 left"');
+});

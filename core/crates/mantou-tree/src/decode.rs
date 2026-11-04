@@ -40,6 +40,7 @@ pub enum Op {
     Text { id: u32, text: String },
     Value { id: u32, rev: u32, text: String },
     Placeholder { id: u32, text: String },
+    Access { id: u32, role: u32, flags: u32, label: String },
     InputOptions { id: u32, flags: u32, max_length: u32 },
     Focus { id: u32 },
     FocusScope { id: u32, flags: u32 },
@@ -225,6 +226,12 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "VALUE needs an id, a rev and a length");
                 }
                 Op::Value { id: a[0], rev: a[1], text: string(bytes, a, i + 1, 2, "VALUE")? }
+            }
+            op::ACCESS => {
+                if n < 4 {
+                    return err(i, "ACCESS needs an id, a role, flags and a length");
+                }
+                Op::Access { id: a[0], role: a[1], flags: a[2], label: string(bytes, a, i + 1, 3, "ACCESS")? }
             }
             op::INPUT_OPTIONS => {
                 fixed(3)?;

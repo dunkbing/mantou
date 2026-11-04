@@ -14,6 +14,7 @@ use taffy::style::{AlignContent, AlignItems, Dimension, LengthPercentage, Length
 use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
 
+pub mod access;
 mod anim;
 mod hover;
 mod image;
@@ -214,6 +215,8 @@ struct Node {
     reported: Option<[f32; 4]>,
     /// FOCUS_SCOPE flags (0 = not a focus scope).
     scope: u32,
+    /// What ACCESS told assistive technology (role, flags, label).
+    access: Option<access::Access>,
     /// A scroll view's offset and limits (overflow: "scroll").
     scroll: Option<ScrollState>,
     /// An Image node's source.
@@ -446,6 +449,7 @@ impl Tree {
                     input,
                     reported: None,
                     scope: 0,
+                    access: None,
                     scroll: None,
                     image: (kind == p::node_kind::IMAGE).then(Box::default),
                     drawn: RefCell::new(None),
@@ -627,6 +631,9 @@ impl Tree {
                 }
                 self.text.get_or_insert_with(TextEngine::new).set_family(family, &names);
                 self.fonts_changed();
+            }
+            Op::Access { id, role, flags, label } => {
+                self.node(id)?.access = (role != 0 || flags != 0 || !label.is_empty()).then_some(access::Access { role, flags, label });
             }
             Op::FocusScope { id, flags } => {
                 self.node(id)?.scope = flags;

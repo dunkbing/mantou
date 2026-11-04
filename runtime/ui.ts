@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
+import { AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { expandStyle, f32bits, parseColor, type Style } from "./style";
@@ -68,6 +68,22 @@ function easingCode(e: Easing | undefined): number {
 function animatable(prop: string): AnimatableProp {
   if (!ANIMATABLE.includes(prop as AnimatableProp)) throw new Error(`mantou: ${prop} can't be animated (only ${ANIMATABLE.join(", ")})`);
   return prop as AnimatableProp;
+}
+
+export type AccessRoleName = Uncapitalize<Exclude<keyof typeof AccessRole, "Auto">>;
+
+/** What assistive technology is told about a node. */
+export interface AccessInfo {
+  /** Default: from the node's kind (Text a label, an Input a text field, a View with onPress a button). "none" leaves the node itself out. */
+  role?: AccessRoleName;
+  /** Its name; default: the text inside it. */
+  label?: string;
+  /** For checkbox, switch, radio and menuItem roles; "mixed" for in between. */
+  checked?: boolean | "mixed";
+  selected?: boolean;
+  disabled?: boolean;
+  /** Leave the node and what's inside it out. */
+  hidden?: boolean;
 }
 
 /** A laid-out box, in logical px from the window's top left. */
@@ -423,9 +439,33 @@ export class Node {
     }
   }
 
+  /**
+   * What screen readers are told about this node: a role (the default for the
+   * kind when omitted), a name, and states. Sent once per turn.
+   */
+  access(a: AccessInfo): this {
+    this.alive();
+    this.acc = { ...this.acc, ...a };
+    this.ui.markPending(this);
+    return this;
+  }
+  private acc: AccessInfo = {};
+  private sentAcc = "0,0,";
+
   /** @internal Sends what is batched until the end of the turn (text, input options). */
   flushPending() {
     if (this.released) return;
+    {
+      const a = this.acc;
+      const role = a.role ? AccessRole[(a.role[0].toUpperCase() + a.role.slice(1)) as keyof typeof AccessRole] : 0;
+      const flags = (a.checked === true ? AccessFlag.Checked : 0) | (a.checked === "mixed" ? AccessFlag.Mixed : 0) | (a.selected ? AccessFlag.Selected : 0) | (a.disabled ? AccessFlag.Disabled : 0) | (a.hidden ? AccessFlag.Hidden : 0);
+      const label = a.label ?? "";
+      const key = `${role},${flags},${label}`;
+      if (key !== this.sentAcc) {
+        this.sentAcc = key;
+        this.ui.enc.access(this.id, role, flags, label);
+      }
+    }
     if (this.isText) {
       const text = this.textContent;
       if (text !== this.sentText) {

@@ -1,12 +1,26 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { Node, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, Node, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
 
-export interface ViewProps {
+/** What screen readers are told about a node (design §10); see `Node.access`. */
+export interface AccessProps {
+  /** Default: from the kind (Text a label, Input a text field, a View with onPress a button). "none" leaves the node itself out. */
+  role?: AccessRoleName;
+  /** Its name; default: the text inside it. */
+  label?: string;
+  /** For checkbox, switch, radio and menuItem roles; "mixed" for in between. */
+  checked?: boolean | "mixed";
+  selected?: boolean;
+  disabled?: boolean;
+  /** Leave the node and what's inside it out. */
+  accessHidden?: boolean;
+}
+
+export interface ViewProps extends AccessProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
@@ -81,7 +95,7 @@ export interface ImageProps {
 }
 
 /** A scroll view (see `Scroll`). */
-export interface ScrollProps {
+export interface ScrollProps extends AccessProps {
   /** The scroll view's own style; `overflow: "scroll"` is set for you. */
   style?: StyleProp;
   /** The style of the content view inside, which holds the children. */
@@ -98,7 +112,7 @@ export interface ScrollProps {
 }
 
 /** Text: its children are strings and numbers (no views inside). */
-export interface TextProps {
+export interface TextProps extends AccessProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
@@ -115,7 +129,7 @@ export interface TextProps {
 }
 
 /** A text field. Keys it uses (typing, arrows, shortcuts like copy) don't reach onKey handlers. */
-export interface InputProps {
+export interface InputProps extends AccessProps {
   /** Controlled: the text. Keep it in sync with onChange, or the input goes back to it. */
   value?: string;
   /** Uncontrolled: the text it starts with. */

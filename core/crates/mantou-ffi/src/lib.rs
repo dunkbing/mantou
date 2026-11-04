@@ -53,7 +53,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
 /// 7: the window config (mt_run) carries size limits and flags.
 /// 8: mt_input_selection; hover (POINTER_ENTER, POINTER_LEAVE), mt_test_input kind 3 (the pointer leaves), mt_test_cursor.
-pub const ABI_VERSION: u32 = 8;
+/// 9: the accessibility tree: mt_test_access (and the ACCESS op).
+pub const ABI_VERSION: u32 = 9;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -500,6 +501,18 @@ pub unsafe extern "C" fn mt_test_service(inst: u32, dst: *mut u8, cap: u32) -> u
     // SAFETY: guaranteed by the caller.
     let out = unsafe { bytes_mut(dst, cap) };
     with(inst, 0, |i| write_str(out, &lock(&i.last_service)))
+}
+
+/// Test hook: the accessibility tree as indented text (`Tree::accessibility_dump`).
+/// Writes at most `cap` bytes and returns the full length.
+///
+/// # Safety
+/// `dst` must be valid for writes of `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_access(inst: u32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, 0, |i| write_str(out, &lock(&i.tree).accessibility_dump()))
 }
 
 /// Test hook: the user chooses the app-menu item `id`.

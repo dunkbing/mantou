@@ -302,6 +302,14 @@ export class HeadlessCore {
     return n ? JSON.parse(new TextDecoder().decode(buf.subarray(0, Math.min(n, buf.byteLength)))) : null;
   }
 
+  /** The accessibility tree as indented text, one node per line: `Role "name" value="…" state`. */
+  accessibility(): string {
+    this.ui.flush();
+    const buf = new Uint8Array(256 * 1024);
+    const n = this.lib.symbols.mt_test_access(this.handle, buf, buf.byteLength);
+    return new TextDecoder().decode(buf.subarray(0, Math.min(n, buf.byteLength)));
+  }
+
   /** The user chooses the app-menu item `id`; then steps. */
   chooseMenu(id: string): this {
     const b = utf8.encode(id);

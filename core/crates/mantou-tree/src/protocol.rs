@@ -63,6 +63,8 @@ pub mod op {
     pub const SELECT: u32 = 29;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
+    /// What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it).
+    pub const ACCESS: u32 = 30;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -96,6 +98,7 @@ pub fn op_name(code: u32) -> &'static str {
         28 => "ANIMATE",
         29 => "SELECT",
         18 => "FOCUS_SCOPE",
+        30 => "ACCESS",
         _ => "UNKNOWN",
     }
 }
@@ -139,6 +142,36 @@ pub mod animate_flag {
 
 pub mod window_flag {
     pub const NOT_RESIZABLE: u32 = 1;
+}
+
+pub mod access_role {
+    pub const AUTO: u32 = 0;
+    pub const NONE: u32 = 1;
+    pub const BUTTON: u32 = 2;
+    pub const CHECKBOX: u32 = 3;
+    pub const SWITCH: u32 = 4;
+    pub const RADIO: u32 = 5;
+    pub const LINK: u32 = 6;
+    pub const HEADING: u32 = 7;
+    pub const LIST: u32 = 8;
+    pub const LIST_ITEM: u32 = 9;
+    pub const DIALOG: u32 = 10;
+    pub const TAB: u32 = 11;
+    pub const TAB_LIST: u32 = 12;
+    pub const MENU: u32 = 13;
+    pub const MENU_ITEM: u32 = 14;
+    pub const IMAGE: u32 = 15;
+    pub const GROUP: u32 = 16;
+    pub const STATUS: u32 = 17;
+    pub const ALERT: u32 = 18;
+}
+
+pub mod access_flag {
+    pub const CHECKED: u32 = 1;
+    pub const MIXED: u32 = 2;
+    pub const SELECTED: u32 = 4;
+    pub const DISABLED: u32 = 8;
+    pub const HIDDEN: u32 = 16;
 }
 
 pub mod focus_scope_flag {

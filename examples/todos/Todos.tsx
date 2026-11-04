@@ -52,6 +52,7 @@ export function Todos(props: { initial?: Todo[] }) {
     <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 12, backgroundColor: "#f3f4f6" }}>
       <Text style={{ fontSize: 22, fontWeight: 700, color: "#111827" }}>To do</Text>
       <Field
+        label="New to-do"
         placeholder="What needs doing?"
         value={draft()}
         onChange={setDraft}
@@ -62,15 +63,15 @@ export function Todos(props: { initial?: Todo[] }) {
       <Scroll style={{ flexGrow: 1, minHeight: 0 }}>
         <For each={todos()}>
           {(todo) => (
-            <View style={row} onPress={() => toggle(todo)}>
+            <View style={row} onPress={() => toggle(todo)} role="checkbox" checked={todo.done}>
               <View style={[box, todo.done ? { backgroundColor: "#2563eb", borderColor: "#2563eb" } : {}]} />
               <Text style={{ fontSize: 15, color: todo.done ? "#9ca3af" : "#111827" }}>{todo.text}</Text>
             </View>
           )}
         </For>
       </Scroll>
-      <Field style={{ height: "auto", minHeight: 64, paddingTop: 8, paddingBottom: 8 }} placeholder="Notes" multiline />
-      <Text style={{ fontSize: 13, color: "#6b7280" }}>{`${left()} left`}</Text>
+      <Field style={{ height: "auto", minHeight: 64, paddingTop: 8, paddingBottom: 8 }} label="Notes" placeholder="Notes" multiline />
+      <Text style={{ fontSize: 13, color: "#6b7280" }} role="status">{`${left()} left`}</Text>
     </View>
   );
 }

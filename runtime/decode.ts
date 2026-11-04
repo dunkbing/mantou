@@ -62,6 +62,7 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "CLEAR_COLOR": o = { op: name, r: bitsf32(w[a]), g: bitsf32(w[a + 1]), b: bitsf32(w[a + 2]), a: bitsf32(w[a + 3]) }; break;
       case "TITLE": o = { op: name, title: str(w, a) }; break;
       case "TEXT": case "PLACEHOLDER": o = { op: name, id: w[a], text: str(w, a + 1) }; break;
+      case "ACCESS": o = { op: name, id: w[a], role: w[a + 1], flags: w[a + 2], label: str(w, a + 3) }; break;
       case "VALUE": o = { op: name, id: w[a], rev: w[a + 1], text: str(w, a + 2) }; break;
       case "INPUT_OPTIONS": o = { op: name, id: w[a], flags: w[a + 1], maxLength: w[a + 2] }; break;
       case "FOCUS": o = { op: name, id: w[a] }; break;

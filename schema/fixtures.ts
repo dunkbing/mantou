@@ -22,6 +22,7 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.setRoot(1);
   e.clearColor(0.1, 0.2, 0.3, 1);
   e.title("Mantou ✓");
+  e.access(3, 3, 1, "Done ✓");
   e.styleReset(1, "width");
   e.remove(1, 2);
   e.release(2);

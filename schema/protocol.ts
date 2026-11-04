@@ -49,6 +49,7 @@ export const ops: OpDef[] = [
   { name: "ANIMATE", code: 28, operands: [["id", "id"], ["animation", "u32"], ["prop", "u32"], ["from", "u32"], ["to", "u32"], ["duration", "f32"], ["easing", "u32"], ["iterations", "f32"], ["flags", "u32"]], doc: "Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows." },
   { name: "SELECT", code: 29, operands: [["id", "id"], ["anchor", "u32"], ["focus", "u32"]], doc: "Select an Input's text from `anchor` to `focus` (the caret), in UTF-16 code units like the DOM's selectionStart (clamped; equal = a caret)." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
+  { name: "ACCESS", code: 30, operands: [["id", "id"], ["role", "u32"], ["flags", "u32"], ["label", "string"]], doc: "What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it)." },
 ];
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4 } as const;
@@ -63,6 +64,15 @@ export const animateFlags = { Alternate: 1 } as const;
 export const windowFlags = { NotResizable: 1 } as const;
 
 /** FOCUS_SCOPE flags. */
+/** ACCESS roles. 0 (Auto) is the default for the node's kind: Text is a label, an Input a text field, an Image an image, a View with a press handler a button, a scroll view a scroll area, any other View a plain container. None hides the node itself from assistive technology (its children stay). */
+export const accessRoles = {
+  Auto: 0, None: 1, Button: 2, Checkbox: 3, Switch: 4, Radio: 5, Link: 6, Heading: 7, List: 8, ListItem: 9,
+  Dialog: 10, Tab: 11, TabList: 12, Menu: 13, MenuItem: 14, Image: 15, Group: 16, Status: 17, Alert: 18,
+} as const;
+
+/** ACCESS flags. Checked and Mixed apply to checkboxes, switches, radios and menu items. */
+export const accessFlags = { Checked: 1, Mixed: 2, Selected: 4, Disabled: 8, Hidden: 16 } as const;
+
 export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 
 /** INPUT_OPTIONS flags. Secure: a bullet per character, no copying, the IME off. */
