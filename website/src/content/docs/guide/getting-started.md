@@ -13,6 +13,8 @@ You need [Bun](https://bun.sh) 1.4.4 or newer.
 bun add mantou-ui
 ```
 
+To start from a working app instead (a counter with a test, and the config below), run `bunx mantou create my-app`, then `cd my-app && bun install && bun run dev`.
+
 In `tsconfig.json`:
 
 ```json

@@ -41,3 +41,16 @@ test("pressing + counts", () => {
 | `accessibility()` | The screen-reader tree as text |
 
 Tests wait for conditions, not time: `step()` runs the app until nothing changes.
+
+## Finding out why it looks wrong
+
+- `MANTOU_DEBUG=layout bun run dev` outlines every box in the window, a colour per node, so you can see which view takes the space (the usual cause is `flexShrink` or a missing `minHeight: 0`).
+- `dumpTree()` returns the tree as text, one line per node with its box in logical px and its text. Print it from a test or an `onKey` handler:
+
+```tsx
+import { dumpTree } from "mantou-ui";
+console.log(dumpTree());
+// View#1 0,0 360×240
+//   View#2 0,0 360×240
+//     Text#3 24,24 40.5×39 "0"
+```

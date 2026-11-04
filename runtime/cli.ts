@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // The `mantou` command, for apps that depend on mantou-ui:
 //
+//   mantou create <dir>               a starter app: a counter with a test
 //   mantou build-core                 build the native core from source (only without a prebuilt one, or to change it)
 //   mantou run <entry> [options]      run an app: --width N --height N --min-width N --min-height N --title T (flags win over run()'s options)
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
@@ -10,6 +11,7 @@ import { basename, join } from "node:path";
 import { libPath } from "./ffi";
 
 const USAGE = `usage:
+  mantou create <dir>                     a starter app (a counter with a test) in a new folder
   mantou build-core                       build the native core from source (needs Rust: https://rustup.rs);
                                           not needed where mantou-ui ships a prebuilt one
   mantou run <entry.tsx> [--width N] [--height N] [--min-width N] [--min-height N] [--title T]
@@ -34,6 +36,22 @@ switch (command) {
     }
     const { start } = await import("./main");
     await start(entry, rest);
+    break;
+  }
+  case "create": {
+    const dir = rest.find((a) => !a.startsWith("--"));
+    if (!dir) {
+      console.error(USAGE);
+      process.exit(2);
+    }
+    try {
+      const { create } = await import("./create");
+      create(dir);
+      console.log(`mantou: created ${dir}\n  cd ${dir} && bun install\n  bun run dev     # open the window\n  bun test        # headless tests`);
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : e);
+      process.exit(1);
+    }
     break;
   }
   case "build-core": {
