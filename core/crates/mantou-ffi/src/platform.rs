@@ -198,6 +198,8 @@ mod mac {
                 "hideOthers" => PredefinedMenuItem::hide_others(label),
                 "showAll" => PredefinedMenuItem::show_all(label),
                 "minimize" => PredefinedMenuItem::minimize(label),
+                // performClose:, which the window answers itself: it ends in the same `closeRequested` as the close button.
+                "closeWindow" => PredefinedMenuItem::close_window(label),
                 "zoom" => PredefinedMenuItem::maximize(label),
                 "fullscreen" => PredefinedMenuItem::fullscreen(label),
                 "about" => PredefinedMenuItem::about(label, None),
@@ -243,7 +245,7 @@ mod mac {
             let edit = json!({"label": "Edit", "items": [
                 {"role": "undo"}, {"role": "redo"}, {"separator": true},
                 {"role": "cut"}, {"role": "copy"}, {"role": "paste"}, {"role": "selectAll"}]});
-            let window = json!({"label": "Window", "items": [{"role": "minimize"}, {"role": "zoom"}, {"role": "fullscreen"}]});
+            let window = json!({"label": "Window", "items": [{"role": "closeWindow"}, {"role": "minimize"}, {"role": "zoom"}, {"role": "fullscreen"}]});
             self.set(inst, &json!([app, edit, window]));
         }
 

@@ -59,7 +59,7 @@ export interface MenuItem {
   /** A submenu. */
   items?: MenuItem[];
   separator?: true;
-  /** A standard item the OS handles: "undo" | "redo" | "cut" | "copy" | "paste" | "selectAll" | "hide" | "hideOthers" | "showAll" | "minimize" | "zoom" | "fullscreen" | "about" | "quit". */
+  /** A standard item the OS handles: "undo" | "redo" | "cut" | "copy" | "paste" | "selectAll" | "hide" | "hideOthers" | "showAll" | "minimize" | "closeWindow" | "zoom" | "fullscreen" | "about" | "quit". */
   role?: string;
 }
 

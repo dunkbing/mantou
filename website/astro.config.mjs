@@ -34,7 +34,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Status',
-					items: ['progress/threading', 'progress/ui-tree', 'progress/text', 'progress/text-input', 'progress/scrolling', 'progress/animations', 'progress/hover', 'progress/platform-services', 'progress/accessibility'],
+					items: ['progress/threading', 'progress/ui-tree', 'progress/text', 'progress/text-input', 'progress/scrolling', 'progress/animations', 'progress/hover', 'progress/platform-services', 'progress/accessibility', 'progress/macos'],
 				},
 			],
 			plugins: [
