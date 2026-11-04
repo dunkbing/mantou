@@ -782,7 +782,7 @@ export class Ui {
     if (id === undefined) {
       id = this.nextStyleId++;
       this.styleIds.set(shared, id);
-      const props = [...expandStyle(shared.style)].map(([p, v]): [StylePropName, unknown] => [p, this.wireValue(p, v)]);
+      const props = [...expandStyle(shared.style)].filter(([, v]) => v !== undefined).map(([p, v]): [StylePropName, unknown] => [p, this.wireValue(p, v)]);
       this.enc.styleDef(id, props);
       this.schedule();
     }

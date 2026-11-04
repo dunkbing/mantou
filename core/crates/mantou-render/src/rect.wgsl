@@ -10,7 +10,7 @@ struct Instance {
     @location(3) clip: vec4<f32>,         // pixels x0, y0, x1, y1
     @location(4) rect_px: vec4<f32>,      // the quad in pixels
     @location(5) border_color: vec4<f32>, // linear RGB, straight alpha
-    @location(6) params: vec4<f32>,       // corner radius, border width (pixels)
+    @location(6) params: vec4<f32>,       // corner radius, border width, shadow sigma (pixels), 1 = a shadow
 };
 
 struct VsOut {
@@ -54,6 +54,13 @@ fn rounded_box(p: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>, radius: f32) -> f32 {
     return length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
+// erf, to within about 5e-4 (Abramowitz and Stegun 7.1.26).
+fn erf(x: f32) -> f32 {
+    let t = 1.0 / (1.0 + 0.3275911 * abs(x));
+    let y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-x * x);
+    return sign(x) * y;
+}
+
 @fragment
 fn fs(in: VsOut) -> @location(0) vec4<f32> {
     let p = in.position.xy;
@@ -66,6 +73,19 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     }
     let radius = in.params.x;
     let border = in.params.y;
+    if (in.params.w > 0.5) {
+        // A box shadow: the rounded box's coverage, blurred. Convolving the
+        // distance with a Gaussian gives the classic erf falloff; a sharp
+        // shadow (sigma 0) is just the anti-aliased box.
+        let d = rounded_box(p, in.rect_px.xy, in.rect_px.zw, radius);
+        let sigma = in.params.z;
+        var cover = clamp(0.5 - d, 0.0, 1.0);
+        if (sigma > 0.0) {
+            cover = 0.5 - 0.5 * erf(d / (sigma * 1.41421356));
+        }
+        let a = in.color.a * cover;
+        return vec4<f32>(in.color.rgb * a, a);
+    }
     if (radius <= 0.0 && border <= 0.0) {
         return vec4<f32>(in.color.rgb * in.color.a, in.color.a);
     }

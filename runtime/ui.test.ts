@@ -28,6 +28,7 @@ test("encoder → decoder round trip for every value kind", () => {
 
 test("colours", () => {
   expect(formatColor(parseColor("#f59e0b"))).toBe("#f59e0bff");
+  expect(formatColor(parseColor("#0003"))).toBe("#00000033");
   expect(formatColor(parseColor("#f59e0b80"))).toBe("#f59e0b80");
   expect(formatColor(parseColor([255, 0, 0, 0.5]))).toBe("#ff000080");
   expect(parseColor("transparent")).toBe(0);

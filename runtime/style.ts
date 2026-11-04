@@ -9,6 +9,20 @@ export interface Style extends WireStyle {
   margin?: Length;
   /** Sets rowGap and columnGap. */
   gap?: Length;
+  /**
+   * A shadow under the box, following its corner radius: offset, blur (like
+   * CSS's blur radius) and spread in px. Sets shadowX/Y/Blur/Spread/Color;
+   * "none" removes it.
+   */
+  boxShadow?: BoxShadow | "none";
+}
+
+export interface BoxShadow {
+  x?: number;
+  y?: number;
+  blur?: number;
+  spread?: number;
+  color: Color;
 }
 
 const SHORTHANDS: Record<string, StylePropName[]> = {
@@ -21,6 +35,17 @@ const SHORTHANDS: Record<string, StylePropName[]> = {
 export function expandStyle(style: Style): Map<StylePropName, unknown> {
   const out = new Map<StylePropName, unknown>();
   for (const [key, value] of Object.entries(style)) {
+    if (key === "boxShadow") {
+      const s = value as BoxShadow | "none" | undefined;
+      const none = s === undefined ? undefined : 0;
+      const shadow = s && s !== "none" ? s : null;
+      out.set("shadowX", shadow ? shadow.x ?? 0 : none);
+      out.set("shadowY", shadow ? shadow.y ?? 0 : none);
+      out.set("shadowBlur", shadow ? shadow.blur ?? 0 : none);
+      out.set("shadowSpread", shadow ? shadow.spread ?? 0 : none);
+      out.set("shadowColor", shadow ? shadow.color : s === undefined ? undefined : "transparent");
+      continue;
+    }
     const props = SHORTHANDS[key] ?? (key in StyleProp ? [key as StylePropName] : null);
     if (!props) throw new Error(`mantou: unknown style property "${key}"`);
     for (const p of props) out.set(p, value);
@@ -47,10 +72,10 @@ export function parseColor(c: Color): number {
   } else if (c === "transparent") {
     return 0;
   } else {
-    const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(c);
-    if (!m) throw new Error(`mantou: unsupported colour "${c}" (use #rgb, #rrggbb, #rrggbbaa, transparent or [r, g, b, a])`);
+    const m = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(c);
+    if (!m) throw new Error(`mantou: unsupported colour "${c}" (use #rgb, #rgba, #rrggbb, #rrggbbaa, transparent or [r, g, b, a])`);
     let hex = m[1];
-    if (hex.length === 3) hex = [...hex].map((h) => h + h).join("");
+    if (hex.length <= 4) hex = [...hex].map((h) => h + h).join("");
     r = parseInt(hex.slice(0, 2), 16);
     g = parseInt(hex.slice(2, 4), 16);
     b = parseInt(hex.slice(4, 6), 16);

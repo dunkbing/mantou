@@ -2,7 +2,7 @@
 
 Native desktop apps in TypeScript, on Bun. Your app runs in a Bun Worker; a Rust core loaded with `bun:ffi` owns the window and draws the UI on the GPU with wgpu. No webview.
 
-> **Early development.** The threading model works on Linux, macOS and Windows. Solid-style JSX, flexbox layout, text, text input, scrolling, rounded corners and borders, clipping, presses, keys and the wheel work.
+> **Early development.** The threading model works on Linux, macOS and Windows. Solid-style JSX, flexbox layout, text and app fonts, text input, scrolling, rounded corners, borders and shadows, clipping, presses, keys and the wheel work.
 
 ```tsx
 import { Text, View, createSignal, run } from "mantou-ui";

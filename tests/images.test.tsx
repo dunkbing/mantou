@@ -49,6 +49,27 @@ for (const scale of [1, 2]) {
     expect(h.capture()).toMatchImage(`text@${scale}x`);
   });
 
+  test(`shadows: offsets, blur, spread, radii, a sharp one and clipping at scale ${scale}`, () => {
+    const card = { width: 72, height: 56, backgroundColor: "#ffffff", borderRadius: 10 } as const;
+    const h = shot(380, 220, scale, () => (
+      <View style={{ flexGrow: 1, padding: 24, gap: 28, backgroundColor: "#eef2f7" }}>
+        <View style={{ flexDirection: "row", gap: 24 }}>
+          <View style={[card, { boxShadow: { y: 2, blur: 4, color: "#0f172a33" } }]} />
+          <View style={[card, { boxShadow: { y: 8, blur: 24, spread: -4, color: "#0f172a40" } }]} />
+          <View style={[card, { borderRadius: 28, boxShadow: { blur: 16, spread: 2, color: "#2563eb66" } }]} />
+          <View style={[card, { borderRadius: 0, boxShadow: { x: 6, y: 6, color: "#0f172a" } }]} />
+        </View>
+        <View style={{ flexDirection: "row", gap: 24 }}>
+          <View style={{ width: 160, height: 60, overflow: "hidden", backgroundColor: "#ffffff", padding: 12 }}>
+            <View style={[card, { width: 60, height: 30, boxShadow: { y: 10, blur: 20, color: "#dc2626aa" } }]} />
+          </View>
+          <View style={[card, { opacity: 0.5, boxShadow: { y: 6, blur: 12, color: "#0f172a66" } }]} />
+        </View>
+      </View>
+    ));
+    expect(h.capture()).toMatchImage(`shadows@${scale}x`);
+  });
+
   test(`boxes: radii, borders, opacity, clipping and a scrollbar at scale ${scale}`, () => {
     const h = shot(360, 200, scale, () => (
       <View style={{ flexGrow: 1, padding: 12, gap: 12, backgroundColor: "#f8fafc" }}>

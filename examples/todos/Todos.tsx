@@ -13,6 +13,7 @@ const field = defineStyle({
   color: "#111827",
   fontSize: 15,
   flexShrink: 0,
+  boxShadow: { y: 1, blur: 3, color: "#0f172a14" },
 });
 const row = defineStyle({ flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 8, paddingBottom: 8 });
 const box = defineStyle({ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: "#9ca3af", flexShrink: 0 });

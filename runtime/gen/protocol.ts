@@ -1,6 +1,6 @@
 // Written by schema/gen.ts from schema/protocol.ts. Don't edit it; change the schema and run `bun run gen`.
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 export const Op = {
   /** Create a node; it starts detached. */
@@ -154,13 +154,18 @@ export const StyleProp = {
   scrollbar: { code: 48, kind: "enum", values: ["auto","none"] },
   scrollbarColor: { code: 49, kind: "color" },
   fontFamily: { code: 50, kind: "family" },
+  shadowX: { code: 51, kind: "f32" },
+  shadowY: { code: 52, kind: "f32" },
+  shadowBlur: { code: 53, kind: "f32" },
+  shadowSpread: { code: 54, kind: "f32" },
+  shadowColor: { code: 55, kind: "color" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
-/** A colour: "#rgb", "#rrggbb", "#rrggbbaa", "transparent", or [r, g, b, a?] with r, g, b in 0–255 and a in 0–1. */
+/** A colour: "#rgb", "#rgba", "#rrggbb", "#rrggbbaa", "transparent", or [r, g, b, a?] with r, g, b in 0–255 and a in 0–1. */
 export type Color = string | readonly [number, number, number] | readonly [number, number, number, number];
 
 /** Style properties as the core understands them (one wire property each). */
@@ -265,4 +270,14 @@ export interface WireStyle {
   scrollbarColor?: Color;
   /** Default: Inter, then the system's fonts. */
   fontFamily?: string | readonly string[];
+  /** Default: 0. */
+  shadowX?: number;
+  /** Default: 0. */
+  shadowY?: number;
+  /** Default: 0 (a blur radius, like CSS's: twice the Gaussian's sigma). */
+  shadowBlur?: number;
+  /** Default: 0. */
+  shadowSpread?: number;
+  /** Default: transparent (no shadow). */
+  shadowColor?: Color;
 }

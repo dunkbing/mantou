@@ -245,3 +245,36 @@ fn layout_listeners_hear_their_box_when_it_changes() {
     t.layout();
     assert_eq!(t.take_events(), vec![TreeEvent::Layout { id: 3, rect: [0.0, 50.0, 300.0, 30.0] }]);
 }
+
+#[test]
+fn a_box_shadow_is_drawn_under_the_box_offset_spread_and_blurred() {
+    use mantou_tree::protocol::Prop;
+    use mantou_tree::{Ops as Batch, Value};
+    let mut o = Batch::new();
+    o.create(1)
+        .create(2)
+        .style(2, Prop::Width, Value::Length(mantou_tree::Length::Px(100.0)))
+        .style(2, Prop::Height, Value::Length(mantou_tree::Length::Px(50.0)))
+        .style(2, Prop::MarginLeft, Value::Length(mantou_tree::Length::Px(40.0)))
+        .style(2, Prop::MarginTop, Value::Length(mantou_tree::Length::Px(40.0)))
+        .style(2, Prop::BackgroundColor, Value::Color(0xff_ff_ff_ff))
+        .style(2, Prop::BorderRadius, Value::F32(8.0))
+        .style(2, Prop::ShadowY, Value::F32(4.0))
+        .style(2, Prop::ShadowBlur, Value::F32(12.0))
+        .style(2, Prop::ShadowSpread, Value::F32(2.0))
+        .style(2, Prop::ShadowColor, Value::Color(0x40_00_00_00))
+        .insert(1, 2, 0)
+        .set_root(1);
+    let mut t = Tree::new();
+    t.set_viewport(400, 300, 2.0);
+    t.apply(&o.bytes()).unwrap();
+    t.layout();
+    let scene = t.scene();
+    let i = scene.quads.iter().position(|q| q.shadow.is_some()).expect("a shadow quad");
+    let q = scene.quads[i];
+    assert_eq!(q.rect, [76.0, 84.0, 284.0, 192.0], "the box (40, 40, 140, 90) moved down 4, grown by 2, at scale 2");
+    assert_eq!(q.shadow, Some(12.0), "sigma is half the blur, in device px");
+    assert_eq!(q.radius, 20.0, "the radius grows with the spread");
+    assert!(scene.quads[i + 1].shadow.is_none() && scene.quads[i + 1].color[3] == 1.0, "the box comes right after: over its shadow");
+    assert!(scene.dump().contains("shadow 76 84 284 192 #00000040 sigma 12 radius 20"));
+}

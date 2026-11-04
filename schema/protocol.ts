@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
@@ -129,6 +129,12 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "scrollbarColor", code: 49, type: "color", default: "#8080808c" },
   // Text and inputs: a family name or a list of them (registered fonts, or the system's), then Inter.
   { name: "fontFamily", code: 50, type: "family", default: "Inter, then the system's fonts" },
+  // A box shadow, drawn under the box, following its corner radius (boxShadow in TypeScript sets all five).
+  { name: "shadowX", code: 51, type: "f32", default: "0" },
+  { name: "shadowY", code: 52, type: "f32", default: "0" },
+  { name: "shadowBlur", code: 53, type: "f32", default: "0 (a blur radius, like CSS's: twice the Gaussian's sigma)" },
+  { name: "shadowSpread", code: 54, type: "f32", default: "0" },
+  { name: "shadowColor", code: 55, type: "color", default: "transparent (no shadow)" },
 ];
 
 /**

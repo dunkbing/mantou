@@ -15,7 +15,7 @@ description: "The frame pipeline, scene, wgpu renderer, scrolling and animation,
 - Layers: scroll containers and nodes with a running transform or opacity animation form a layer. Its transform is applied at composite time, so scrolling and these animations need no relayout and no scene rebuild.
 
 ### 9.3 Renderer (wgpu)
-**Status:** one pipeline draws every quad in paint order: filled rectangles with rounded corners and borders (an SDF in the fragment shader), and glyphs from the atlas. Each quad carries a clip rectangle (`overflow: hidden`, intersected down the tree). Shadows, gradients, images and rounded clips aren't built yet.
+**Status:** one pipeline draws every quad in paint order: filled rectangles with rounded corners and borders (an SDF in the fragment shader), and glyphs from the atlas. Each quad carries a clip rectangle (`overflow: hidden`, intersected down the tree). Box shadows (`boxShadow`: offset, blur, spread, colour, following the corner radius) are one extra quad under the box, drawn as far as the blur reaches, with the rounded box's distance turned into coverage by the error function, the closed form of a Gaussian blur across an edge ([#12](https://github.com/dunkbing/mantou/issues/12)). Reference images (`tests/images/shadows@*.png`) check them. Inset shadows, gradients, images and rounded clips aren't built yet.
 
 - One instanced quad per operation. An "uber" fragment shader computes the SDF for rounded rects, analytic blurred shadows (Evan Wallace's method), gradients, border dashes, atlas coverage and the innermost rounded clip. Outer clips become scissor rects.
 - Batches share a scissor rect and a texture. Operations completely hidden by a later opaque fill are dropped.

@@ -47,7 +47,7 @@ function ts(): string {
   L.push(`export const StylePropByCode: Record<number, StylePropName> = { ${styleProps.map((p) => `${p.code}: "${p.name}"`).join(", ")} };`, "");
   L.push("/** A length: logical pixels, a percentage string, or \"auto\". */");
   L.push("export type Length = number | `${number}%` | \"auto\";");
-  L.push("/** A colour: \"#rgb\", \"#rrggbb\", \"#rrggbbaa\", \"transparent\", or [r, g, b, a?] with r, g, b in 0–255 and a in 0–1. */");
+  L.push("/** A colour: \"#rgb\", \"#rgba\", \"#rrggbb\", \"#rrggbbaa\", \"transparent\", or [r, g, b, a?] with r, g, b in 0–255 and a in 0–1. */");
   L.push("export type Color = string | readonly [number, number, number] | readonly [number, number, number, number];", "");
   L.push("/** Style properties as the core understands them (one wire property each). */");
   L.push("export interface WireStyle {");

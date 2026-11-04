@@ -138,7 +138,9 @@ impl Renderer {
         let (w, h) = (size_px.0.max(1) as f32, size_px.1.max(1) as f32);
         self.scratch.clear();
         for q in &scene.quads {
-            let [x0, y0, x1, y1] = q.rect;
+            // A shadow is drawn as far as its blur reaches (three sigmas), past its shape.
+            let grow = q.shadow.map_or(0.0, |sigma| (3.0 * sigma).ceil() + 1.0);
+            let [x0, y0, x1, y1] = [q.rect[0] - grow, q.rect[1] - grow, q.rect[2] + grow, q.rect[3] + grow];
             let c = self.color(q.color);
             self.scratch.extend_from_slice(&[x0 / w * 2.0 - 1.0, 1.0 - y0 / h * 2.0, x1 / w * 2.0 - 1.0, 1.0 - y1 / h * 2.0]);
             self.scratch.extend_from_slice(&c);
@@ -147,7 +149,8 @@ impl Renderer {
             self.scratch.extend_from_slice(&q.rect);
             let bc = self.color(q.border_color);
             self.scratch.extend_from_slice(&bc);
-            self.scratch.extend_from_slice(&[q.radius, q.border, 0.0, 0.0]);
+            let (sigma, is_shadow) = q.shadow.map_or((0.0, 0.0), |s| (s, 1.0));
+            self.scratch.extend_from_slice(&[q.radius, q.border, sigma, is_shadow]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {

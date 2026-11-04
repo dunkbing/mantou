@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -328,10 +328,15 @@ pub enum Prop {
     Scrollbar = 48,
     ScrollbarColor = 49,
     FontFamily = 50,
+    ShadowX = 51,
+    ShadowY = 52,
+    ShadowBlur = 53,
+    ShadowSpread = 54,
+    ShadowColor = 55,
 }
 
 impl Prop {
-    pub const COUNT: usize = 50;
+    pub const COUNT: usize = 55;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -385,6 +390,11 @@ impl Prop {
             48 => Prop::Scrollbar,
             49 => Prop::ScrollbarColor,
             50 => Prop::FontFamily,
+            51 => Prop::ShadowX,
+            52 => Prop::ShadowY,
+            53 => Prop::ShadowBlur,
+            54 => Prop::ShadowSpread,
+            55 => Prop::ShadowColor,
             _ => return None,
         })
     }
@@ -441,6 +451,11 @@ impl Prop {
             Prop::Scrollbar => "scrollbar",
             Prop::ScrollbarColor => "scrollbarColor",
             Prop::FontFamily => "fontFamily",
+            Prop::ShadowX => "shadowX",
+            Prop::ShadowY => "shadowY",
+            Prop::ShadowBlur => "shadowBlur",
+            Prop::ShadowSpread => "shadowSpread",
+            Prop::ShadowColor => "shadowColor",
         }
     }
 
@@ -496,6 +511,11 @@ impl Prop {
             Prop::Scrollbar => ValueKind::Enum(2),
             Prop::ScrollbarColor => ValueKind::Color,
             Prop::FontFamily => ValueKind::Family,
+            Prop::ShadowX => ValueKind::F32,
+            Prop::ShadowY => ValueKind::F32,
+            Prop::ShadowBlur => ValueKind::F32,
+            Prop::ShadowSpread => ValueKind::F32,
+            Prop::ShadowColor => ValueKind::Color,
         }
     }
 

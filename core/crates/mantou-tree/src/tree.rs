@@ -53,6 +53,10 @@ pub struct Quad {
     pub border: f32,
     /// The border's colour, like `color`.
     pub border_color: [f32; 4],
+    /// A box shadow: `rect` is the shadow's shape (box offset and spread),
+    /// blurred by this Gaussian sigma (device px); the renderer draws past
+    /// `rect` as far as the blur reaches.
+    pub shadow: Option<f32>,
 }
 
 impl Quad {
@@ -89,6 +93,14 @@ impl Scene {
                 continue;
             }
             let [x0, y0, x1, y1] = q.rect;
+            if let Some(sigma) = q.shadow {
+                out.push_str(&format!("shadow {x0} {y0} {x1} {y1} {} sigma {sigma}", hex(q.color)));
+                if q.radius > 0.0 {
+                    out.push_str(&format!(" radius {}", q.radius));
+                }
+                out.push('\n');
+                continue;
+            }
             out.push_str(&format!("quad {x0} {y0} {x1} {y1} {}", hex(q.color)));
             if q.radius > 0.0 {
                 out.push_str(&format!(" radius {}", q.radius));
@@ -141,6 +153,9 @@ struct Visual {
     selection_color: Option<u32>,
     /// overflow: "scroll".
     scrolls: bool,
+    /// Box shadow: x, y, blur, spread (logical px) and colour (0 alpha = none).
+    shadow: [f32; 4],
+    shadow_color: u32,
     no_scrollbar: bool,
     scrollbar_color: Option<u32>,
 }
@@ -824,6 +839,7 @@ impl Tree {
                 radius: scroll::THUMB_RADIUS * s,
                 border: 0.0,
                 border_color: [0.0; 4],
+                shadow: None,
             }
         };
         let mut thumbs = self.thumbs.iter().peekable();
@@ -849,8 +865,20 @@ impl Tree {
             let border_color = rgba(node.v.border_color, alpha);
             let border = if border_color[3] > 0.0 { (node.v.border * s).max(0.0) } else { 0.0 };
             let rect = [snap(r[0]), snap(r[1]), snap(r[2]), snap(r[3])];
+            let sc = rgba(node.v.shadow_color, alpha);
+            if sc[3] > 0.0 && r[2] > r[0] && r[3] > r[1] {
+                // Under the box: its shape moved by the offset and grown by the spread.
+                let [sx, sy, blur, spread] = node.v.shadow;
+                let shape = [(r[0] + sx - spread) * s, (r[1] + sy - spread) * s, (r[2] + sx + spread) * s, (r[3] + sy + spread) * s];
+                let sigma = blur.max(0.0) * s / 2.0;
+                let reach = [shape[0] - 3.0 * sigma, shape[1] - 3.0 * sigma, shape[2] + 3.0 * sigma, shape[3] + 3.0 * sigma];
+                if shape[2] > shape[0] && shape[3] > shape[1] && overlaps(reach, clip) {
+                    let radius = ((node.v.radius + spread) * s).max(0.0);
+                    quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma) });
+                }
+            }
             if (bg[3] > 0.0 || border > 0.0) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
-                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: node.v.radius * s, border, border_color });
+                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: node.v.radius * s, border, border_color, shadow: None });
             }
             if node.kind == p::node_kind::TEXT && !node.text.is_empty() {
                 let color = rgba(node.v.color, alpha);
@@ -899,6 +927,7 @@ impl Tree {
                     radius: 0.0,
                     border: 0.0,
                     border_color: [0.0; 4],
+                    shadow: None,
                 };
                 if ed.text().is_empty() && !ed.is_composing() && !inp.placeholder.is_empty() {
                     let pc = node.v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
@@ -1045,7 +1074,7 @@ fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGly
             continue;
         }
         let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
-        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4] });
+        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None });
         any = true;
     }
     any
@@ -1174,6 +1203,15 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         }
         Prop::MaxLines => v.text.max_lines = num().clamp(0.0, 10_000.0) as u32,
         Prop::FontStyle => v.text.italic = e == p::font_style::ITALIC,
+        Prop::ShadowX => v.shadow[0] = num(),
+        Prop::ShadowY => v.shadow[1] = num(),
+        Prop::ShadowBlur => v.shadow[2] = num().max(0.0),
+        Prop::ShadowSpread => v.shadow[3] = num(),
+        Prop::ShadowColor => {
+            if let Value::Color(c) = value {
+                v.shadow_color = c
+            }
+        }
         Prop::FontFamily => {
             if let Value::Family(f) = value {
                 v.text.family = f
