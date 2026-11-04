@@ -55,6 +55,8 @@ pub enum TreeEvent {
     /// The pointer came over a node with a Hover listener, or left it.
     PointerEnter(u32),
     PointerLeave(u32),
+    /// A focused Input with a Select listener moved its caret or selection (UTF-16 units).
+    Select { id: u32, anchor: u32, focus: u32 },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -633,6 +635,10 @@ impl Tree {
                 let Some(inp) = self.node(id)?.input.as_mut() else { return Err(format!("PLACEHOLDER: {id} is not an input")) };
                 inp.placeholder = text;
             }
+            Op::InputAllow { id, allow } => {
+                let Some(inp) = self.node(id)?.input.as_mut() else { return Err(format!("INPUT_ALLOW: {id} is not an input")) };
+                inp.editor.get_mut().set_allow(&allow);
+            }
             Op::InputOptions { id, flags, max_length } => {
                 let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
                 let Some(inp) = node.input.as_mut() else { return Err(format!("INPUT_OPTIONS: {id} is not an input")) };
@@ -934,6 +940,18 @@ impl Tree {
 
     /// Events for JS since the last call.
     pub fn take_events(&mut self) -> Vec<TreeEvent> {
+        // Only the focused input's selection moves by itself; say so when it listens.
+        if let Some(id) = self.focus
+            && let Some(node) = self.nodes.get_mut(&id)
+            && node.listen & event_mask::SELECT != 0
+            && let Some(inp) = node.input.as_mut()
+        {
+            let (a, f) = inp.editor.get_mut().selection_utf16();
+            if inp.reported_sel != Some((a, f)) {
+                inp.reported_sel = Some((a, f));
+                self.events.push(TreeEvent::Select { id, anchor: a as u32, focus: f as u32 });
+            }
+        }
         std::mem::take(&mut self.events)
     }
 

@@ -49,6 +49,7 @@ export const ops: OpDef[] = [
   { name: "ANIMATE", code: 28, operands: [["id", "id"], ["animation", "u32"], ["prop", "u32"], ["from", "u32"], ["to", "u32"], ["duration", "f32"], ["easing", "u32"], ["iterations", "f32"], ["flags", "u32"]], doc: "Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows." },
   { name: "SELECT", code: 29, operands: [["id", "id"], ["anchor", "u32"], ["focus", "u32"]], doc: "Select an Input's text from `anchor` to `focus` (the caret), in UTF-16 code units like the DOM's selectionStart (clamped; equal = a caret)." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
+  { name: "INPUT_ALLOW", code: 31, operands: [["id", "id"], ["allow", "string"]], doc: "The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered." },
   { name: "ACCESS", code: 30, operands: [["id", "id"], ["role", "u32"], ["flags", "u32"], ["label", "string"]], doc: "What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it)." },
 ];
 
@@ -82,7 +83,7 @@ export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
-export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16, Drop: 32 } as const;
+export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16, Drop: 32, Select: 64 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;
@@ -234,6 +235,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "MENU", code: 19, fields: "c = byte length; then the UTF-8 id of the menu item, padded to words", doc: "The user chose an item of the app menu." },
   { name: "NODE_POINTER", code: 25, fields: "a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot)", doc: "The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch." },
   { name: "WINDOW_STATE", code: 27, fields: "a = WindowStateFlag bits (focused, minimized, maximized, fullscreen, dark system theme), b = x, c = y (i32 as u32: the window's outer position, logical px)", doc: "The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen." },
+  { name: "SELECTION", code: 28, fields: "a = input, b = anchor, c = focus (UTF-16 units, equal = a caret); only for Inputs with a Select listener, when their selection changes", doc: "An Input's caret or selection moved." },
   { name: "FILE_DROP", code: 26, fields: "a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words", doc: "Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path." },
 ];
 

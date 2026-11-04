@@ -50,7 +50,7 @@ function setHandler(node: Node, name: string, value: unknown, add: (f: never) =>
 /** Inputs whose autoFocus was read: it counts only when the input is created (dunkbing/mantou#4). */
 const autoFocusRead = new WeakSet<Node>();
 
-const inputEvents: Record<string, "change" | "submit" | "focus" | "blur"> = { onChange: "change", onSubmit: "submit", onFocus: "focus", onBlur: "blur" };
+const inputEvents: Record<string, "change" | "submit" | "focus" | "blur" | "select"> = { onSelect: "select", onChange: "change", onSubmit: "submit", onFocus: "focus", onBlur: "blur" };
 
 function setInputProperty(node: Node, name: string, value: unknown, prev: unknown): boolean {
   switch (name) {
@@ -67,6 +67,9 @@ function setInputProperty(node: Node, name: string, value: unknown, prev: unknow
     case "readOnly":
     case "secure":
       node.setOptions({ [name]: !!value });
+      return true;
+    case "allow":
+      node.setOptions({ allow: value === undefined || value === null ? "" : String(value) });
       return true;
     case "maxLength":
       node.setOptions({ maxLength: Number(value ?? 0) });

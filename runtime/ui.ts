@@ -197,6 +197,8 @@ export interface InputOptions {
   /** A password field: a bullet per character, no copy or cut, the IME off. */
   secure?: boolean;
   readOnly?: boolean;
+  /** The characters typing and pasting may add: `"0-9."` (characters and ranges; a leading `^` means all but these). Checked in the core. */
+  allow?: string;
   /** In characters; 0 = no limit. */
   maxLength?: number;
 }
@@ -204,6 +206,8 @@ export interface InputOptions {
 type InputHandlers = {
   change: ((value: string) => void)[];
   submit: ((value: string) => void)[];
+  /** The caret or selection moved: UTF-16 units like the DOM's selectionStart; equal means a caret. */
+  select: ((s: { start: number; end: number; anchor: number; focus: number }) => void)[];
   focus: (() => void)[];
   blur: (() => void)[];
 };
@@ -284,8 +288,8 @@ export class Node {
   private pendingValue: { text: string; rev: number } | null = null;
   private pendingSelection: [number, number] | null = null;
   private placeholderText = "";
-  private options = { flags: 0, maxLength: 0 };
-  private sentOptions = { flags: 0, maxLength: 0 };
+  private options = { flags: 0, maxLength: 0, allow: "" };
+  private sentOptions = { flags: 0, maxLength: 0, allow: "" };
   private inputHandlers: InputHandlers | null = null;
 
   constructor(readonly ui: Ui, readonly id: number, readonly kind: number) {}
@@ -390,6 +394,7 @@ export class Node {
     flag(InputFlag.Multiline, options.multiline);
     flag(InputFlag.ReadOnly, options.readOnly);
     flag(InputFlag.Secure, options.secure);
+    if (options.allow !== undefined) o.allow = String(options.allow);
     if (options.maxLength !== undefined) o.maxLength = Math.max(0, Math.floor(options.maxLength || 0));
     this.ui.markPending(this);
     return this;
@@ -463,11 +468,13 @@ export class Node {
   /** Adds an Input handler: "change" (the user changed the text), "submit" (Enter), "focus", "blur". */
   onInput<K extends keyof InputHandlers>(type: K, handler: InputHandlers[K][number]): () => void {
     this.assertInput(`on${type[0].toUpperCase()}${type.slice(1)}`);
-    const list = ((this.inputHandlers ??= { change: [], submit: [], focus: [], blur: [] })[type] as unknown[]);
+    const list = ((this.inputHandlers ??= { change: [], submit: [], focus: [], blur: [], select: [] })[type] as unknown[]);
     list.push(handler);
+    if (type === "select" && list.length === 1) this.listen();
     return () => {
       const i = list.indexOf(handler);
       if (i >= 0) list.splice(i, 1);
+      if (type === "select" && list.length === 0 && !this.released) this.listen();
     };
   }
 
@@ -485,6 +492,11 @@ export class Node {
       case "submit":
         for (const f of [...(h?.submit ?? [])]) f(this.value);
         return;
+      case "selection": {
+        const s = { start: Math.min(e.anchor, e.focus), end: Math.max(e.anchor, e.focus), anchor: e.anchor, focus: e.focus };
+        for (const f of [...(h?.select ?? [])]) f(s);
+        return;
+      }
       case "focus":
         for (const f of [...(h?.focus ?? [])]) f();
         return;
@@ -529,9 +541,10 @@ export class Node {
     } else if (this.isInput) {
       const o = this.options, s = this.sentOptions;
       if (o.flags !== s.flags || o.maxLength !== s.maxLength) {
-        this.sentOptions = { ...o };
         this.ui.enc.inputOptions(this.id, o.flags, o.maxLength);
       }
+      if (o.allow !== s.allow) this.ui.enc.inputAllow(this.id, o.allow);
+      this.sentOptions = { ...o };
       // After the options: a multiline value keeps its newlines.
       const v = this.pendingValue;
       this.pendingValue = null;
@@ -768,7 +781,8 @@ export class Node {
       (this.scrollHandlers.length ? EventMask.Scroll : 0) |
       (this.hoverHandlers.length ? EventMask.Hover : 0) |
       (this.dropHandlers.drop.length || this.dropHandlers.over.length ? EventMask.Drop : 0) |
-      (Object.values(this.pointerHandlers).some((h) => h.length) ? EventMask.Pointer : 0);
+      (Object.values(this.pointerHandlers).some((h) => h.length) ? EventMask.Pointer : 0) |
+      (this.inputHandlers?.select.length ? EventMask.Select : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
   }

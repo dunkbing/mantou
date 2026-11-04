@@ -29,7 +29,8 @@ export type CoreEvent =
 /** What the core says about Input nodes. */
 export type InputCoreEvent =
   | { type: "focus" | "blur" | "submit"; target: number }
-  | { type: "textChanged"; target: number; rev: number; text: string };
+  | { type: "textChanged"; target: number; rev: number; text: string }
+  | { type: "selection"; target: number; anchor: number; focus: number };
 
 export interface KeyInfo {
   /** A character ("j", "J", " ") or a named key ("ArrowDown", "Enter", "Escape"…). */
@@ -108,6 +109,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
     case Event.BLUR: return { type: "blur", target: w[i + 1] };
     case Event.SUBMIT: return { type: "submit", target: w[i + 1] };
+    case Event.SELECTION: return { type: "selection", target: w[i + 1], anchor: w[i + 2], focus: w[i + 3] };
     case Event.TEXT_CHANGED: return { type: "textChanged", target: w[i + 1], rev: w[i + 2], text: text(w, i, w[i + 3]) };
     default: return null;
   }
@@ -178,7 +180,7 @@ export function route(
     const scale = e.scale || ui.windowSize?.scale || 1;
     ui.dispatchResize(e.width / scale, e.height / scale, scale);
   }
-  else if (e.type === "focus" || e.type === "blur" || e.type === "submit" || e.type === "textChanged") ui.dispatchInput(e);
+  else if (e.type === "focus" || e.type === "blur" || e.type === "submit" || e.type === "textChanged" || e.type === "selection") ui.dispatchInput(e);
   else if (e.type === "wheel") ui.dispatchWheel(e.target, e.dx, e.dy);
   else if (e.type === "keyDown" || e.type === "keyUp") ui.dispatchKey(e);
 }

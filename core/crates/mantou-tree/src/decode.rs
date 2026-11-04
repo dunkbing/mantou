@@ -40,6 +40,7 @@ pub enum Op {
     Text { id: u32, text: String },
     Value { id: u32, rev: u32, text: String },
     Placeholder { id: u32, text: String },
+    InputAllow { id: u32, allow: String },
     Access { id: u32, role: u32, flags: u32, label: String },
     InputOptions { id: u32, flags: u32, max_length: u32 },
     Focus { id: u32 },
@@ -221,6 +222,7 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::TITLE => Op::Title(string(bytes, a, i + 1, 0, "TITLE")?),
             op::TEXT => Op::Text { id: id_then_string(a, i, "TEXT")?, text: string(bytes, a, i + 1, 1, "TEXT")? },
             op::PLACEHOLDER => Op::Placeholder { id: id_then_string(a, i, "PLACEHOLDER")?, text: string(bytes, a, i + 1, 1, "PLACEHOLDER")? },
+            op::INPUT_ALLOW => Op::InputAllow { id: id_then_string(a, i, "INPUT_ALLOW")?, allow: string(bytes, a, i + 1, 1, "INPUT_ALLOW")? },
             op::VALUE => {
                 if n < 3 {
                     return err(i, "VALUE needs an id, a rev and a length");

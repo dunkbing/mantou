@@ -20,13 +20,15 @@ pub(super) struct Input {
     pub(super) placeholder: String,
     /// Counts the user's edits; VALUE ops older than this are stale.
     pub(super) rev: u32,
+    /// The selection the app last heard (UTF-16), for SELECTION events.
+    pub(super) reported_sel: Option<(usize, usize)>,
 }
 
 impl Input {
     pub(super) fn new(engine: &mut TextEngine) -> Input {
         let mut editor = Editor::new(&TextStyle::default());
         editor.set_text(engine, "");
-        Input { editor: RefCell::new(editor), placeholder: String::new(), rev: 0 }
+        Input { editor: RefCell::new(editor), placeholder: String::new(), rev: 0, reported_sel: None }
     }
 
     pub(super) fn set_options(&mut self, engine: &mut TextEngine, flags: u32, max_length: u32) -> bool {

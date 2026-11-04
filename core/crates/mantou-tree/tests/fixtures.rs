@@ -45,6 +45,7 @@ fn op_json(o: &Op) -> J {
         Op::Title(t) => json!({"op": "TITLE", "title": t}),
         Op::Text { id, text } => json!({"op": "TEXT", "id": id, "text": text}),
         Op::Value { id, rev, text } => json!({"op": "VALUE", "id": id, "rev": rev, "text": text}),
+        Op::InputAllow { id, allow } => json!({"op": "INPUT_ALLOW", "id": id, "allow": allow}),
         Op::Placeholder { id, text } => json!({"op": "PLACEHOLDER", "id": id, "text": text}),
         Op::InputOptions { id, flags, max_length } => json!({"op": "INPUT_OPTIONS", "id": id, "flags": flags, "maxLength": max_length}),
         Op::Access { id, role, flags, label } => json!({"op": "ACCESS", "id": id, "role": role, "flags": flags, "label": label}),

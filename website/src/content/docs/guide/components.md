@@ -44,6 +44,8 @@ const [name, setName] = createSignal("");
 | `multiline` | Enter adds a line; Ctrl/Cmd+Enter submits |
 | `secure` | Password field |
 | `maxLength`, `readOnly` | |
+| `allow` | The characters typing and pasting may add, checked in the core: `"0-9."` (characters and ranges), `"^<>"` for all but those |
+| `onSelect` | The caret or selection moved: `{ start, end }` in UTF-16 units (`start === end` is a caret) |
 | `onChange`, `onSubmit`, `onFocus`, `onBlur` | |
 
 Move the caret with `node.setSelection(start, end)` (via `ref`), in UTF-16 units.

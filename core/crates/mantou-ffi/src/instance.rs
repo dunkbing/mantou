@@ -273,6 +273,7 @@ impl Instance {
                 }
                 TreeEvent::AnimationEnd { id, animation } => self.push_event([ev::ANIMATION_END, id, animation, 0]),
                 TreeEvent::PointerEnter(id) => self.push_event([ev::POINTER_ENTER, id, 0, 0]),
+                TreeEvent::Select { id, anchor, focus } => self.push_event([ev::SELECTION, id, anchor, focus]),
                 TreeEvent::PointerLeave(id) => self.push_event([ev::POINTER_LEAVE, id, 0, 0]),
             }
         }

@@ -281,3 +281,24 @@ test("setSelection places the caret or selects, in UTF-16 units, after the turn'
   h.type("!");
   expect(input.value).toBe("😀! smile");
 });
+
+test("allow filters typing and pasting in the core, and onSelect hears the caret", () => {
+  let num!: Node, all!: Node;
+  const sel: [number, number][] = [];
+  const h = app(() => (
+    <View style={{ gap: 8, alignItems: "start" }}>
+      <Input ref={num} style={field} allow="0-9." autoFocus onSelect={(s) => sel.push([s.start, s.end])} />
+      <Input ref={all} style={field} allow="^0-9" />
+    </View>
+  ));
+  h.type("a1b2.c3");
+  expect(h.value(num)).toBe("12.3");
+  expect(sel.at(-1)).toEqual([4, 4]);
+  h.key("ArrowLeft");
+  expect(sel.at(-1)).toEqual([3, 3]);
+  h.key("ArrowLeft", { shift: true });
+  expect(sel.at(-1)).toEqual([2, 3]);
+  all.focus();
+  h.step().type("a1b2");
+  expect(h.value(all)).toBe("ab"); // everything but digits
+});

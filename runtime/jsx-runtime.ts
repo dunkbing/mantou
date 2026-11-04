@@ -170,6 +170,10 @@ export interface InputProps extends AccessProps {
    */
   secure?: boolean;
   /** In characters. */
+  /** The characters typing and pasting may add, checked in the core: `"0-9."` (characters and ranges), `"^<>"` for all but those. */
+  allow?: string;
+  /** The caret or selection moved (UTF-16 units; `start === end` is a caret). */
+  onSelect?: (s: { start: number; end: number; anchor: number; focus: number }) => void;
   maxLength?: number;
   /** Focus it when it's created. Later changes to it do nothing (use `node.focus()`). */
   autoFocus?: boolean;

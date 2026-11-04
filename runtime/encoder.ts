@@ -62,6 +62,7 @@ export class OpEncoder {
 
   text(id: number, s: string) { this.op(Op.TEXT, [id, ...stringWords(s)]); }
   value(id: number, rev: number, s: string) { this.op(Op.VALUE, [id, rev, ...stringWords(s)]); }
+  inputAllow(id: number, s: string) { this.op(Op.INPUT_ALLOW, [id, ...stringWords(s)]); }
   placeholder(id: number, s: string) { this.op(Op.PLACEHOLDER, [id, ...stringWords(s)]); }
   inputOptions(id: number, flags: number, maxLength: number) { this.op(Op.INPUT_OPTIONS, [id, flags, maxLength]); }
   access(id: number, role: number, flags: number, label: string) { this.op(Op.ACCESS, [id, role, flags, ...stringWords(label)]); }

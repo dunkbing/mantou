@@ -63,6 +63,8 @@ pub mod op {
     pub const SELECT: u32 = 29;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
+    /// The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered.
+    pub const INPUT_ALLOW: u32 = 31;
     /// What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it).
     pub const ACCESS: u32 = 30;
 }
@@ -98,6 +100,7 @@ pub fn op_name(code: u32) -> &'static str {
         28 => "ANIMATE",
         29 => "SELECT",
         18 => "FOCUS_SCOPE",
+        31 => "INPUT_ALLOW",
         30 => "ACCESS",
         _ => "UNKNOWN",
     }
@@ -117,6 +120,7 @@ pub mod event_mask {
     pub const HOVER: u32 = 8;
     pub const POINTER: u32 = 16;
     pub const DROP: u32 = 32;
+    pub const SELECT: u32 = 64;
 }
 
 pub mod scroll_flag {
@@ -284,6 +288,8 @@ pub mod event {
     pub const NODE_POINTER: u32 = 25;
     /// The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen. a = WindowStateFlag bits (focused, minimized, maximized, fullscreen, dark system theme), b = x, c = y (i32 as u32: the window's outer position, logical px).
     pub const WINDOW_STATE: u32 = 27;
+    /// An Input's caret or selection moved. a = input, b = anchor, c = focus (UTF-16 units, equal = a caret); only for Inputs with a Select listener, when their selection changes.
+    pub const SELECTION: u32 = 28;
     /// Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words.
     pub const FILE_DROP: u32 = 26;
 }

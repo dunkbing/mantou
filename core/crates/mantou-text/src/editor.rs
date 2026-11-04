@@ -44,6 +44,9 @@ pub struct Editor {
     pub read_only: bool,
     /// Maximum length in characters; 0 = no limit.
     pub max_len: usize,
+    /// The characters typing and pasting may add, as inclusive ranges; `allow_not` inverts it. Empty = anything.
+    allow: Vec<(char, char)>,
+    allow_not: bool,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
     last_edit: Option<Edit>,
@@ -109,6 +112,8 @@ impl Editor {
             multiline: false,
             read_only: false,
             max_len: 0,
+            allow: Vec::new(),
+            allow_not: false,
             undo: Vec::new(),
             redo: Vec::new(),
             last_edit: None,
@@ -335,12 +340,42 @@ impl Editor {
         self.last_edit = None;
     }
 
+    /// Sets the accepted characters: `0-9.` (characters and `a-z` ranges), `^` first inverts; `[..]` is tolerated.
+    pub fn set_allow(&mut self, spec: &str) {
+        let spec = spec.strip_prefix('[').and_then(|s| s.strip_suffix(']')).unwrap_or(spec);
+        let (not, spec) = spec.strip_prefix('^').map_or((false, spec), |s| (true, s));
+        let cs: Vec<char> = spec.chars().collect();
+        let mut set = Vec::new();
+        let mut i = 0;
+        while i < cs.len() {
+            if i + 2 < cs.len() && cs[i + 1] == '-' {
+                set.push((cs[i], cs[i + 2]));
+                i += 3;
+            } else {
+                set.push((cs[i], cs[i]));
+                i += 1;
+            }
+        }
+        self.allow_not = not && !set.is_empty();
+        self.allow = set;
+    }
+
+    fn allowed(&self, c: char) -> bool {
+        self.allow.is_empty() || self.allow.iter().any(|&(a, b)| (a..=b).contains(&c)) != self.allow_not
+    }
+
     /// Inserts text at the caret, replacing the selection. Returns whether the text changed.
     pub fn insert(&mut self, engine: &mut TextEngine, text: &str) -> bool {
         if self.read_only || text.is_empty() {
             return false;
         }
         let mut t = self.clean(text).into_owned();
+        if !self.allow.is_empty() {
+            t.retain(|c| self.allowed(c) || (c == '\n' && self.multiline));
+            if t.is_empty() {
+                return false;
+            }
+        }
         if self.max_len > 0 {
             let (a, f) = self.char_selection();
             let selected = a.abs_diff(f);

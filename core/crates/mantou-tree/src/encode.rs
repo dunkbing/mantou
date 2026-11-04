@@ -101,6 +101,11 @@ impl Ops {
         w.extend(string_words(text));
         self.op(op::PLACEHOLDER, &w)
     }
+    pub fn input_allow(&mut self, id: u32, allow: &str) -> &mut Self {
+        let mut w = vec![id];
+        w.extend(string_words(allow));
+        self.op(op::INPUT_ALLOW, &w)
+    }
     pub fn access(&mut self, id: u32, role: u32, flags: u32, label: &str) -> &mut Self {
         let mut w = vec![id, role, flags];
         w.extend(string_words(label));
