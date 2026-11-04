@@ -77,8 +77,9 @@ export const clipboard = {
 };
 
 /** Choose files (or folders); the paths, or null when cancelled. */
-export function openFile(options: OpenFileOptions = {}): Promise<string[] | null> {
-  return ui().service<string[]>({ kind: "openFile", ...options });
+export async function openFile(options: OpenFileOptions = {}): Promise<string[] | null> {
+  const paths = await ui().service<string[]>({ kind: "openFile", ...options });
+  return paths && paths.length ? paths : null; // some platforms' dialogs answer an empty list when cancelled
 }
 
 /** Choose where to save; the path, or null when cancelled. */

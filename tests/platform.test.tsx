@@ -109,3 +109,15 @@ test("openExternal, reveal, notify, setBadge and the tray send their requests", 
   await f;
   expect(h.lastService()).toEqual({ kind: "createTray", icon: "icon.png", menu: [{ id: "quit", label: "Quit" }] });
 });
+
+test("openFile answers null for a cancel, also when the dialog answers an empty list (dunkbing/mantou#28)", async () => {
+  const h = app();
+  h.answer([]);
+  const p = openFile();
+  h.step();
+  expect(await p).toBeNull();
+  h.answer(["/tmp/a.txt"]);
+  const q = openFile();
+  h.step();
+  expect(await q).toEqual(["/tmp/a.txt"]);
+});
