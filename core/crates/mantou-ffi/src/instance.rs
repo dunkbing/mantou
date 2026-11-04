@@ -121,7 +121,12 @@ pub struct Instance {
 impl Instance {
     pub fn new(headless: bool) -> Instance {
         Instance {
-            tree: Mutex::new(Tree::new()),
+            tree: Mutex::new({
+                let mut t = Tree::new();
+                // MANTOU_DEBUG=layout (comma-separated list): outline every box.
+                t.set_debug_layout(std::env::var("MANTOU_DEBUG").is_ok_and(|v| v.split(',').any(|p| p.trim() == "layout")));
+                t
+            }),
             scene: Mutex::new(Arc::new(Scene { clear: [0.08, 0.08, 0.1, 1.0], ..Scene::default() })),
             stats: Stats::default(),
             headless,

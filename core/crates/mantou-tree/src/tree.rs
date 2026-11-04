@@ -312,6 +312,8 @@ pub struct Tree {
     /// The Text node whose text is selected (`userSelect`), and its read-only editor: only one at a time.
     tsel: Option<(u32, mantou_text::Editor)>,
     events: Vec<TreeEvent>,
+    /// Outline every box in the scene (MANTOU_DEBUG=layout).
+    debug_layout: bool,
     /// macOS key bindings (see `set_mac_keys`).
     mac: bool,
     /// A Layout listener was added since the last layout.
@@ -390,6 +392,7 @@ impl Tree {
             drag: None,
             tsel: None,
             events: Vec::new(),
+            debug_layout: false,
             mac: cfg!(target_os = "macos"),
             reports_pending: false,
             scopes: Vec::new(),
@@ -416,6 +419,12 @@ impl Tree {
     /// scene of an unchanged tree would be the same, so it needn't be built).
     pub fn scene_stale(&self) -> bool {
         self.scene_dirty
+    }
+
+    /// Outlines every box in the scene, for debugging layout.
+    pub fn set_debug_layout(&mut self, on: bool) {
+        self.debug_layout = on;
+        self.scene_dirty = true;
     }
 
     pub fn node_count(&self) -> usize {
@@ -1276,6 +1285,16 @@ impl Tree {
         }
         for t in thumbs {
             quads.push(thumb_quad(t, &self.nodes));
+        }
+        if self.debug_layout {
+            // Every box's edge, on top: a hue per node, so neighbours can be told apart.
+            const HUES: [[f32; 4]; 6] = [[0.95, 0.3, 0.3, 0.8], [0.3, 0.75, 0.35, 0.8], [0.3, 0.5, 0.95, 0.8], [0.95, 0.7, 0.2, 0.8], [0.75, 0.35, 0.9, 0.8], [0.2, 0.8, 0.85, 0.8]];
+            for b in &self.boxes {
+                let rect = [snap(b.rect[0]), snap(b.rect[1]), snap(b.rect[2]), snap(b.rect[3])];
+                if rect[2] > rect[0] && rect[3] > rect[1] {
+                    quads.push(Quad { rect, color: [0.0; 4], uv: [0.0; 4], clip: NO_CLIP, radius: 0.0, border: 1.0, border_color: HUES[b.id as usize % HUES.len()], shadow: None, image: None, extra: Extra::NONE });
+                }
+            }
         }
         let atlas = if glyphs { self.text.as_ref().map(|t| t.atlas()) } else { None };
         Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas, images }
