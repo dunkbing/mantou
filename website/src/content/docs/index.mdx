@@ -1,39 +1,39 @@
 ---
 title: Mantou
-description: Mantou is a native GUI framework for Bun + TypeScript that draws its own UI on the GPU.
+description: Native desktop apps in TypeScript, on Bun. You write Solid-style JSX; a Rust core draws it on the GPU. No webview.
 template: splash
 hero:
-  tagline: Native desktop apps in TypeScript, on Bun.
+  title: Desktop apps in TypeScript, drawn natively
+  tagline: Write Solid-style JSX on Bun. Mantou lays it out, draws it on the GPU and keeps scrolling smooth while your code is busy. No browser, no webview.
+  image:
+    file: ../../assets/showcase.png
+    alt: A Mantou app with a scrolling inbox, a compose form, buttons with shadows and a code card
   actions:
-    - text: Read the design
-      link: /design/overview/
+    - text: Get started
+      link: /guide/getting-started/
       icon: right-arrow
-    - text: Status
-      link: /progress/threading/
-      variant: minimal
     - text: GitHub
       link: https://github.com/dunkbing/mantou
       icon: external
-      variant: minimal
+      variant: secondary
 ---
 
-Mantou lets you write desktop apps in TypeScript and TSX, run them on Bun, and show UI that Mantou draws itself on the GPU. It never shows a webview. The main thread never runs app JavaScript and never waits for it. That keeps scrolling, resizing and animation smooth while the app's JS is busy or paused for garbage collection.
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+```bash
+bun add mantou-ui
+```
 
 ```tsx
-import { Index, Text, View, createSignal, defineStyle, run } from "mantou-ui";
-
-const dot = defineStyle({ width: 28, height: 28, backgroundColor: "#f59e0b" });
+import { Text, View, createSignal, run } from "mantou-ui";
 
 function Counter() {
   const [count, setCount] = createSignal(0);
   return (
-    <View style={{ flexGrow: 1, padding: 24, gap: 16 }}>
-      <View style={{ width: 88, height: 44, borderRadius: 8, justifyContent: "center", backgroundColor: "#16a34a" }} onPress={() => setCount((n) => n + 1)}>
-        <Text style={{ color: "#ffffff", fontWeight: 600, textAlign: "center" }}>+1</Text>
-      </View>
+    <View style={{ padding: 24, gap: 12, alignItems: "flex-start" }}>
       <Text style={{ fontSize: 32, fontWeight: 700 }}>{count()}</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        <Index each={Array.from({ length: count() })}>{() => <View style={dot} />}</Index>
+      <View style={{ padding: 12, borderRadius: 8, backgroundColor: "#2563eb" }} onPress={() => setCount(count() + 1)}>
+        <Text style={{ color: "#fff", fontWeight: 600 }}>Add one</Text>
       </View>
     </View>
   );
@@ -42,22 +42,33 @@ function Counter() {
 run(() => <Counter />, { title: "Counter" });
 ```
 
-This runs today (`examples/counter`). For something bigger, [Mantou Mail](https://github.com/dunkbing/mantou-mail) is an email app (mailboxes, a message list, a reader and keyboard shortcuts) built the same way, with Mantou from npm ([Text and Mantou Mail](/progress/text/)).
+## What you get
 
-## Status
+<CardGrid>
+  <Card title="Fast by construction" icon="rocket">
+    The window runs on its own thread. Scrolling, resizing and animations don't wait for your code, and an idle app uses no CPU.
+  </Card>
+  <Card title="Familiar" icon="pen">
+    Solid signals and JSX, flexbox layout, and the npm packages you already use, on Bun.
+  </Card>
+  <Card title="The parts apps need" icon="puzzle">
+    Text input with IME, virtualized lists, images and SVG, custom fonts, shadows, animations, menus, dialogs, clipboard, drag and drop.
+  </Card>
+  <Card title="Accessible" icon="approve-check">
+    Screen readers see your UI through AccessKit on macOS, Windows and Linux.
+  </Card>
+  <Card title="Testable" icon="seti:checkbox">
+    Test against the real layout and text engine with `bun test`, no window needed.
+  </Card>
+  <Card title="One command to ship" icon="download">
+    `mantou build` makes one executable; `mantou package` makes a macOS app and disk image.
+  </Card>
+</CardGrid>
 
-**Early development.** The threading model works with a real window on Linux, macOS and Windows. Solid-style JSX, flexbox layout, text and app fonts, text input, scrolling, rounded corners, borders and shadows, clipping, presses, keys and the wheel work, and so do headless test instances. Images don't exist yet. See [threading](/progress/threading/), [UI tree, layout and rendering](/progress/ui-tree/), [text and Mantou Mail](/progress/text/), [text input](/progress/text-input/) and [scrolling and dialogs](/progress/scrolling/).
+## Where to go next
 
-## Documentation
+- **New here?** [Getting started](/guide/getting-started/), then [components](/guide/components/) and [styling](/guide/styling/).
+- **A real app:** [Mantou Mail](https://github.com/dunkbing/mantou-mail) is an email client built with Mantou.
+- **How it works inside:** [How it works](/design/overview/). **What's tested:** [status](/progress/threading/).
 
-- [Overview](/design/overview/): summary, goals and non-goals, design principles.
-- [Threading and architecture](/design/threading/): who owns the main thread, and how the pieces fit.
-- [The native core](/design/native-core/) and [the TypeScript runtime](/design/runtime/).
-- [Protocols](/design/protocols/), [rendering and input](/design/rendering/), [FFI conventions](/design/ffi/).
-- [Testing](/design/testing/), [packaging](/design/packaging/), [alternatives, risks and decisions](/design/decisions/).
-
-## For LLMs and agents
-
-- [`/llms.txt`](/llms.txt): an index of the documentation, following [llmstxt.org](https://llmstxt.org/).
-- [`/llms-full.txt`](/llms-full.txt): all documentation in one file. [`/llms-small.txt`](/llms-small.txt) is a compact version.
-- Every page is also available as raw Markdown: append `.md` to its path, for example [`/design/protocols.md`](/design/protocols.md) for [`/design/protocols/`](/design/protocols/). The home page is [`/index.md`](/index.md).
+Mantou is in early development and works on Linux, macOS and Windows. Every page is also Markdown: append `.md` to its path, or read [`/llms.txt`](/llms.txt).

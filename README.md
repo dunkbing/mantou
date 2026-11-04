@@ -53,4 +53,4 @@ For a real app, see [Mantou Mail](https://github.com/dunkbing/mantou-mail): an e
 
 ## Docs and contributing
 
-The design, the protocol and test results are at [mantou.dunkbing.dev](https://mantou.dunkbing.dev) (source in [`website/`](website/)). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose). Working on the code, as a person or an agent? Start with [AGENTS.md](AGENTS.md).
+The guide, the design and test results are at [mantou.dunkbing.dev](https://mantou.dunkbing.dev) (source in [`website/`](website/)). Found a bug or need a feature? [Open an issue](https://github.com/dunkbing/mantou/issues/new/choose). Working on the code, as a person or an agent? Start with [AGENTS.md](AGENTS.md).

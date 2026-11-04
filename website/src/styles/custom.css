@@ -1,0 +1,86 @@
+/* A warm, paper-like look: cream canvas, one red-orange accent, IBM Plex. */
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+:root {
+  --m-neutral: oklch(53% 0.02 259);
+  --m-cream: oklch(60% 0.1 75);
+  --m-brand: oklch(59% 0.185 32);
+  --sl-font: "IBM Plex Sans Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sl-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --sl-content-width: 46rem;
+}
+
+:root[data-theme="light"] {
+  --sl-color-bg: color-mix(in oklch, var(--m-cream), white 95%);
+  --sl-color-bg-nav: color-mix(in oklch, var(--m-cream), white 95%);
+  --sl-color-bg-sidebar: color-mix(in oklch, var(--m-cream), white 95%);
+  --sl-color-bg-inline-code: color-mix(in oklch, var(--m-cream), white 85%);
+  --sl-color-hairline-light: color-mix(in oklch, var(--m-cream), white 70%);
+  --sl-color-hairline: color-mix(in oklch, var(--m-cream), white 70%);
+  --sl-color-hairline-shade: color-mix(in oklch, var(--m-cream), white 80%);
+  --sl-color-white: color-mix(in oklch, var(--m-neutral), black 70%);
+  --sl-color-text: color-mix(in oklch, var(--m-neutral), black 55%);
+  --sl-color-gray-1: color-mix(in oklch, var(--m-neutral), black 40%);
+  --sl-color-gray-2: color-mix(in oklch, var(--m-neutral), black 26%);
+  --sl-color-gray-3: var(--m-neutral);
+  --sl-color-gray-4: color-mix(in oklch, var(--m-neutral), white 50%);
+  --sl-color-gray-5: color-mix(in oklch, var(--m-cream), white 70%);
+  --sl-color-gray-6: color-mix(in oklch, var(--m-cream), white 85%);
+  --sl-color-gray-7: color-mix(in oklch, var(--m-cream), white 95%);
+  --sl-color-black: color-mix(in oklch, var(--m-cream), white 95%);
+  --sl-color-accent-low: color-mix(in oklch, var(--m-brand), white 85%);
+  --sl-color-accent: var(--m-brand);
+  --sl-color-accent-high: color-mix(in oklch, var(--m-brand), black 30%);
+}
+
+:root[data-theme="dark"] {
+  --sl-color-bg: color-mix(in oklch, var(--m-neutral), black 88%);
+  --sl-color-bg-nav: color-mix(in oklch, var(--m-neutral), black 88%);
+  --sl-color-bg-sidebar: color-mix(in oklch, var(--m-neutral), black 88%);
+  --sl-color-black: color-mix(in oklch, var(--m-neutral), black 88%);
+  --sl-color-hairline-light: color-mix(in oklch, var(--m-neutral), black 70%);
+  --sl-color-hairline: color-mix(in oklch, var(--m-neutral), black 70%);
+  --sl-color-accent-low: color-mix(in oklch, var(--m-brand), black 65%);
+  --sl-color-accent: color-mix(in oklch, var(--m-brand), white 15%);
+  --sl-color-accent-high: color-mix(in oklch, var(--m-brand), white 55%);
+}
+
+/* The thin accent rail along the top of every page. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 0.375rem;
+  background: var(--m-brand);
+  z-index: 100;
+}
+.header { margin-top: 0.375rem; }
+.site-title { font-weight: 700; letter-spacing: -0.01em; font-size: 1.15rem; }
+
+h1, h2, h3 { letter-spacing: -0.02em; font-weight: 650; }
+.sl-markdown-content h2 { margin-top: 2.5rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--sl-color-hairline); }
+
+/* Code and tables */
+.expressive-code { --ec-brdRad: 0.625rem; }
+:root[data-theme="light"] .expressive-code { --ec-brdCol: var(--sl-color-hairline); --ec-codeBg: color-mix(in oklch, var(--m-cream), white 90%); }
+.sl-markdown-content table { display: table; width: 100%; border: 1px solid var(--sl-color-hairline); border-radius: 0.625rem; border-collapse: separate; border-spacing: 0; overflow: hidden; }
+.sl-markdown-content :is(th, td) { padding: 0.55rem 0.9rem; }
+.sl-markdown-content tr:not(:last-child) > :is(td, th) { border-bottom: 1px solid var(--sl-color-hairline); }
+.sl-markdown-content :not(pre) > code { border-radius: 0.35rem; padding: 0.1em 0.35em; }
+
+/* Sidebar */
+.sidebar-content a[aria-current="page"] { background: var(--sl-color-accent-low); color: var(--sl-color-accent-high); border-radius: 0.5rem; font-weight: 600; }
+.sidebar-content a { border-radius: 0.5rem; }
+
+/* Home page */
+[data-has-hero] .hero { padding-block: clamp(2.5rem, 8vw, 6rem) 2rem; gap: 2.5rem; }
+[data-has-hero] .hero h1 { font-size: clamp(2.5rem, 6vw, 4.25rem); line-height: 1.04; letter-spacing: -0.035em; font-weight: 700; }
+[data-has-hero] .hero .tagline { font-size: clamp(1.1rem, 2vw, 1.4rem); color: var(--sl-color-gray-2); max-width: 36rem; }
+[data-has-hero] .hero img { border-radius: 1rem; border: 1px solid var(--sl-color-hairline); box-shadow: 0 24px 60px -24px color-mix(in oklch, var(--m-neutral), transparent 55%); }
+.sl-link-button { border-radius: 0.6rem; font-weight: 600; padding: 0.65em 1.2em; }
+.sl-link-button.primary { background: var(--m-brand); border-color: var(--m-brand); color: white; }
+.sl-link-button.secondary { border-color: var(--sl-color-hairline); }
+.card-grid .card, .starlight-card, :is(.card-grid) > * { border-radius: 0.9rem; }
+[data-has-hero] .sl-markdown-content { max-width: 64rem; margin-inline: auto; }
