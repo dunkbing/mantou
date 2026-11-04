@@ -199,9 +199,14 @@ export const StyleProp = {
   translateY: { code: 58, kind: "f32" },
   scale: { code: 59, kind: "f32" },
   cursor: { code: 60, kind: "enum", values: ["auto","default","pointer","text","grab","grabbing","notAllowed","move","crosshair","wait","progress","help","ewResize","nsResize","neswResize","nwseResize","colResize","rowResize","none"] },
+  textDecoration: { code: 61, kind: "enum", values: ["none","underline","lineThrough"] },
+  letterSpacing: { code: 62, kind: "f32" },
+  textTransform: { code: 63, kind: "enum", values: ["none","uppercase","lowercase","capitalize"] },
+  whiteSpace: { code: 64, kind: "enum", values: ["normal","nowrap"] },
+  textOverflow: { code: 65, kind: "enum", values: ["ellipsis","clip"] },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -330,4 +335,14 @@ export interface WireStyle {
   scale?: number;
   /** Default: auto. */
   cursor?: "auto" | "default" | "pointer" | "text" | "grab" | "grabbing" | "notAllowed" | "move" | "crosshair" | "wait" | "progress" | "help" | "ewResize" | "nsResize" | "neswResize" | "nwseResize" | "colResize" | "rowResize" | "none";
+  /** Default: none. */
+  textDecoration?: "none" | "underline" | "lineThrough";
+  /** Default: 0 (px added after each character). */
+  letterSpacing?: number;
+  /** Default: none. */
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
+  /** Default: normal. */
+  whiteSpace?: "normal" | "nowrap";
+  /** Default: ellipsis (what is cut off by maxLines or a nowrap line that is too wide ends in …). */
+  textOverflow?: "ellipsis" | "clip";
 }

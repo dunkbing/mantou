@@ -1081,6 +1081,12 @@ impl Tree {
                     }
                 };
                 glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, color, clip);
+                for d in &layout.decorations {
+                    let rect = [snap((c[0] + d[0] * k) * s), snap((c[1] + d[1] * k) * s), snap((c[0] + d[2] * k) * s), snap((c[1] + d[3] * k) * s).max(snap((c[1] + d[1] * k) * s) + 1.0)];
+                    if overlaps(rect, clip) {
+                        quads.push(Quad { rect, color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
+                    }
+                }
             }
             if let (Some(inp), Some(text)) = (&node.input, self.text.as_mut()) {
                 let c = b.content;
@@ -1419,6 +1425,24 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         }
         Prop::MaxLines => v.text.max_lines = num().clamp(0.0, 10_000.0) as u32,
         Prop::FontStyle => v.text.italic = e == p::font_style::ITALIC,
+        Prop::TextDecoration => {
+            v.text.decoration = match e {
+                p::text_decoration::UNDERLINE => mantou_text::Decoration::Underline,
+                p::text_decoration::LINE_THROUGH => mantou_text::Decoration::LineThrough,
+                _ => mantou_text::Decoration::None,
+            }
+        }
+        Prop::LetterSpacing => v.text.letter_spacing = finite(num(), 0.0).clamp(-100.0, 100.0),
+        Prop::TextTransform => {
+            v.text.transform = match e {
+                p::text_transform::UPPERCASE => mantou_text::Transform::Upper,
+                p::text_transform::LOWERCASE => mantou_text::Transform::Lower,
+                p::text_transform::CAPITALIZE => mantou_text::Transform::Capitalize,
+                _ => mantou_text::Transform::None,
+            }
+        }
+        Prop::WhiteSpace => v.text.nowrap = e == p::white_space::NOWRAP,
+        Prop::TextOverflow => v.text.ellipsis = e != p::text_overflow::CLIP,
         Prop::ShadowX => v.shadow[0] = num(),
         Prop::ShadowY => v.shadow[1] = num(),
         Prop::ShadowBlur => v.shadow[2] = num().max(0.0),

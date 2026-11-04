@@ -380,6 +380,29 @@ pub mod cursor {
     pub const NONE: u32 = 18;
 }
 
+pub mod text_decoration {
+    pub const NONE: u32 = 0;
+    pub const UNDERLINE: u32 = 1;
+    pub const LINE_THROUGH: u32 = 2;
+}
+
+pub mod text_transform {
+    pub const NONE: u32 = 0;
+    pub const UPPERCASE: u32 = 1;
+    pub const LOWERCASE: u32 = 2;
+    pub const CAPITALIZE: u32 = 3;
+}
+
+pub mod white_space {
+    pub const NORMAL: u32 = 0;
+    pub const NOWRAP: u32 = 1;
+}
+
+pub mod text_overflow {
+    pub const ELLIPSIS: u32 = 0;
+    pub const CLIP: u32 = 1;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -454,10 +477,15 @@ pub enum Prop {
     TranslateY = 58,
     Scale = 59,
     Cursor = 60,
+    TextDecoration = 61,
+    LetterSpacing = 62,
+    TextTransform = 63,
+    WhiteSpace = 64,
+    TextOverflow = 65,
 }
 
 impl Prop {
-    pub const COUNT: usize = 60;
+    pub const COUNT: usize = 65;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -521,6 +549,11 @@ impl Prop {
             58 => Prop::TranslateY,
             59 => Prop::Scale,
             60 => Prop::Cursor,
+            61 => Prop::TextDecoration,
+            62 => Prop::LetterSpacing,
+            63 => Prop::TextTransform,
+            64 => Prop::WhiteSpace,
+            65 => Prop::TextOverflow,
             _ => return None,
         })
     }
@@ -587,6 +620,11 @@ impl Prop {
             Prop::TranslateY => "translateY",
             Prop::Scale => "scale",
             Prop::Cursor => "cursor",
+            Prop::TextDecoration => "textDecoration",
+            Prop::LetterSpacing => "letterSpacing",
+            Prop::TextTransform => "textTransform",
+            Prop::WhiteSpace => "whiteSpace",
+            Prop::TextOverflow => "textOverflow",
         }
     }
 
@@ -652,6 +690,11 @@ impl Prop {
             Prop::TranslateY => ValueKind::F32,
             Prop::Scale => ValueKind::F32,
             Prop::Cursor => ValueKind::Enum(19),
+            Prop::TextDecoration => ValueKind::Enum(3),
+            Prop::LetterSpacing => ValueKind::F32,
+            Prop::TextTransform => ValueKind::Enum(4),
+            Prop::WhiteSpace => ValueKind::Enum(2),
+            Prop::TextOverflow => ValueKind::Enum(2),
         }
     }
 
@@ -707,6 +750,10 @@ impl Prop {
                 "rowResize",
                 "none",
             ],
+            Prop::TextDecoration => &["none", "underline", "lineThrough"],
+            Prop::TextTransform => &["none", "uppercase", "lowercase", "capitalize"],
+            Prop::WhiteSpace => &["normal", "nowrap"],
+            Prop::TextOverflow => &["ellipsis", "clip"],
             _ => &[],
         }
     }

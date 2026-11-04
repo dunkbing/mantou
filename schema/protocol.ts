@@ -169,6 +169,12 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "scale", code: 59, type: "f32", default: "1" },
   // The pointer's shape over the node (and its descendants that don't set one), set by the core as the pointer moves. "auto": an Input's text cursor, else the arrow.
   { name: "cursor", code: 60, type: { enum: ["auto", "default", "pointer", "text", "grab", "grabbing", "notAllowed", "move", "crosshair", "wait", "progress", "help", "ewResize", "nsResize", "neswResize", "nwseResize", "colResize", "rowResize", "none"] }, default: "auto" },
+  // More text styles.
+  { name: "textDecoration", code: 61, type: { enum: ["none", "underline", "lineThrough"] }, default: "none" },
+  { name: "letterSpacing", code: 62, type: "f32", default: "0 (px added after each character)" },
+  { name: "textTransform", code: 63, type: { enum: ["none", "uppercase", "lowercase", "capitalize"] }, default: "none" },
+  { name: "whiteSpace", code: 64, type: { enum: ["normal", "nowrap"] }, default: "normal" },
+  { name: "textOverflow", code: 65, type: { enum: ["ellipsis", "clip"] }, default: "ellipsis (what is cut off by maxLines or a nowrap line that is too wide ends in …)" },
 ];
 
 /**

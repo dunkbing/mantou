@@ -35,7 +35,16 @@ Two things catch people out:
 
 ## Text
 
-`color`, `fontSize`, `fontWeight`, `fontStyle`, `fontFamily`, `lineHeight`, `textAlign`, `maxLines`. Inputs also take `placeholderColor`, `caretColor`, `selectionColor`.
+`color`, `fontSize`, `fontWeight`, `fontStyle`, `fontFamily`, `lineHeight`, `textAlign`, `maxLines`, plus:
+
+| | |
+|---|---|
+| `textDecoration` | `"none"`, `"underline"`, `"lineThrough"` |
+| `letterSpacing` | px added after each character |
+| `textTransform` | `"uppercase"`, `"lowercase"`, `"capitalize"` |
+| `whiteSpace` | `"nowrap"` keeps one line |
+| `textOverflow` | `"ellipsis"` (default) or `"clip"` for what `maxLines` or `nowrap` cuts off |
+ Inputs also take `placeholderColor`, `caretColor`, `selectionColor`.
 
 The default font is Inter. To use your own:
 

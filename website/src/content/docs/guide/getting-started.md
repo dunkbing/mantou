@@ -30,7 +30,7 @@ import { Text, View, createSignal, run } from "mantou-ui";
 function App() {
   const [count, setCount] = createSignal(0);
   return (
-    <View style={{ flexGrow: 1, padding: 24, gap: 12, alignItems: "flex-start" }}>
+    <View style={{ flexGrow: 1, padding: 24, gap: 12, alignItems: "start" }}>
       <Text style={{ fontSize: 32, fontWeight: 700 }}>{count()}</Text>
       <View
         style={{ padding: 12, borderRadius: 8, backgroundColor: "#2563eb", cursor: "pointer" }}

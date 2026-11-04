@@ -53,16 +53,61 @@ pub struct TextStyle {
     pub italic: bool,
     /// A font family id (TextEngine::set_family); 0 = the default fonts.
     pub family: u32,
+    /// Px added after each character.
+    pub letter_spacing: f32,
+    pub transform: Transform,
+    pub decoration: Decoration,
+    /// One line, however wide.
+    pub nowrap: bool,
+    /// What is cut off ends in an ellipsis (true) or just stops (false).
+    pub ellipsis: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Transform {
+    #[default]
+    None,
+    Upper,
+    Lower,
+    Capitalize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Decoration {
+    #[default]
+    None,
+    Underline,
+    LineThrough,
+}
+
+impl Transform {
+    fn apply(self, text: &str) -> String {
+        match self {
+            Transform::None => text.to_owned(),
+            Transform::Upper => text.to_uppercase(),
+            Transform::Lower => text.to_lowercase(),
+            Transform::Capitalize => {
+                let mut start = true;
+                text.chars()
+                    .flat_map(|c| {
+                        let up = start && c.is_alphabetic();
+                        start = !c.is_alphanumeric() && c != '\'';
+                        if up { c.to_uppercase().collect::<Vec<_>>() } else { vec![c] }
+                    })
+                    .collect()
+            }
+        }
+    }
 }
 
 impl Default for TextStyle {
     fn default() -> Self {
-        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false, family: 0 }
+        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false, family: 0, letter_spacing: 0.0, transform: Transform::None, decoration: Decoration::None, nowrap: false, ellipsis: true }
     }
 }
 
 impl TextStyle {
-    fn key(&self) -> [u32; 7] {
+    fn key(&self) -> [u32; 9] {
         [
             self.family,
             self.size.to_bits(),
@@ -71,6 +116,8 @@ impl TextStyle {
             self.align as u32,
             self.max_lines,
             self.italic as u32,
+            self.letter_spacing.to_bits(),
+            self.transform as u32 | (self.decoration as u32) << 4 | (self.nowrap as u32) << 8 | (self.ellipsis as u32) << 9,
         ]
     }
 }
@@ -95,6 +142,8 @@ pub struct TextLayout {
     /// Lines were cut off (`max_lines`) or a single line was too wide: it ends in an ellipsis.
     pub truncated: bool,
     pub glyphs: Vec<PlacedGlyph>,
+    /// Underlines and strike-throughs, as boxes [x0, y0, x1, y1] in logical px from the layout's top left.
+    pub decorations: Vec<[f32; 4]>,
 }
 
 /// A glyph's bitmap in the atlas, and where it sits relative to its pen position (device px).
@@ -205,7 +254,7 @@ impl Atlas {
     }
 }
 
-type LayoutKey = (String, [u32; 7], u32);
+type LayoutKey = (String, [u32; 9], u32);
 
 /// Text layout and glyph rasterization for one tree.
 pub struct TextEngine {
@@ -220,7 +269,7 @@ pub struct TextEngine {
     /// than the limit keeps most of its hits instead of losing them all.
     cache: HashMap<LayoutKey, Arc<TextLayout>>,
     older: HashMap<LayoutKey, Arc<TextLayout>>,
-    ellipses: HashMap<[u32; 7], Vec<PlacedGlyph>>,
+    ellipses: HashMap<[u32; 9], Vec<PlacedGlyph>>,
     /// Font family lists by id, each ending in the default ones (FAMILY).
     families: HashMap<u32, String>,
     /// Layouts computed (cache misses), for tests and stats.
@@ -316,6 +365,9 @@ impl TextEngine {
         b.push_default(StyleProperty::FontSize(style.size));
         b.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
         b.push_default(StyleProperty::FontStyle(if style.italic { FontStyle::Italic } else { FontStyle::Normal }));
+        if style.letter_spacing != 0.0 {
+            b.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
+        }
         b.push_default(StyleProperty::LineHeight(if style.line_height > 0.0 {
             LineHeight::FontSizeRelative(style.line_height)
         } else {
@@ -382,8 +434,15 @@ impl TextEngine {
         if text.is_empty() {
             return TextLayout::default();
         }
+        let transformed;
+        let text = if style.transform == Transform::None {
+            text
+        } else {
+            transformed = style.transform.apply(text);
+            &transformed
+        };
         let mut layout = self.shape(text, style);
-        let single = style.max_lines == 1;
+        let single = style.max_lines == 1 || style.nowrap;
         layout.break_all_lines(if single { None } else { max_width });
         if !single {
             let align = match style.align {
@@ -402,7 +461,7 @@ impl TextEngine {
         if truncated
             && let Some(last) = lines.last_mut()
         {
-            let ell = self.ellipsis(style);
+            let ell = if style.ellipsis { self.ellipsis(style) } else { Vec::new() };
             let ell_w: f32 = ell.iter().map(|g| g.advance).sum();
             let limit = max_width.unwrap_or(f32::INFINITY) - ell_w;
             while last.last().is_some_and(|g| g.x + g.advance > limit) {
@@ -438,7 +497,21 @@ impl TextEngine {
             }
         }
         let height = if keep == total { layout.height() } else { extents.iter().map(|e| e.1).sum() };
-        TextLayout { width, height, lines: keep as u32, truncated, glyphs: lines.into_iter().flatten().collect() }
+        // ponytail: line positions from the font size, not the font's own underline metrics.
+        let mut decorations = Vec::new();
+        if style.decoration != Decoration::None {
+            for (l, e) in lines.iter().zip(&extents) {
+                let (Some(first), Some(last)) = (l.first(), l.last()) else { continue };
+                let thickness = (style.size / 14.0).max(1.0);
+                let y = match style.decoration {
+                    Decoration::Underline => first.y + style.size * 0.12,
+                    _ => first.y - style.size * 0.3,
+                };
+                let _ = e;
+                decorations.push([first.x, y, last.x + last.advance, y + thickness]);
+            }
+        }
+        TextLayout { width, height, lines: keep as u32, truncated, glyphs: lines.into_iter().flatten().collect(), decorations }
     }
 
     /// The glyph's bitmap in the atlas, rasterizing it the first time, at `size_px`
