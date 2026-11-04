@@ -55,6 +55,9 @@ export function prebuiltPath(): string | null {
 /** MANTOU_CORE, else a core built from this copy of mantou-ui (release, then debug), else the prebuilt one. */
 export function libPath(): string {
   if (process.env.MANTOU_CORE) return process.env.MANTOU_CORE;
+  // A compiled app ships the core beside its executable (`mantou build`).
+  const beside = join(dirname(process.execPath), FILE);
+  if (existsSync(beside)) return beside;
   const target = join(import.meta.dir, "..", "core", "target");
   const release = join(target, "release", FILE), debug = join(target, "debug", FILE);
   for (const p of [release, debug]) if (existsSync(p)) return p;

@@ -9,10 +9,10 @@ import { openCore } from "./ffi";
 
 /**
  * Opens the window and runs `entry` (an app module, .ts or .tsx) in the app
- * Worker. Never returns: this thread runs the native event loop until the app
+ * Worker (`worker` is the app's own, for a compiled app that embeds its entry). Never returns: this thread runs the native event loop until the app
  * quits, then the process exits with its code.
  */
-export async function start(entry: string, args: string[] = []): Promise<never> {
+export async function start(entry: string, args: string[] = [], worker?: Worker): Promise<never> {
   const opt = (name: string, d: string) => {
     const i = args.indexOf(`--${name}`);
     return i >= 0 && args[i + 1] ? args[i + 1] : d;
@@ -22,10 +22,11 @@ export async function start(entry: string, args: string[] = []): Promise<never> 
   const core = openCore();
 
   // The Worker entry registers the JSX plugin, then imports the app.
-  const worker = new Worker(new URL("./worker.ts", import.meta.url).href);
+  worker ??= new Worker(new URL("./worker.ts", import.meta.url).href);
+  const w = worker;
   await new Promise<void>((ok, fail) => {
     const timer = setTimeout(() => fail(new Error("mantou: the app Worker did not start within 10 s")), 10_000);
-    worker.addEventListener("message", (e) => {
+    w.addEventListener("message", (e) => {
       const data = (e as MessageEvent).data;
       if (data === "mantou:ready") {
         clearTimeout(timer);
@@ -35,11 +36,11 @@ export async function start(entry: string, args: string[] = []): Promise<never> 
         fail(new Error("mantou: the app failed to load (see the error above)"));
       }
     });
-    worker.addEventListener("error", (e) => {
+    w.addEventListener("error", (e) => {
       clearTimeout(timer);
       fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
     });
-    worker.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href });
+    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href });
   }).catch((err) => {
     console.error(err instanceof Error ? err.message : err);
     process.exit(70);
