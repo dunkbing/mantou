@@ -96,12 +96,49 @@ export function List<T>(props: ListProps<T>): JSX.Element {
   const outer = createElement("view") as Node;
   const inner = createElement("view") as Node;
   const rows = new Map<number, () => void>();
-  const height = () => Math.max(1, props.itemHeight);
+  const size = (h: number) => (Number.isFinite(h) && h > 0 ? h : 0);
+  // Where each row starts: offsets[i], and offsets[n] is the content's height.
+  // A fixed height needs no table; a function is called once per item each
+  // time `each` (or anything it reads) changes.
+  const layout = createMemo(() => {
+    const each = props.each, ih = props.itemHeight;
+    if (typeof ih === "number") {
+      const h = Math.max(1, size(ih));
+      return { n: each.length, top: (i: number) => i * h, at: (y: number) => Math.floor(y / h), before: (y: number) => Math.ceil(y / h) };
+    }
+    const offsets = new Float64Array(each.length + 1);
+    for (let i = 0; i < each.length; i++) offsets[i + 1] = offsets[i] + size(ih(each[i], i));
+    return {
+      n: each.length,
+      top: (i: number) => offsets[i],
+      // The last row starting at or above y.
+      at: (y: number) => {
+        let lo = 0, hi = each.length;
+        while (hi - lo > 1) {
+          const mid = (lo + hi) >>> 1;
+          if (offsets[mid] <= y) lo = mid;
+          else hi = mid;
+        }
+        return lo;
+      },
+      // How many rows start above y.
+      before: (y: number) => {
+        let lo = 0, hi = each.length + 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (offsets[mid] < y) lo = mid + 1;
+          else hi = mid;
+        }
+        return lo;
+      },
+    };
+  });
   const range = createMemo<[number, number]>(
     () => {
-      const n = props.each.length, h = height(), over = props.overscan ?? 4;
-      const first = Math.max(0, Math.floor(offset() / h) - over);
-      const last = Math.min(n, Math.ceil((offset() + Math.max(viewport(), h)) / h) + over);
+      const { n, at, before } = layout(), over = props.overscan ?? 4;
+      if (n === 0) return [0, 0];
+      const first = Math.max(0, at(offset()) - over);
+      const last = Math.min(n, Math.max(first + 1, before(offset() + Math.max(viewport(), 1))) + over);
       return [first, Math.max(first, last)];
     },
     [0, 0],
@@ -113,9 +150,11 @@ export function List<T>(props: ListProps<T>): JSX.Element {
     },
     range: () => range(),
     scrollToIndex(index, options = {}) {
-      const h = height(), vp = viewport(), y = offset();
-      const top = Math.max(0, Math.min(index, props.each.length - 1)) * h, bottom = top + h;
-      const to = { start: top, end: bottom - vp, center: top + h / 2 - vp / 2, nearest: top < y ? top : bottom > y + vp ? bottom - vp : y }[options.block ?? "nearest"];
+      const { n, top: topOf } = layout();
+      if (n === 0) return;
+      const i = Math.max(0, Math.min(index, n - 1)), vp = viewport(), y = offset();
+      const top = topOf(i), bottom = topOf(i + 1);
+      const to = { start: top, end: bottom - vp, center: (top + bottom) / 2 - vp / 2, nearest: top < y || bottom - top > vp ? top : bottom > y + vp ? bottom - vp : y }[options.block ?? "nearest"];
       outer.scrollTo({ y: to });
     },
   };
@@ -137,7 +176,8 @@ export function List<T>(props: ListProps<T>): JSX.Element {
     inner,
     {
       get style() {
-        return [{ flexShrink: 0, height: props.each.length * height() }, props.contentStyle];
+        const { n, top } = layout();
+        return [{ flexShrink: 0, height: top(n) }, props.contentStyle];
       },
     },
     true,
@@ -156,7 +196,11 @@ export function List<T>(props: ListProps<T>): JSX.Element {
       if (rows.has(i)) continue;
       createRoot((dispose) => {
         const row = createElement("view") as Node;
-        row.style({ position: "absolute", left: 0, right: 0, top: i * height(), height: height() });
+        // Its place follows the heights: a row above that grows moves it, with no new row.
+        createEffect(() => {
+          const { top } = layout();
+          row.style({ position: "absolute", left: 0, right: 0, top: top(i), height: top(i + 1) - top(i) });
+        });
         insert(row, () => props.children(() => props.each[i], i));
         inner.append(row);
         rows.set(i, dispose);

@@ -34,8 +34,12 @@ export interface ViewProps {
 /** A virtualized list (see `List`). */
 export interface ListProps<T> {
   each: readonly T[];
-  /** Every row's height, in px. */
-  itemHeight: number;
+  /**
+   * Rows' heights, in px: one for every row, or a function of the item and
+   * its index, for rows of different heights known from the data (it runs for
+   * every item when `each`, or a signal it reads, changes).
+   */
+  itemHeight: number | ((item: T, index: number) => number);
   /** Rows kept beyond each edge of the view (default 4). */
   overscan?: number;
   style?: StyleProp;
