@@ -550,7 +550,7 @@ pub extern "C" fn mt_test_viewport(inst: u32, width_px: u32, height_px: u32, sca
 }
 
 /// Advances a headless instance's manual clock by `advance_ms` and does what
-/// is due (for now: lays out if anything changed). Returns flags: bit 0 = events are
+/// is due: advances animations, and lays out if anything changed. Returns flags: bit 0 = events are
 /// waiting for `mt_take_events`, bit 1 = a layout ran.
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_test_step(inst: u32, advance_ms: f64) -> u32 {
@@ -558,6 +558,7 @@ pub extern "C" fn mt_test_step(inst: u32, advance_ms: f64) -> u32 {
         let mut ran = false;
         if i.headless {
             *lock(&i.clock_ms) += advance_ms.max(0.0);
+            i.tick();
             ran = i.layout_if_needed();
         }
         (i.events_pending() as u32) | ((ran as u32) << 1)

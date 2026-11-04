@@ -164,7 +164,7 @@ impl Tree {
             at = self.nodes[&view].parent;
             let Some(st) = self.nodes[&view].scroll else { continue };
             let (Some(r), Some(vb)) = (self.rect(id), self.boxes.iter().find(|b| b.id == view).copied()) else { continue };
-            let v = viewport(&vb, self.borders(view));
+            let v = viewport(&vb, self.borders(view).map(|b| b * vb.k));
             let mut next = st.offset;
             for axis in 0..2 {
                 let (lo, hi, vlo, vhi) = (r[axis], r[axis + 2], v[axis], v[axis + 2]);
@@ -180,6 +180,8 @@ impl Tree {
                     _ => 0.0,
                 };
             }
+            // Window px to the view's own (a transform may scale it).
+            let next = [st.offset[0] + (next[0] - st.offset[0]) / vb.k, st.offset[1] + (next[1] - st.offset[1]) / vb.k];
             if self.set_offset(view, next[0], next[1]) {
                 moved = true;
                 self.place_boxes();

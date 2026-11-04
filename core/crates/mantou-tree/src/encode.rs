@@ -134,6 +134,13 @@ impl Ops {
         w.extend(string_words(names));
         self.op(op::FONT_FAMILY, &w)
     }
+    pub fn transition(&mut self, id: u32, prop: Prop, duration: f32, easing: u32) -> &mut Self {
+        self.op(op::TRANSITION, &[id, prop as u32, duration.to_bits(), easing])
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn animate(&mut self, id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32) -> &mut Self {
+        self.op(op::ANIMATE, &[id, animation, prop as u32, from, to, duration.to_bits(), easing, iterations.to_bits(), flags])
+    }
     pub fn window_size(&mut self, width: f32, height: f32) -> &mut Self {
         self.op(op::WINDOW_SIZE, &[width.to_bits(), height.to_bits()])
     }

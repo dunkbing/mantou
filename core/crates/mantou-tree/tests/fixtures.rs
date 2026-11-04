@@ -48,6 +48,8 @@ fn op_json(o: &Op) -> J {
         Op::Placeholder { id, text } => json!({"op": "PLACEHOLDER", "id": id, "text": text}),
         Op::InputOptions { id, flags, max_length } => json!({"op": "INPUT_OPTIONS", "id": id, "flags": flags, "maxLength": max_length}),
         Op::Focus { id } => json!({"op": "FOCUS", "id": id}),
+        Op::Transition { id, prop, duration, easing } => json!({"op": "TRANSITION", "id": id, "prop": prop.name(), "duration": *duration as f64, "easing": easing}),
+        Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => json!({"op": "ANIMATE", "id": id, "animation": animation, "prop": prop.name(), "from": from, "to": to, "duration": *duration as f64, "easing": easing, "iterations": *iterations as f64, "flags": flags}),
         Op::WindowSize { width, height } => json!({"op": "WINDOW_SIZE", "width": *width as f64, "height": *height as f64}),
         Op::WindowLimits { min, max, flags } => json!({"op": "WINDOW_LIMITS", "minWidth": min[0] as f64, "minHeight": min[1] as f64, "maxWidth": max[0] as f64, "maxHeight": max[1] as f64, "flags": flags}),
         Op::ImagePath { id, path } => json!({"op": "IMAGE_PATH", "id": id, "path": path}),
@@ -90,7 +92,7 @@ fn every_op_code_is_covered_by_the_fixture() {
     let mut seen: Vec<&str> = ops.iter().map(|o| op_json(o)["op"].as_str().unwrap().to_string().leak() as &str).collect();
     seen.sort();
     seen.dedup();
-    for code in 1..=26 {
+    for code in 1..=28 {
         let name = mantou_tree::protocol::op_name(code);
         assert!(seen.contains(&name), "fixture has no {name}");
     }

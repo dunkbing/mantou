@@ -14,10 +14,12 @@ use taffy::style::{AlignContent, AlignItems, Dimension, LengthPercentage, Length
 use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
 
+mod anim;
 mod image;
 mod input;
 mod scroll;
 
+use anim::Anims;
 use input::Input;
 use image::ImageNode;
 use scroll::{Drag, Request, ScrollState, Thumb};
@@ -46,6 +48,8 @@ pub enum TreeEvent {
     /// An Image's source was decoded: its natural size (logical px).
     ImageLoad { id: u32, size: [f32; 2] },
     ImageError { id: u32, message: String },
+    /// An ANIMATE finished, or another animation of its property replaced it.
+    AnimationEnd { id: u32, animation: u32 },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -184,6 +188,9 @@ struct Visual {
     shadow_color: u32,
     no_scrollbar: bool,
     scrollbar_color: Option<u32>,
+    /// The transform: a translation (logical px) and a scale about the box's centre.
+    translate: [f32; 2],
+    scale: f32,
 }
 
 struct Node {
@@ -208,6 +215,10 @@ struct Node {
     /// A Text node's layout at the width it was drawn at (its bits), reused
     /// while its text, style and width stay the same.
     drawn: RefCell<Option<(u32, Arc<TextLayout>)>>,
+    /// Its transitions and running animations.
+    anim: Option<Box<Anims>>,
+    /// It has been placed at least once (a transition needs a look to start from).
+    placed: bool,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -218,6 +229,12 @@ struct LaidOut {
     rect: [f32; 4],
     content: [f32; 4],
     clip: [f32; 4],
+    /// Its border box without transforms: what Layout listeners hear.
+    layout: [f32; 4],
+    /// The scale its transforms and its ancestors' draw it at (1 = none):
+    /// `rect` and `content` are already transformed, but sizes inside (text,
+    /// borders, editor coordinates) are multiplied by it.
+    k: f32,
 }
 
 pub struct Tree {
@@ -264,6 +281,9 @@ pub struct Tree {
     /// The app asked for a window size, or limits, since they were last taken.
     window_size: Option<[f32; 2]>,
     window_limits: Option<WindowLimits>,
+    /// The clock animations run on (ms), and how many nodes are animating.
+    now: f64,
+    animating: usize,
 }
 
 /// What WINDOW_LIMITS asked for: sizes in logical px (0 = no limit).
@@ -324,6 +344,8 @@ impl Tree {
             scene_dirty: true,
             window_size: None,
             window_limits: None,
+            now: 0.0,
+            animating: 0,
         }
     }
 
@@ -416,6 +438,8 @@ impl Tree {
                     scroll: None,
                     image: (kind == p::node_kind::IMAGE).then(Box::default),
                     drawn: RefCell::new(None),
+                    anim: None,
+                    placed: false,
                 });
                 self.restyle(id);
             }
@@ -444,6 +468,9 @@ impl Tree {
                 }
                 if self.drag == Some(id) {
                     self.drag = None;
+                }
+                if node.anim.as_ref().is_some_and(|a| a.is_active()) {
+                    self.animating = self.animating.saturating_sub(1);
                 }
                 self.layout_dirty = true;
             }
@@ -589,6 +616,10 @@ impl Tree {
                 }
                 self.set_focus((id != 0).then_some(id));
             }
+            Op::Transition { id, prop, duration, easing } => self.set_transition(id, prop, duration, easing)?,
+            Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => {
+                self.start_animation(id, animation, prop, from, to, duration, easing, iterations, flags)?
+            }
             Op::Unknown { .. } => {}
         }
         Ok(())
@@ -655,7 +686,7 @@ impl Tree {
         // absolutely positioned children (Taffy defaults to `static`, whose
         // boxes aren't; dunkbing/mantou#1).
         let mut style = Style { flex_direction: FlexDirection::Column, position: Position::Relative, ..Style::default() };
-        let mut v = Visual { opacity: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
+        let mut v = Visual { opacity: 1.0, scale: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
         let shared = self.styles.get(&node.shared).map(|v| v.as_slice()).unwrap_or(&[]);
         for (prop, value) in shared.iter().copied().chain(node.own.iter().map(|(k, v)| (*k, *v))) {
             set_prop(&mut style, &mut v, prop, value);
@@ -676,8 +707,10 @@ impl Tree {
         if v.scrolls != node.scroll.is_some() {
             node.scroll = v.scrolls.then(ScrollState::default);
         }
+        let (before, drawn_before) = (node.v, node.vis());
         node.v = v;
         self.layout_dirty = true;
+        self.start_transitions(id, before, drawn_before);
     }
 
     fn viewport_logical(&self) -> (f32, f32) {
@@ -763,7 +796,7 @@ impl Tree {
         for b in &self.boxes {
             if let Some(inp) = &self.nodes[&b.id].input {
                 let c = b.content;
-                inp.editor.borrow_mut().set_size(c[2] - c[0], c[3] - c[1]);
+                inp.editor.borrow_mut().set_size((c[2] - c[0]) / b.k, (c[3] - c[1]) / b.k);
             }
         }
         self.report_layouts();
@@ -776,7 +809,7 @@ impl Tree {
         self.boxes.clear();
         self.thumbs.clear();
         if let Some(root) = self.root {
-            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY]);
+            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY], Xf { k: 1.0, o: [0.0; 2] });
         }
     }
 
@@ -792,7 +825,7 @@ impl Tree {
                 continue;
             }
             laid_out.insert(b.id);
-            let r = b.rect;
+            let r = b.layout;
             let rect = [r[0], r[1], r[2] - r[0], r[3] - r[1]];
             if node.reported != Some(rect) {
                 node.reported = Some(rect);
@@ -826,7 +859,10 @@ impl Tree {
         std::mem::take(&mut self.events)
     }
 
-    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4]) {
+    /// Places a node and its subtree. `px, py` is its parent's origin in
+    /// layout coordinates (scroll offsets applied); `xf` maps layout
+    /// coordinates to the window's, with the ancestors' transforms.
+    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4], xf: Xf) {
         let node = &self.nodes[&id];
         if node.v.hidden {
             return;
@@ -836,9 +872,19 @@ impl Tree {
         let rect = [x, y, x + l.size.width, y + l.size.height];
         let (pd, bd) = (l.padding, l.border);
         let content = [x + pd.left + bd.left, y + pd.top + bd.top, rect[2] - pd.right - bd.right, rect[3] - pd.bottom - bd.bottom];
-        let laid = LaidOut { id, rect, content, clip };
+        // Its own transform, about its centre, then its ancestors'.
+        let v = node.vis();
+        let xf = if v.scale != 1.0 || v.translate != [0.0; 2] {
+            let (s, c) = (v.scale, [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0]);
+            Xf { k: xf.k * s, o: [(c[0] * (1.0 - s) + v.translate[0]) * xf.k + xf.o[0], (c[1] * (1.0 - s) + v.translate[1]) * xf.k + xf.o[1]] }
+        } else {
+            xf
+        };
+        let laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k };
         self.boxes.push(laid);
-        let inner = if node.v.clips { intersect(clip, rect) } else { clip };
+        self.nodes.get_mut(&id).expect("exists").placed = true;
+        let node = &self.nodes[&id];
+        let inner = if node.v.clips { intersect(clip, laid.rect) } else { clip };
         let border = [bd.left, bd.top, bd.right, bd.bottom];
         // A scroll view: how far its content reaches (from its padding box), and so how far it scrolls.
         let mut extent = [0.0f32; 2];
@@ -852,7 +898,7 @@ impl Tree {
                 extent[0] = extent[0].max(cl.location.x + cl.size.width + cl.margin.right - bd.left + pd.right);
                 extent[1] = extent[1].max(cl.location.y + cl.size.height + cl.margin.bottom - bd.top + pd.bottom);
             }
-            let view = scroll::viewport(&laid, border);
+            let view = [rect[0] + border[0], rect[1] + border[1], rect[2] - border[2], rect[3] - border[3]];
             let st = self.nodes.get_mut(&id).and_then(|n| n.scroll.as_mut()).expect("a scroll view");
             st.max = [(extent[0] - (view[2] - view[0])).max(0.0), (extent[1] - (view[3] - view[1])).max(0.0)];
             st.offset = [st.offset[0].clamp(0.0, st.max[0]), st.offset[1].clamp(0.0, st.max[1])];
@@ -860,16 +906,16 @@ impl Tree {
         let node = &self.nodes[&id];
         let offset = node.scroll.map_or([0.0; 2], |s| s.offset);
         for c in node.children.clone() {
-            self.collect_boxes(c, x - offset[0], y - offset[1], inner);
+            self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf);
         }
         let node = &self.nodes[&id];
         if let Some(st) = node.scroll
             && !node.v.no_scrollbar
         {
             let at = self.boxes.len();
-            let mut t = scroll::thumbs(id, &laid, border, &st, extent, at);
+            let mut t = scroll::thumbs(id, &laid, border.map(|b| b * xf.k), &st, extent.map(|e| e * xf.k), at);
             for th in &mut t {
-                th.clip = intersect(clip, rect);
+                th.clip = intersect(clip, laid.rect);
             }
             self.thumbs.extend(t);
         }
@@ -895,11 +941,11 @@ impl Tree {
         let mut glyphs = false;
         let mut images: HashMap<u32, Arc<Pixels>> = HashMap::new();
         let thumb_quad = |t: &Thumb, nodes: &HashMap<u32, Node>| {
-            let v = &nodes[&t.view].v;
+            let v = nodes[&t.view].vis();
             let mut alpha = v.opacity;
             let mut a = nodes[&t.view].parent;
             while let Some(pid) = a {
-                alpha *= nodes[&pid].v.opacity;
+                alpha *= nodes[&pid].vis().opacity;
                 a = nodes[&pid].parent;
             }
             let c = t.clip;
@@ -924,11 +970,14 @@ impl Tree {
                 quads.push(thumb_quad(t, &self.nodes));
             }
             let node = &self.nodes[&b.id];
-            let mut alpha = node.v.opacity;
+            // What's drawn now: the style, with animated values over it.
+            let v = node.vis();
+            let k = b.k;
+            let mut alpha = v.opacity;
             let mut a = node.parent;
             while let Some(pid) = a {
                 let pn = &self.nodes[&pid];
-                alpha *= pn.v.opacity;
+                alpha *= pn.vis().opacity;
                 a = pn.parent;
             }
             let clip = if b.clip[0].is_finite() { [snap(b.clip[0]), snap(b.clip[1]), snap(b.clip[2]), snap(b.clip[3])] } else { NO_CLIP };
@@ -936,24 +985,24 @@ impl Tree {
                 continue; // clipped away entirely
             }
             let r = b.rect;
-            let bg = rgba(node.v.background, alpha);
-            let border_color = rgba(node.v.border_color, alpha);
-            let border = if border_color[3] > 0.0 { (node.v.border * s).max(0.0) } else { 0.0 };
+            let bg = rgba(v.background, alpha);
+            let border_color = rgba(v.border_color, alpha);
+            let border = if border_color[3] > 0.0 { (v.border * k * s).max(0.0) } else { 0.0 };
             let rect = [snap(r[0]), snap(r[1]), snap(r[2]), snap(r[3])];
-            let sc = rgba(node.v.shadow_color, alpha);
+            let sc = rgba(v.shadow_color, alpha);
             if sc[3] > 0.0 && r[2] > r[0] && r[3] > r[1] {
                 // Under the box: its shape moved by the offset and grown by the spread.
-                let [sx, sy, blur, spread] = node.v.shadow;
+                let [sx, sy, blur, spread] = v.shadow.map(|x| x * k);
                 let shape = [(r[0] + sx - spread) * s, (r[1] + sy - spread) * s, (r[2] + sx + spread) * s, (r[3] + sy + spread) * s];
                 let sigma = blur.max(0.0) * s / 2.0;
                 let reach = [shape[0] - 3.0 * sigma, shape[1] - 3.0 * sigma, shape[2] + 3.0 * sigma, shape[3] + 3.0 * sigma];
                 if shape[2] > shape[0] && shape[3] > shape[1] && overlaps(reach, clip) {
-                    let radius = ((node.v.radius + spread) * s).max(0.0);
+                    let radius = ((v.radius * k + spread) * s).max(0.0);
                     quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma), image: None });
                 }
             }
             if (bg[3] > 0.0 || border > 0.0) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
-                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: node.v.radius * s, border, border_color, shadow: None, image: None });
+                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None });
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
                 let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());
@@ -969,28 +1018,28 @@ impl Tree {
                     if let Some(px) = pixels {
                         let (pw, ph) = (px.width as f32, px.height as f32);
                         let uv = [frac[0] * pw, frac[1] * ph, frac[2] * pw, frac[3] * ph];
-                        let tint = node.v.color_set;
-                        let color = if tint { rgba(node.v.color, alpha) } else { [1.0, 1.0, 1.0, alpha] };
-                        quads.push(Quad { rect, color, uv, clip, radius: node.v.radius * s, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint }) });
+                        let tint = v.color_set;
+                        let color = if tint { rgba(v.color, alpha) } else { [1.0, 1.0, 1.0, alpha] };
+                        quads.push(Quad { rect, color, uv, clip, radius: v.radius * k * s, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint }) });
                         images.insert(px.id, px);
                     }
                 }
             }
             if node.kind == p::node_kind::TEXT && !node.text.is_empty() {
-                let color = rgba(node.v.color, alpha);
+                let color = rgba(v.color, alpha);
                 if color[3] <= 0.0 {
                     continue;
                 }
                 let c = b.content;
                 // Entirely clipped away: not laid out at all. (A font size of
                 // slack covers glyphs that reach past the box, like italics.)
-                let slack = node.v.text.size;
+                let slack = v.text.size * k;
                 let reach = [snap(b.rect[0] - slack), snap(b.rect[1] - slack), snap(b.rect[2] + slack), snap(b.rect[3] + slack)];
                 if !overlaps(reach, clip) {
                     continue;
                 }
                 let Some(text) = self.text.as_mut() else { continue };
-                let width = (c[2] - c[0]).max(0.0);
+                let width = ((c[2] - c[0]) / k).max(0.0);
                 let mut drawn = node.drawn.borrow_mut();
                 let layout = match drawn.as_ref() {
                     Some((w, l)) if *w == width.to_bits() => l.clone(),
@@ -1000,7 +1049,7 @@ impl Tree {
                         l
                     }
                 };
-                glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), s, color, clip);
+                glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, color, clip);
             }
             if let (Some(inp), Some(text)) = (&node.input, self.text.as_mut()) {
                 let c = b.content;
@@ -1013,10 +1062,10 @@ impl Tree {
                 if focused {
                     ed.keep_caret_visible(text);
                 }
-                let (ox, oy) = input::origin(&ed, text, c);
-                let color = rgba(node.v.color, alpha);
+                let (ox, oy) = input::origin(&ed, text, c, k);
+                let color = rgba(v.color, alpha);
                 let fill = |r: [f32; 4], color: [f32; 4]| Quad {
-                    rect: [snap(ox + r[0]), snap(oy + r[1]), snap(ox + r[2]), snap(oy + r[3])],
+                    rect: [snap(ox + r[0] * k), snap(oy + r[1] * k), snap(ox + r[2] * k), snap(oy + r[3] * k)],
                     color,
                     uv: [0.0; 4],
                     clip,
@@ -1027,17 +1076,17 @@ impl Tree {
                     image: None,
                 };
                 if ed.text().is_empty() && !ed.is_composing() && !inp.placeholder.is_empty() {
-                    let pc = node.v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
-                    let style = TextStyle { max_lines: if ed.multiline { 0 } else { 1 }, ..node.v.text };
-                    let layout = text.layout(&inp.placeholder, &style, ed.multiline.then_some((c[2] - c[0]).max(0.0)));
-                    glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (ox, oy), s, pc, clip);
+                    let pc = v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
+                    let style = TextStyle { max_lines: if ed.multiline { 0 } else { 1 }, ..v.text };
+                    let layout = text.layout(&inp.placeholder, &style, ed.multiline.then_some(((c[2] - c[0]) / k).max(0.0)));
+                    glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (ox, oy), k, s, pc, clip);
                 }
                 if focused {
-                    let sel = rgba(node.v.selection_color.unwrap_or(SELECTION), alpha);
+                    let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
                     quads.extend(ed.selection(text).into_iter().map(|r| fill(r, sel)));
                 }
                 let placed = ed.glyphs(text);
-                glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), s, color, clip);
+                glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), k, s, color, clip);
                 if focused {
                     for r in ed.compose(text) {
                         quads.push(fill([r[0], r[3] - 1.0, r[2], r[3]], color));
@@ -1046,7 +1095,7 @@ impl Tree {
                     if anchor == head
                         && let Some(r) = ed.caret(text)
                     {
-                        let caret = rgba(node.v.caret_color.unwrap_or(node.v.color), alpha);
+                        let caret = rgba(v.caret_color.unwrap_or(v.color), alpha);
                         let mut q = fill(r, caret);
                         q.rect[2] = q.rect[2].max(q.rect[0] + 1.0);
                         quads.push(q);
@@ -1158,12 +1207,18 @@ impl Tree {
     }
 }
 
-/// Glyph quads for text laid out from `origin` (logical px); returns whether any was drawn.
-fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGlyph], origin: (f32, f32), s: f32, color: [f32; 4], clip: [f32; 4]) -> bool {
+/// Glyph quads for text laid out from `origin` (window px) and drawn at scale
+/// `k` (a transform's), on a display of scale `s`; returns whether any was drawn.
+#[allow(clippy::too_many_arguments)]
+fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGlyph], origin: (f32, f32), k: f32, s: f32, color: [f32; 4], clip: [f32; 4]) -> bool {
     let mut any = false;
     for g in glyphs {
-        let (gx, gy) = ((origin.0 + g.x) * s, (origin.1 + g.y) * s);
-        let Some(e) = text.glyph(g.font, g.id, g.size * s, gx - gx.floor()) else { continue };
+        let (gx, gy) = ((origin.0 + g.x * k) * s, (origin.1 + g.y * k) * s);
+        let size = g.size * k * s;
+        if size < 0.5 {
+            continue; // too small to see (a scale near 0)
+        }
+        let Some(e) = text.glyph(g.font, g.id, size, gx - gx.floor()) else { continue };
         let x0 = gx.floor() + e.left as f32;
         let y0 = gy.round() - e.top as f32;
         let rect = [x0, y0, x0 + e.w as f32, y0 + e.h as f32];
@@ -1175,6 +1230,23 @@ fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGly
         any = true;
     }
     any
+}
+
+/// A transform from layout coordinates to the window's: scale by `k`, then move by `o`.
+#[derive(Clone, Copy)]
+struct Xf {
+    k: f32,
+    o: [f32; 2],
+}
+
+impl Xf {
+    fn rect(&self, r: [f32; 4]) -> [f32; 4] {
+        [r[0] * self.k + self.o[0], r[1] * self.k + self.o[1], r[2] * self.k + self.o[0], r[3] * self.k + self.o[1]]
+    }
+}
+
+fn finite(v: f32, or: f32) -> f32 {
+    if v.is_finite() { v } else { or }
 }
 
 fn intersect(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
@@ -1290,6 +1362,9 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
             }
         }
         Prop::ObjectFit => v.fit = e,
+        Prop::TranslateX => v.translate[0] = finite(num(), 0.0),
+        Prop::TranslateY => v.translate[1] = finite(num(), 0.0),
+        Prop::Scale => v.scale = finite(num(), 1.0).max(0.0),
         Prop::FontSize => v.text.size = num().clamp(1.0, 1000.0),
         Prop::FontWeight => v.text.weight = num().clamp(1.0, 1000.0),
         Prop::LineHeight => v.text.line_height = num().clamp(0.0, 10.0),

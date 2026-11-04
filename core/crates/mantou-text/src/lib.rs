@@ -108,6 +108,14 @@ pub struct AtlasEntry {
     pub top: i32,
 }
 
+/// Atlas versions, unique in the process: a renderer shared by several
+/// instances (headless ones) tells their atlases apart by version.
+static NEXT_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_version() -> u64 {
+    NEXT_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 /// The coverage atlas (one byte per texel). Renderers upload it whenever `version` changes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AtlasImage {
@@ -145,7 +153,7 @@ struct Atlas {
 impl Atlas {
     fn new() -> Atlas {
         Atlas {
-            image: Arc::new(AtlasImage { width: ATLAS_START, height: ATLAS_START, pixels: vec![0; (ATLAS_START * ATLAS_START) as usize], version: 1 }),
+            image: Arc::new(AtlasImage { width: ATLAS_START, height: ATLAS_START, pixels: vec![0; (ATLAS_START * ATLAS_START) as usize], version: next_version() }),
             shelves: Vec::new(),
             next_y: 0,
             entries: HashMap::new(),
@@ -184,7 +192,7 @@ impl Atlas {
             let src = &old.pixels[y * old.width as usize..(y + 1) * old.width as usize];
             pixels[y * w as usize..y * w as usize + old.width as usize].copy_from_slice(src);
         }
-        self.image = Arc::new(AtlasImage { width: w, height: h, pixels, version: old.version + 1 });
+        self.image = Arc::new(AtlasImage { width: w, height: h, pixels, version: next_version() });
     }
 
     fn blit(&mut self, x: u32, y: u32, w: u32, h: u32, data: &[u8]) {
@@ -193,7 +201,7 @@ impl Atlas {
             let dst = (y as usize + row) * img.width as usize + x as usize;
             img.pixels[dst..dst + w as usize].copy_from_slice(&data[row * w as usize..(row + 1) * w as usize]);
         }
-        img.version += 1;
+        img.version = next_version();
     }
 }
 
@@ -524,6 +532,19 @@ mod tests {
         assert!(bold.width > regular.width);
         let again = e.layout("Mantou", &TextStyle::default(), None);
         assert!(Arc::ptr_eq(&regular, &again));
+    }
+
+    #[test]
+    fn atlases_of_different_engines_never_share_a_version() {
+        // A renderer shared by headless instances uploads an atlas only when its version is new to it.
+        let (mut a, mut b) = (TextEngine::new(), TextEngine::new());
+        assert_ne!(a.atlas().version, b.atlas().version);
+        for e in [&mut a, &mut b] {
+            let t = e.layout("A", &TextStyle::default(), None);
+            let g = t.glyphs[0];
+            e.glyph(g.font, g.id, 16.0, 0.0);
+        }
+        assert_ne!(a.atlas().version, b.atlas().version);
     }
 
     #[test]

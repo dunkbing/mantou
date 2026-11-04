@@ -2,10 +2,11 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
+import { AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
-import { expandStyle, type Style } from "./style";
+import { expandStyle, f32bits, parseColor, type Style } from "./style";
+import type { Color } from "./gen/protocol";
 
 export type { Style } from "./style";
 
@@ -16,6 +17,55 @@ export interface Sink {
   rect?(id: number): [number, number, number, number] | null;
   /** Sends a platform service request (JSON); the answer comes back through `Ui.dispatchService`. */
   service?(req: number, json: string): void;
+}
+
+/** Properties the core can animate (design §9.4). */
+export type AnimatableProp = "opacity" | "translateX" | "translateY" | "scale" | "backgroundColor" | "borderColor" | "color";
+const ANIMATABLE: readonly AnimatableProp[] = ["opacity", "translateX", "translateY", "scale", "backgroundColor", "borderColor", "color"];
+const COLOURS: readonly AnimatableProp[] = ["backgroundColor", "borderColor", "color"];
+
+/** CSS's timing functions. */
+export type Easing = "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out";
+const EASINGS: Record<Easing, number> = {
+  linear: EasingCode.Linear, ease: EasingCode.Ease, "ease-in": EasingCode.EaseIn, "ease-out": EasingCode.EaseOut, "ease-in-out": EasingCode.EaseInOut,
+};
+
+/** A property's transition: a duration in ms, or a duration and an easing ("ease" by default). */
+export type TransitionSpec = number | { duration: number; easing?: Easing };
+/** Which properties animate to their new values when the app changes them. */
+export type Transitions = Partial<Record<AnimatableProp, TransitionSpec>>;
+
+export interface AnimateOptions {
+  /** Start and end values: numbers, or colours for colour properties. */
+  from: number | Color;
+  to: number | Color;
+  /** One iteration, in ms. */
+  duration: number;
+  easing?: Easing;
+  /** How many times (default 1; Infinity = until stopped). */
+  iterations?: number;
+  /** Every other iteration runs backwards. */
+  alternate?: boolean;
+}
+
+/** A running ANIMATE. */
+export interface Animation {
+  /** Settles when it ends: it finished, `stop()` was called, another animation of its property replaced it, or its node was released. */
+  readonly finished: Promise<void>;
+  /** Ends it now; the property goes back to its style's value. */
+  stop(): void;
+}
+
+function easingCode(e: Easing | undefined): number {
+  if (e === undefined) return EasingCode.Ease;
+  const c = EASINGS[e];
+  if (c === undefined) throw new Error(`mantou: unknown easing "${e}" (use ${Object.keys(EASINGS).join(", ")})`);
+  return c;
+}
+
+function animatable(prop: string): AnimatableProp {
+  if (!ANIMATABLE.includes(prop as AnimatableProp)) throw new Error(`mantou: ${prop} can't be animated (only ${ANIMATABLE.join(", ")})`);
+  return prop as AnimatableProp;
 }
 
 /** A laid-out box, in logical px from the window's top left. */
@@ -136,6 +186,10 @@ export class Node {
   private layoutHandlers: ((rect: Rect) => void)[] = [];
   private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
   private imageHandlers: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] } = { load: [], error: [] };
+  /** The transitions last sent, by property: duration and easing code. */
+  private transitions = new Map<AnimatableProp, [number, number]>();
+  /** Running animations' ids. */
+  private running = new Set<number>();
   /** An Image's natural size once it has loaded (logical px), or the error if it failed. */
   imageState: { width: number; height: number } | { error: string } | null = null;
   /** A scroll view's offset, as the core last reported it to scroll handlers. */
@@ -484,7 +538,71 @@ export class Node {
     this.scrollHandlers.length = 0;
     this.inputHandlers = null;
     this.released = true;
+    for (const a of this.running) this.ui.endAnimation(a);
     this.ui.free(this);
+  }
+
+  /**
+   * Sets which properties animate to their new values when they change
+   * (design §9.4): `{ opacity: 200, translateY: { duration: 300, easing: "ease-out" } }`.
+   * It replaces the node's transitions: properties left out stop
+   * transitioning. The core runs them, with no JS per frame; it applies to
+   * changes made after it.
+   */
+  transition(transitions: Transitions): this {
+    this.alive();
+    const next = new Map<AnimatableProp, [number, number]>();
+    for (const [prop, spec] of Object.entries(transitions)) {
+      if (spec === undefined) continue;
+      const duration = typeof spec === "number" ? spec : spec.duration;
+      if (!Number.isFinite(duration) || duration < 0) throw new Error(`mantou: transition ${prop}: the duration must be a number of ms`);
+      next.set(animatable(prop), [duration, easingCode(typeof spec === "number" ? undefined : spec.easing)]);
+    }
+    for (const [prop, [d, e]] of next) {
+      const old = this.transitions.get(prop);
+      if (old && old[0] === d && old[1] === e) continue;
+      this.ui.enc.transition(this.id, StyleProp[prop].code, d, e);
+    }
+    for (const prop of this.transitions.keys()) if (!next.has(prop)) this.ui.enc.transition(this.id, StyleProp[prop].code, 0, 0);
+    this.transitions = next;
+    this.ui.schedule();
+    return this;
+  }
+
+  /**
+   * Animates a property from one value to another (design §9.4). The core
+   * runs it, with no JS per frame; when it ends, the property goes back to
+   * the style's value. A new animation of the same property replaces it.
+   */
+  animate(prop: AnimatableProp, options: AnimateOptions): Animation {
+    this.alive();
+    const p = animatable(prop);
+    const { duration, iterations = 1 } = options;
+    if (!Number.isFinite(duration) || duration < 0) throw new Error(`mantou: animate ${prop}: the duration must be a number of ms`);
+    if (Number.isNaN(iterations) || iterations < 0) throw new Error(`mantou: animate ${prop}: iterations must be 0 or more (or Infinity)`);
+    const value = (v: number | Color) => {
+      if (COLOURS.includes(p)) return parseColor(v as Color);
+      if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`mantou: animate ${prop}: from and to must be numbers`);
+      return f32bits(v);
+    };
+    const [from, to] = [value(options.from), value(options.to)];
+    const id = this.ui.nextAnimation++;
+    this.running.add(id);
+    const finished = new Promise<void>((resolve) => this.ui.animations.set(id, () => {
+      this.running.delete(id);
+      resolve();
+    }));
+    this.ui.enc.animate(this.id, id, StyleProp[p].code, from, to, duration, easingCode(options.easing), iterations, options.alternate ? AnimateFlag.Alternate : 0);
+    this.ui.schedule();
+    return {
+      finished,
+      stop: () => {
+        if (!this.running.has(id) || this.released) return;
+        // A zero-length animation of the property (id 0: no event) replaces it, and ends at once.
+        this.ui.enc.animate(this.id, 0, StyleProp[p].code, to, to, 0, 0, 1, 0);
+        this.ui.schedule();
+      },
+    };
   }
 
   /**
@@ -725,6 +843,23 @@ export class Ui {
   /** Delivers a scroll view's new offset to its scroll handlers. */
   dispatchScroll(targetId: number, x: number, y: number) {
     this.nodes.get(targetId)?.handleScroll({ x, y });
+  }
+
+  /** @internal Animation ids, and what to do when each ends. */
+  animations = new Map<number, () => void>();
+  /** @internal */
+  nextAnimation = 1;
+
+  /** An ANIMATE ended (ANIMATION_END). */
+  dispatchAnimationEnd(animation: number) {
+    this.endAnimation(animation);
+  }
+
+  /** @internal */
+  endAnimation(animation: number) {
+    const end = this.animations.get(animation);
+    this.animations.delete(animation);
+    end?.();
   }
 
   /** Delivers a node's new box to its layout handlers. */

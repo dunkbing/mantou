@@ -4,7 +4,7 @@
 // them is disposed (design §7.4).
 import { createRenderer } from "solid-js/universal";
 import { createContext, getOwner, onCleanup, useContext } from "./solid";
-import { Node, SharedStyle, TextLeaf, type Child, type PressEvent, type Rect, type ScrollOffset, type Style, type Ui, type WheelEvent } from "../ui";
+import { Node, SharedStyle, TextLeaf, type Child, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
 export const UiContext = createContext<Ui>();
@@ -106,6 +106,9 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       return;
     case "focusScope":
       node.focusScope(!!value);
+      return;
+    case "transition":
+      node.transition((value ?? {}) as Transitions);
       return;
   }
   if (node.isInput && setInputProperty(node, name, value, prev)) return;

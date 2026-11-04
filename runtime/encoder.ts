@@ -77,6 +77,10 @@ export class OpEncoder {
     this.op(Op.FONT, [data.length, ...words]);
   }
   fontFamily(family: number, names: string) { this.op(Op.FONT_FAMILY, [family, ...stringWords(names)]); }
+  transition(id: number, prop: number, duration: number, easing: number) { this.op(Op.TRANSITION, [id, prop, f32bits(duration), easing]); }
+  animate(id: number, animation: number, prop: number, from: number, to: number, duration: number, easing: number, iterations: number, flags: number) {
+    this.op(Op.ANIMATE, [id, animation, prop, from, to, f32bits(duration), easing, f32bits(iterations), flags]);
+  }
   windowSize(width: number, height: number) { this.op(Op.WINDOW_SIZE, [f32bits(width), f32bits(height)]); }
   windowLimits(minW: number, minH: number, maxW: number, maxH: number, flags: number) {
     this.op(Op.WINDOW_LIMITS, [f32bits(minW), f32bits(minH), f32bits(maxW), f32bits(maxH), flags]);

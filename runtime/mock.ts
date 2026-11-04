@@ -47,6 +47,11 @@ export class MockCore {
     this.ui.dispatchScroll(nodeId, x, y);
   }
 
+  /** An animation ended (its id is the ANIMATE op's `animation`). */
+  animationEnd(animation: number) {
+    this.ui.dispatchAnimationEnd(animation);
+  }
+
   /** The window resized (logical px). */
   resize(width: number, height: number, scale = 1) {
     this.ui.dispatchResize(width, height, scale);

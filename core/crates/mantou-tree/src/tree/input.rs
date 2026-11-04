@@ -62,11 +62,12 @@ impl Clipboard for MemoryClipboard {
 
 /// Where an input's text starts, in window px: single-line text is centred
 /// vertically in the content box, as in a browser.
-pub(super) fn origin(ed: &Editor, engine: &mut TextEngine, content: [f32; 4]) -> (f32, f32) {
+/// Where an input's text starts (window px), in its content box drawn at scale `k`.
+pub(super) fn origin(ed: &Editor, engine: &mut TextEngine, content: [f32; 4], k: f32) -> (f32, f32) {
     if ed.multiline {
         return (content[0], content[1]);
     }
-    let lh = ed.line_height(engine);
+    let lh = ed.line_height(engine) * k;
     (content[0], content[1] + ((content[3] - content[1]) - lh).max(0.0) / 2.0)
 }
 
@@ -136,10 +137,13 @@ impl Tree {
         true
     }
 
-    fn origin_of(&mut self, id: u32) -> Option<(f32, f32)> {
-        let content = self.boxes.iter().find(|b| b.id == id)?.content;
+    /// An input's text origin (window px) and the scale it's drawn at.
+    fn origin_of(&mut self, id: u32) -> Option<(f32, f32, f32)> {
+        let b = self.boxes.iter().find(|b| b.id == id)?;
+        let (content, k) = (b.content, b.k);
         let ed = self.nodes.get(&id)?.input.as_ref()?.editor.borrow();
-        Some(origin(&ed, self.text.as_mut()?, content))
+        let (x, y) = origin(&ed, self.text.as_mut()?, content, k);
+        Some((x, y, k))
     }
 
     /// The primary button went down at (x, y), the `clicks`th time in a row.
@@ -157,9 +161,9 @@ impl Tree {
             self.set_focus(None);
             return had;
         };
-        let Some((ox, oy)) = self.origin_of(id) else { return false };
+        let Some((ox, oy, k)) = self.origin_of(id) else { return false };
         self.set_focus(Some(id));
-        let (px, py) = (x - ox, y - oy);
+        let (px, py) = ((x - ox) / k, (y - oy) / k);
         self.with_focused(false, |ed, t| match clicks {
             0 | 1 if extend => ed.extend_to_point(t, px, py),
             0 | 1 => ed.move_to_point(t, px, py),
@@ -177,8 +181,8 @@ impl Tree {
             return self.thumb_move(x, y);
         }
         let Some(id) = self.drag.filter(|&d| Some(d) == self.focus) else { return false };
-        let Some((ox, oy)) = self.origin_of(id) else { return false };
-        self.with_focused(false, |ed, t| ed.extend_to_point(t, x - ox, y - oy))
+        let Some((ox, oy, k)) = self.origin_of(id) else { return false };
+        self.with_focused(false, |ed, t| ed.extend_to_point(t, (x - ox) / k, (y - oy) / k))
     }
 
     pub fn pointer_up(&mut self) {
@@ -415,10 +419,10 @@ impl Tree {
     /// input, in logical window px.
     pub fn ime_area(&mut self) -> Option<[f32; 4]> {
         let id = self.focus?;
-        let (ox, oy) = self.origin_of(id)?;
+        let (ox, oy, k) = self.origin_of(id)?;
         let mut ed = self.nodes.get(&id)?.input.as_ref()?.editor.borrow_mut();
         let r = ed.ime_area(self.text.as_mut()?);
-        Some([ox + r[0], oy + r[1], ox + r[2], oy + r[3]])
+        Some([ox + r[0] * k, oy + r[1] * k, ox + r[2] * k, oy + r[3] * k])
     }
 
     /// The focused input's selection as byte offsets (anchor, focus), for tests.

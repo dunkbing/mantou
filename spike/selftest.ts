@@ -232,6 +232,35 @@ async function main() {
       layoutsWhileBlocked: d.layouts, commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
     });
   }
+
+  // 11. An animation runs on the main thread while the Worker is blocked, then the window goes idle (design §9.4).
+  {
+    let root = core.ui.nodes.get(core.hit(...BOARD))!;
+    while (root.parent) root = root.parent;
+    const box = core.ui.view({ position: "absolute", left: 24, top: 8, width: 40, height: 40, backgroundColor: "#f59e0b" });
+    root.append(box);
+    await until("the box is laid out", () => core.nodeRect(box.id) !== null, 5_000);
+    const x0 = core.nodeRect(box.id)![0];
+    const a = box.animate("translateX", { from: 0, to: 200, duration: 500, easing: "linear" });
+    core.ui.flush();
+    const before = core.stats();
+    const spinUntil = performance.now() + 300;
+    while (performance.now() < spinUntil) {}
+    const during = delta(before, core.stats());
+    const moved = core.nodeRect(box.id)![0] - x0;
+    let ended = false;
+    a.finished.then(() => (ended = true));
+    await until("the animation ends", () => ended, 5_000);
+    await sleep(100);
+    const after = core.stats();
+    await sleep(500);
+    const idle = delta(after, core.stats());
+    check("animating without JS, then idle", during.frames >= 5 && during.commits === 0 && moved > 0 && idle.frames === 0, {
+      framesWhileBlocked: during.frames, commitsWhileBlocked: during.commits, movedPx: Math.round(moved), framesAfterEnd: idle.frames,
+    });
+    root.remove(box);
+    box.release();
+  }
 }
 
 let code = 0;

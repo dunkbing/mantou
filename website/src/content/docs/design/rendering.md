@@ -24,12 +24,13 @@ description: "The frame pipeline, scene, wgpu renderer, scrolling and animation,
 
 ### 9.4 Scrolling and animation
 - **Scrolling** belongs to the core: wheel and trackpad input, momentum (taken from the OS where it provides it), rubber-banding and scrollbars. JS receives throttled `SCROLL` events only if it listens for them.
-  - **Status:** implemented for `overflow: "scroll"` views ([Scrolling and dialogs](/progress/scrolling/)): the wheel and trackpad on the main thread with no relayout, a draggable overlay thumb, `SCROLL_TO` and `SCROLL_INTO_VIEW` applied after the batch's layout, and `SCROLL` events at most once per placement. Rubber-banding, keyboard scrolling and virtualized lists aren't yet.
+  - **Status:** implemented for `overflow: "scroll"` views ([Scrolling and dialogs](/progress/scrolling/)): the wheel and trackpad on the main thread with no relayout, a draggable overlay thumb, `SCROLL_TO` and `SCROLL_INTO_VIEW` applied after the batch's layout, and `SCROLL` events at most once per placement. Rubber-banding and keyboard scrolling aren't yet.
 - **Virtualized lists:** the core asks JS for rows by index as they come into view (`LIST_NEED(rows)`), and JS answers with ops. Rows that leave the view are recycled, with new item signals bound to them.
 - **Animations:**
   - Declarative transitions on style props (`transition={{ opacity: 200 }}`) and an `animate()` command run in the core, with timing curves and springs.
   - Animations of compositor props (transform, opacity, colour) run on the main thread without relayout.
   - Animations of layout props relayout once per frame under the lock.
+  - **Status:** implemented for opacity, colours and transforms ([Animations](/progress/animations/)): `transition` and `animate()` send `TRANSITION` and `ANIMATE` once, and the core advances them on its clock each frame on the main thread, placing transformed boxes again without a relayout. `ANIMATION_END` reports explicit animations. CSS's cubic-bezier easings; springs, rotation and layout props aren't yet.
 
 ## 10. Input, focus, accessibility, platform services
 

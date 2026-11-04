@@ -19,7 +19,7 @@ function App() {
 run(() => <App />);
 ```
 
-> **Early development.** Works on Linux, macOS and Windows: flexbox layout, text and custom fonts, text input (with IME), scrolling, images and SVG icons, rounded corners, borders and shadows. Animations and accessibility are next.
+> **Early development.** Works on Linux, macOS and Windows: flexbox layout, text and custom fonts, text input (with IME), scrolling, images and SVG icons, rounded corners, borders, shadows and animations. Accessibility is next.
 
 ## Use it
 

@@ -201,6 +201,9 @@ impl App {
             let _ = window.request_inner_size(LogicalSize::new(w, h));
         }
         self.sync_ime(&window);
+        // Animations advance once a frame, on the main thread, with no JS;
+        // while any runs, the next frame is asked for (vsync paces them).
+        let animating = self.inst.tick();
         let scene = lock(&self.inst.scene).clone();
         let Some(gpu) = self.gpu.as_mut() else { return };
         window.pre_present_notify();
@@ -208,6 +211,9 @@ impl App {
             Drawn::Yes => bump(&self.inst.stats.frames),
             Drawn::Retry => window.request_redraw(),
             Drawn::Skipped => {}
+        }
+        if animating {
+            window.request_redraw();
         }
     }
 

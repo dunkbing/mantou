@@ -257,6 +257,37 @@
     "block": 0
   },
   {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "translateY",
+    "value": 12
+  },
+  {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "scale",
+    "value": 0.949999988079071
+  },
+  {
+    "op": "TRANSITION",
+    "id": 3,
+    "prop": "opacity",
+    "duration": 200,
+    "easing": 3
+  },
+  {
+    "op": "ANIMATE",
+    "id": 3,
+    "animation": 1,
+    "prop": "opacity",
+    "from": 0,
+    "to": 1065353216,
+    "duration": 300,
+    "easing": 0,
+    "iterations": 2,
+    "flags": 1
+  },
+  {
     "op": "WINDOW_SIZE",
     "width": 1200,
     "height": 760

@@ -202,6 +202,7 @@ impl Instance {
                 TreeEvent::Layout { id, rect: [x, y, w, h] } => {
                     self.push_record(&[ev::LAYOUT, id, x.to_bits(), y.to_bits()], &[w.to_bits(), h.to_bits()]);
                 }
+                TreeEvent::AnimationEnd { id, animation } => self.push_event([ev::ANIMATION_END, id, animation, 0]),
             }
         }
     }
@@ -280,6 +281,7 @@ impl Instance {
     /// Applies a batch, lays out and publishes the scene. 0, or -1 for a malformed batch.
     pub fn commit(&self, bytes: &[u8]) -> i32 {
         let mut tree = lock(&self.tree);
+        tree.set_time(self.now_ms()); // animations it starts start now
         match tree.apply(bytes) {
             Ok(report) => {
                 for e in &report.errors {
@@ -305,6 +307,19 @@ impl Instance {
         self.publish(&mut tree);
         bump(&self.stats.commits);
         0
+    }
+
+    /// Advances animations to the instance's clock and publishes what they
+    /// drew (design §9.4). Returns whether anything still animates.
+    pub fn tick(&self) -> bool {
+        let mut tree = lock(&self.tree);
+        if !tree.is_animating() {
+            return false;
+        }
+        tree.set_time(self.now_ms());
+        let more = tree.tick();
+        self.publish(&mut tree);
+        more
     }
 
     /// Sets the viewport and lays out at once, without JS.

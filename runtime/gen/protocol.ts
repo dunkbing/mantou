@@ -1,6 +1,6 @@
 // Written by schema/gen.ts from schema/protocol.ts. Don't edit it; change the schema and run `bun run gen`.
 
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 export const Op = {
   /** Create a node; it starts detached. */
@@ -53,17 +53,23 @@ export const Op = {
   IMAGE_PATH: 25,
   /** An Image's source as the file's bytes. */
   IMAGE_DATA: 26,
+  /** When the node's `prop` changes, animate to the new value over `duration` ms (Easing; 0 = no transition). Animatable: opacity, translateX, translateY, scale, backgroundColor, borderColor, color. */
+  TRANSITION: 27,
+  /** Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows. */
+  ANIMATE: 28,
   /** Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen. */
   FOCUS_SCOPE: 18,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 18: "FOCUS_SCOPE" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 18: "FOCUS_SCOPE" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
 export const WindowFlag = {"NotResizable":1} as const;
+export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4} as const;
+export const AnimateFlag = {"Alternate":1} as const;
 export const ScrollFlag = {"By":1} as const;
 export const ScrollBlock = {"Nearest":0,"Start":1,"Center":2,"End":3} as const;
 export const Unit = { px: 0, percent: 1, auto: 2 } as const;
@@ -107,6 +113,8 @@ export const Event = {
   IMAGE_LOAD: 20,
   /** An Image's source couldn't be read or decoded. a = image node, c = byte length; then the UTF-8 message, padded to words. */
   IMAGE_ERROR: 21,
+  /** An ANIMATE finished (or was replaced or its node released). a = node, b = animation id. */
+  ANIMATION_END: 22,
   /** A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left). */
   LAYOUT: 16,
   /** A platform service (dialog, context menu) finished. a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words. */
@@ -173,9 +181,12 @@ export const StyleProp = {
   shadowSpread: { code: 54, kind: "f32" },
   shadowColor: { code: 55, kind: "color" },
   objectFit: { code: 56, kind: "enum", values: ["fill","contain","cover"] },
+  translateX: { code: 57, kind: "f32" },
+  translateY: { code: 58, kind: "f32" },
+  scale: { code: 59, kind: "f32" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -296,4 +307,10 @@ export interface WireStyle {
   shadowColor?: Color;
   /** Default: fill. */
   objectFit?: "fill" | "contain" | "cover";
+  /** Default: 0. */
+  translateX?: number;
+  /** Default: 0. */
+  translateY?: number;
+  /** Default: 1. */
+  scale?: number;
 }

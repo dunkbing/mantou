@@ -47,6 +47,8 @@ pub enum Op {
     ImagePath { id: u32, path: String },
     ImageData { id: u32, data: Vec<u8> },
     WindowSize { width: f32, height: f32 },
+    Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
+    Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
     /// Logical px, 0 = no limit.
     WindowLimits { min: [f32; 2], max: [f32; 2], flags: u32 },
     FontFamily { family: u32, names: String },
@@ -229,6 +231,22 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUS => {
                 fixed(1)?;
                 Op::Focus { id: a[0] }
+            }
+            op::TRANSITION => {
+                fixed(4)?;
+                let duration = f32::from_bits(a[2]);
+                if !duration.is_finite() || duration < 0.0 {
+                    return err(i, "TRANSITION needs a finite duration of 0 or more");
+                }
+                Op::Transition { id: a[0], prop: prop(a[1], i)?, duration, easing: a[3] }
+            }
+            op::ANIMATE => {
+                fixed(9)?;
+                let (duration, iterations) = (f32::from_bits(a[5]), f32::from_bits(a[7]));
+                if !duration.is_finite() || duration < 0.0 || iterations.is_nan() || iterations < 0.0 {
+                    return err(i, "ANIMATE needs a finite duration and iterations of 0 or more");
+                }
+                Op::Animate { id: a[0], animation: a[1], prop: prop(a[2], i)?, from: a[3], to: a[4], duration, easing: a[6], iterations, flags: a[8] }
             }
             op::WINDOW_SIZE => {
                 fixed(2)?;

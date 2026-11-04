@@ -6,7 +6,7 @@
 //   bun run gen            write them
 //   bun run gen --check    exit 1 if any is stale (CI)
 import { join } from "node:path";
-import { events, eventMask, windowFlags, focusScopeFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
+import { events, eventMask, easings, animateFlags, windowFlags, focusScopeFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
 
 const root = join(import.meta.dir, "..");
 const check = Bun.argv.includes("--check");
@@ -29,6 +29,8 @@ function ts(): string {
   L.push(`export const InputFlag = ${JSON.stringify(inputFlags)} as const;`);
   L.push(`export const FocusScopeFlag = ${JSON.stringify(focusScopeFlags)} as const;`);
   L.push(`export const WindowFlag = ${JSON.stringify(windowFlags)} as const;`);
+  L.push(`export const Easing = ${JSON.stringify(easings)} as const;`);
+  L.push(`export const AnimateFlag = ${JSON.stringify(animateFlags)} as const;`);
   L.push(`export const ScrollFlag = ${JSON.stringify(scrollFlags)} as const;`);
   L.push(`export const ScrollBlock = ${JSON.stringify(scrollBlocks)} as const;`);
   L.push(`export const Unit = { ${units.map((u, i) => `${u}: ${i}`).join(", ")} } as const;`);
@@ -77,6 +79,10 @@ function rs(): string {
   for (const [k, v] of Object.entries(scrollFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod scroll_block {");
   for (const [k, v] of Object.entries(scrollBlocks)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod easing {");
+  for (const [k, v] of Object.entries(easings)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod animate_flag {");
+  for (const [k, v] of Object.entries(animateFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod window_flag {");
   for (const [k, v] of Object.entries(windowFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod focus_scope_flag {");

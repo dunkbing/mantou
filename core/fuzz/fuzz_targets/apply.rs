@@ -1,7 +1,8 @@
 //! Any bytes, split into batches: applying, laying out, building the scene and
 //! hit-testing never panic, and the tree stays consistent. Between batches,
 //! the bytes also drive input (presses, drags, keys, text, the IME), so inputs'
-//! editing is fuzzed with whatever the batches built.
+//! editing is fuzzed with whatever the batches built, and the clock moves, so
+//! are animations.
 #![no_main]
 use mantou_tree::protocol::input_flag;
 use mantou_tree::{MemoryClipboard, Ops, Tree};
@@ -64,6 +65,9 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
             _ => {}
         }
         let _ = tree.ime_area();
+        // The clock moves on by the batch's own amount (animations it started run, end, or are replaced).
+        tree.set_time((len as f64) * 37.0 * (1 + rest.len() % 7) as f64);
+        tree.tick();
         let _ = tree.take_events();
         tree.layout();
         let _ = tree.scene();

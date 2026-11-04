@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 11;
+pub const PROTOCOL_VERSION: u32 = 12;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -55,6 +55,10 @@ pub mod op {
     pub const IMAGE_PATH: u32 = 25;
     /// An Image's source as the file's bytes.
     pub const IMAGE_DATA: u32 = 26;
+    /// When the node's `prop` changes, animate to the new value over `duration` ms (Easing; 0 = no transition). Animatable: opacity, translateX, translateY, scale, backgroundColor, borderColor, color.
+    pub const TRANSITION: u32 = 27;
+    /// Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows.
+    pub const ANIMATE: u32 = 28;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -86,6 +90,8 @@ pub fn op_name(code: u32) -> &'static str {
         24 => "WINDOW_LIMITS",
         25 => "IMAGE_PATH",
         26 => "IMAGE_DATA",
+        27 => "TRANSITION",
+        28 => "ANIMATE",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -113,6 +119,18 @@ pub mod scroll_block {
     pub const START: u32 = 1;
     pub const CENTER: u32 = 2;
     pub const END: u32 = 3;
+}
+
+pub mod easing {
+    pub const LINEAR: u32 = 0;
+    pub const EASE: u32 = 1;
+    pub const EASE_IN: u32 = 2;
+    pub const EASE_OUT: u32 = 3;
+    pub const EASE_IN_OUT: u32 = 4;
+}
+
+pub mod animate_flag {
+    pub const ALTERNATE: u32 = 1;
 }
 
 pub mod window_flag {
@@ -197,6 +215,8 @@ pub mod event {
     pub const IMAGE_LOAD: u32 = 20;
     /// An Image's source couldn't be read or decoded. a = image node, c = byte length; then the UTF-8 message, padded to words.
     pub const IMAGE_ERROR: u32 = 21;
+    /// An ANIMATE finished (or was replaced or its node released). a = node, b = animation id.
+    pub const ANIMATION_END: u32 = 22;
     /// A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left).
     pub const LAYOUT: u32 = 16;
     /// A platform service (dialog, context menu) finished. a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words.
@@ -361,10 +381,13 @@ pub enum Prop {
     ShadowSpread = 54,
     ShadowColor = 55,
     ObjectFit = 56,
+    TranslateX = 57,
+    TranslateY = 58,
+    Scale = 59,
 }
 
 impl Prop {
-    pub const COUNT: usize = 56;
+    pub const COUNT: usize = 59;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -424,6 +447,9 @@ impl Prop {
             54 => Prop::ShadowSpread,
             55 => Prop::ShadowColor,
             56 => Prop::ObjectFit,
+            57 => Prop::TranslateX,
+            58 => Prop::TranslateY,
+            59 => Prop::Scale,
             _ => return None,
         })
     }
@@ -486,6 +512,9 @@ impl Prop {
             Prop::ShadowSpread => "shadowSpread",
             Prop::ShadowColor => "shadowColor",
             Prop::ObjectFit => "objectFit",
+            Prop::TranslateX => "translateX",
+            Prop::TranslateY => "translateY",
+            Prop::Scale => "scale",
         }
     }
 
@@ -547,6 +576,9 @@ impl Prop {
             Prop::ShadowSpread => ValueKind::F32,
             Prop::ShadowColor => ValueKind::Color,
             Prop::ObjectFit => ValueKind::Enum(3),
+            Prop::TranslateX => ValueKind::F32,
+            Prop::TranslateY => ValueKind::F32,
+            Prop::Scale => ValueKind::F32,
         }
     }
 

@@ -1,13 +1,15 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { Node, PressEvent, Rect, ScrollOffset, TextLeaf, WheelEvent } from "./ui";
+import type { Node, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
 
 export interface ViewProps {
   style?: StyleProp;
+  /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
+  transition?: Transitions;
   /**
    * A focus scope, for dialogs: while it's on screen, Tab and Shift+Tab stay
    * among the inputs inside the topmost scope, and when it leaves the screen
@@ -59,6 +61,8 @@ export interface ImageProps {
   onLoad?: (size: { width: number; height: number }) => void;
   /** The source couldn't be read or decoded. */
   onError?: (message: string) => void;
+  /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
+  transition?: Transitions;
   onPress?: (e: PressEvent) => void;
   onLayout?: (rect: Rect) => void;
   ref?: Node | ((node: Node) => void);
@@ -83,6 +87,8 @@ export interface ScrollProps {
 /** Text: its children are strings and numbers (no views inside). */
 export interface TextProps {
   style?: StyleProp;
+  /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
+  transition?: Transitions;
   onPress?: (e: PressEvent) => void;
   onWheel?: (e: WheelEvent) => void;
   /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
@@ -122,6 +128,8 @@ export interface InputProps {
   onWheel?: (e: WheelEvent) => void;
   /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
   onLayout?: (rect: Rect) => void;
+  /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
+  transition?: Transitions;
   style?: StyleProp;
   ref?: Node | ((node: Node) => void);
 }
