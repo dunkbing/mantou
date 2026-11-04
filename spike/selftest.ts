@@ -196,10 +196,21 @@ async function main() {
     for (let i = 0; i < 5; i++) core.testWheel((r[0] + r[2]) / 2, (r[1] + r[3]) / 2, 40);
     // The Worker stays blocked (it never yields) until the main thread has
     // scrolled all five turns, reading positions from the core synchronously.
+    // Look every 5 ms, not in a tight loop: each look takes the tree's lock,
+    // and a Worker hammering it can starve the main thread (macOS's mutexes
+    // aren't fair), which would be the test's fault, not the core's.
     const giveUp = performance.now() + 10_000;
+    const every = (ms: number, done: () => boolean) => {
+      let next = 0;
+      while (performance.now() < giveUp) {
+        if (performance.now() < next) continue;
+        if (done()) return;
+        next = performance.now() + ms;
+      }
+    };
     let moved = 0;
-    while ((moved = top0 - core.nodeRect(rows[0].id)![1]) < 200 && performance.now() < giveUp) {}
-    while (core.stats().frames === before.frames && performance.now() < giveUp) {}
+    every(5, () => (moved = top0 - core.nodeRect(rows[0].id)![1]) >= 200);
+    every(5, () => core.stats().frames > before.frames);
     const d = delta(before, core.stats());
     check("scrolling without JS", moved === 200 && d.commits === 0 && d.frames >= 1, {
       scrolledPx: moved, commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
