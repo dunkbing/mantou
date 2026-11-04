@@ -485,6 +485,7 @@ impl App {
                 } else {
                     let kind = if state == ElementState::Pressed { ev::POINTER_DOWN } else { ev::POINTER_UP };
                     inst.push_event([kind, button_code(button), x.to_bits(), y.to_bits()]);
+                    inst.pointer_button(if state == ElementState::Pressed { 0 } else { 1 }, button_code(button), x, y);
                 }
             }
             WindowEvent::ModifiersChanged(m) => {

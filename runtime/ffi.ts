@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 9;
+export const ABI_VERSION = 10;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -41,6 +41,7 @@ export const symbols = {
   mt_test_focused: { args: ["u32"], returns: "u32" },
   mt_test_answer: { args: ["u32", "ptr", "u32"], returns: "void" },
   mt_test_service: { args: ["u32", "ptr", "u32"], returns: "u32" },
+  mt_test_button: { args: ["u32", "u32", "u32", "f32", "f32"], returns: "void" },
   mt_test_access: { args: ["u32", "ptr", "u32"], returns: "u32" },
   mt_test_menu: { args: ["u32", "ptr", "u32"], returns: "void" },
 } as const;

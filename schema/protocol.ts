@@ -79,7 +79,7 @@ export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
-export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8 } as const;
+export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;
@@ -201,6 +201,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
   { name: "SERVICE_RESULT", code: 18, fields: "a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words", doc: "A platform service (dialog, context menu) finished." },
   { name: "MENU", code: 19, fields: "c = byte length; then the UTF-8 id of the menu item, padded to words", doc: "The user chose an item of the app menu." },
+  { name: "NODE_POINTER", code: 25, fields: "a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot)", doc: "The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch." },
 ];
 
 /** Bits of a key event's modifiers. */

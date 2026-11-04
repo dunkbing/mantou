@@ -21,6 +21,7 @@ export type CoreEvent =
   | { type: "pointerEnter" | "pointerLeave"; target: number }
   | { type: "serviceResult"; req: number; cancelled: boolean; json: string }
   | { type: "menu"; id: string }
+  | { type: "nodePointer"; target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }
   | InputCoreEvent;
 
 /** What the core says about Input nodes. */
@@ -98,6 +99,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.SCROLL: return { type: "scroll", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
     case Event.SERVICE_RESULT: return { type: "serviceResult", req: w[i + 1], cancelled: w[i + 2] !== 0, json: text(w, i, w[i + 3]) };
+    case Event.NODE_POINTER: return { type: "nodePointer", target: w[i + 1], x: f[i + 2], y: f[i + 3], kind: w[i + 4] as 0 | 1 | 2, button: w[i + 5], buttons: w[i + 6], mods: w[i + 7], clicks: w[i + 8] };
     case Event.MENU: return { type: "menu", id: text(w, i, w[i + 3]) };
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
     case Event.BLUR: return { type: "blur", target: w[i + 1] };
@@ -147,6 +149,7 @@ export function route(
     dispatchHover(t: number, hovered: boolean): void;
     dispatchService(req: number, cancelled: boolean, json: string): void;
     dispatchMenu(id: string): void;
+    dispatchPointer(e: { target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }): void;
     readonly windowSize: { scale: number } | null;
   },
   e: CoreEvent,
@@ -159,6 +162,7 @@ export function route(
   else if (e.type === "pointerEnter" || e.type === "pointerLeave") ui.dispatchHover(e.target, e.type === "pointerEnter");
   else if (e.type === "serviceResult") ui.dispatchService(e.req, e.cancelled, e.json);
   else if (e.type === "menu") ui.dispatchMenu(e.id);
+  else if (e.type === "nodePointer") ui.dispatchPointer(e);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });
   // Sizes arrive in device px; the app works in logical px.
   else if (e.type === "windowReady") ui.dispatchResize(e.width / e.scale, e.height / e.scale, e.scale);

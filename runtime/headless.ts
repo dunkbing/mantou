@@ -131,6 +131,13 @@ export class HeadlessCore {
     return StyleProp.cursor.values[this.lib.symbols.mt_test_cursor(this.handle)];
   }
 
+  /** A secondary or middle button (1 middle, 2 secondary) going down or up at logical (x, y), then step. */
+  pointerButton(kind: "down" | "up", button: 1 | 2, x: number, y: number): this {
+    this.ui.flush();
+    this.lib.symbols.mt_test_button(this.handle, kind === "down" ? 0 : 1, button, x, y);
+    return this.step();
+  }
+
   /** Presses (down + up) at logical (x, y), or at the centre of a node. */
   press(target: Node | [number, number]): this {
     const [x, y] = Array.isArray(target) ? target : this.center(target);

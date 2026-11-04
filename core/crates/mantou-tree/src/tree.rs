@@ -1155,6 +1155,11 @@ impl Tree {
     /// The node a press at this point targets: the topmost node under it, if a
     /// node on its path to the root listens for presses.
     pub fn press_target(&self, x: f32, y: f32) -> Option<u32> {
+        self.listener_target(x, y, event_mask::PRESS)
+    }
+
+    /// The topmost node under a point, if a node on its path to the root listens for `mask` (an `event_mask` bit).
+    pub fn listener_target(&self, x: f32, y: f32, mask: u32) -> Option<u32> {
         if self.on_thumb(x, y) {
             return None; // a scrollbar thumb is the core's, not the content's
         }
@@ -1162,12 +1167,17 @@ impl Tree {
         let mut a = Some(hit);
         while let Some(id) = a {
             let n = &self.nodes[&id];
-            if n.listen & event_mask::PRESS != 0 {
+            if n.listen & mask != 0 {
                 return Some(hit);
             }
             a = n.parent;
         }
         None
+    }
+
+    /// Whether the node exists.
+    pub fn has_node(&self, id: u32) -> bool {
+        self.nodes.contains_key(&id)
     }
 
     /// Every node id, sorted.

@@ -48,6 +48,10 @@ struct Pointer {
     /// The last primary press (time ms, x, y) and how many came in a row.
     last_down: Option<(f64, f32, f32)>,
     clicks: u32,
+    /// Buttons held (a bit per button code), and the node that got the first press of this hold:
+    /// moves and releases go to it until every button is up (a drag keeps reporting outside the node).
+    buttons: u32,
+    captured: Option<u32>,
 }
 
 /// The window's clipboard: the system's, else one in memory.
@@ -94,6 +98,8 @@ pub struct Instance {
     pub clock_ms: Mutex<f64>,
     events: Mutex<Vec<u32>>,
     wake_pending: AtomicBool,
+    /// Where in `events` the last queued pointer move starts (usize::MAX = none), to coalesce moves. Under the `events` lock.
+    last_move: AtomicUsize,
     /// `extern "C" fn()` of the threadsafe JSCallback, 0 when none.
     wake: AtomicUsize,
     pointer: Mutex<Pointer>,
@@ -122,6 +128,7 @@ impl Instance {
             clock_ms: Mutex::new(0.0),
             events: Mutex::new(Vec::new()),
             wake_pending: AtomicBool::new(false),
+            last_move: AtomicUsize::new(usize::MAX),
             wake: AtomicUsize::new(0),
             pointer: Mutex::new(Pointer::default()),
             modifiers: AtomicU32::new(0),
@@ -155,6 +162,13 @@ impl Instance {
     fn push_record(&self, rec: &[u32; 4], extra: &[u32]) {
         {
             let mut q = lock(&self.events);
+            // A pointer move right after another to the same node replaces it: a drag costs one event per batch.
+            let is_move = rec[0] == ev::NODE_POINTER && extra.first() == Some(&2);
+            let prev = self.last_move.load(Ordering::Relaxed);
+            if is_move && prev != usize::MAX && prev + 4 + (q[prev] >> 16) as usize == q.len() && q[prev + 1] == rec[1] {
+                q.truncate(prev);
+            }
+            self.last_move.store(if is_move { q.len() } else { usize::MAX }, Ordering::Relaxed);
             q.push(rec[0] | (extra.len() as u32) << 16);
             q.extend_from_slice(&rec[1..]);
             q.extend_from_slice(extra);
@@ -273,6 +287,7 @@ impl Instance {
         // this take or wakes the Worker again, so none is ever stranded.
         self.wake_pending.store(false, Ordering::Release);
         let mut q = lock(&self.events);
+        self.last_move.store(usize::MAX, Ordering::Relaxed);
         let cap = out.len() / 4;
         let mut n = 0;
         while n < q.len() {
@@ -399,6 +414,7 @@ impl Instance {
                 let clicks = p.clicks;
                 p.pressed_on = lock(&self.tree).press_target(x, y);
                 drop(p);
+                self.node_pointer(0, 0, x, y, clicks);
                 self.push_event([ev::POINTER_DOWN, 0, x.to_bits(), y.to_bits()]);
                 let shift = self.modifiers.load(Ordering::Relaxed) & key_modifier::SHIFT != 0;
                 self.edit(|t| t.pointer_down(x, y, clicks, shift))
@@ -409,6 +425,7 @@ impl Instance {
                 p.primary_down = false;
                 drop(p);
                 lock(&self.tree).pointer_up();
+                self.node_pointer(1, 0, x, y, 0);
                 self.push_event([ev::POINTER_UP, 0, x.to_bits(), y.to_bits()]);
                 if let Some(t) = target.filter(|t| pressed == Some(*t)) {
                     bump(&self.stats.presses);
@@ -419,9 +436,56 @@ impl Instance {
             _ => {
                 let dragging = p.primary_down;
                 drop(p);
+                self.node_pointer(2, 0, x, y, 0);
                 self.push_event([ev::POINTER_MOVE, 0, x.to_bits(), y.to_bits()]);
                 dragging && self.edit(|t| t.pointer_drag(x, y))
             }
+        }
+    }
+
+    /// A button other than the primary one went down (`kind` 0) or up (1) at (x, y): nodes with pointer
+    /// handlers hear it. The primary button comes through `pointer`.
+    pub fn pointer_button(&self, kind: u32, button: u32, x: f32, y: f32) {
+        self.hover(Some((x, y)));
+        lock(&self.pointer).position = (x, y);
+        self.node_pointer(kind, button, x, y, 1);
+    }
+
+    /// Queues a NODE_POINTER event for the node a pointer handler listens on (see the event's doc).
+    /// `kind`: 0 = down, 1 = up, 2 = move.
+    fn node_pointer(&self, kind: u32, button: u32, x: f32, y: f32, clicks: u32) {
+        let mask = mantou_tree::protocol::event_mask::POINTER;
+        // Pointer state first, then the tree: the order `pointer` takes them in.
+        let mut p = lock(&self.pointer);
+        let tree = lock(&self.tree);
+        let bit = 1u32 << button.min(31);
+        match kind {
+            0 => p.buttons |= bit,
+            1 => p.buttons &= !bit,
+            _ => {}
+        }
+        let buttons = p.buttons;
+        if p.captured.is_some_and(|c| !tree.has_node(c)) {
+            p.captured = None;
+        }
+        let target = match p.captured {
+            Some(c) => Some(c),
+            None => {
+                let t = tree.listener_target(x, y, mask);
+                if kind == 0 {
+                    p.captured = t; // the first press of a hold
+                }
+                t
+            }
+        };
+        if kind == 1 && buttons == 0 {
+            p.captured = None;
+        }
+        drop(tree);
+        drop(p);
+        if let Some(t) = target {
+            let mods = self.modifiers.load(Ordering::Relaxed);
+            self.push_record(&[ev::NODE_POINTER, t, x.to_bits(), y.to_bits()], &[kind, button, buttons, mods, clicks]);
         }
     }
 

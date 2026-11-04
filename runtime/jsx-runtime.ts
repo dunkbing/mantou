@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { AccessRoleName, Node, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -20,7 +20,21 @@ export interface AccessProps {
   accessHidden?: boolean;
 }
 
-export interface ViewProps extends AccessProps {
+/** Pointer handlers (they bubble, like presses). */
+export interface PointerProps {
+  /** A button went down on the node or inside it. */
+  onPointerDown?: (e: PointerEvent) => void;
+  /** The pointer moved over it, or anywhere while a button held that went down on it (a drag). At most one per batch. */
+  onPointerMove?: (e: PointerEvent) => void;
+  /** A button came up; after a press on the node, wherever the pointer is. */
+  onPointerUp?: (e: PointerEvent) => void;
+  /** The secondary button went down (macOS: also Control + the primary one): where `showMenu` goes. */
+  onContextMenu?: (e: PointerEvent) => void;
+  /** The primary button went down for the second time in a row at one spot. */
+  onDoubleClick?: (e: PointerEvent) => void;
+}
+
+export interface ViewProps extends AccessProps, PointerProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
@@ -95,7 +109,7 @@ export interface ImageProps {
 }
 
 /** A scroll view (see `Scroll`). */
-export interface ScrollProps extends AccessProps {
+export interface ScrollProps extends AccessProps, PointerProps {
   /** The scroll view's own style; `overflow: "scroll"` is set for you. */
   style?: StyleProp;
   /** The style of the content view inside, which holds the children. */
@@ -112,7 +126,7 @@ export interface ScrollProps extends AccessProps {
 }
 
 /** Text: its children are strings and numbers (no views inside). */
-export interface TextProps extends AccessProps {
+export interface TextProps extends AccessProps, PointerProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;

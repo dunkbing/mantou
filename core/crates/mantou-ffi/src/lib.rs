@@ -53,8 +53,9 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
 /// 7: the window config (mt_run) carries size limits and flags.
 /// 8: mt_input_selection; hover (POINTER_ENTER, POINTER_LEAVE), mt_test_input kind 3 (the pointer leaves), mt_test_cursor.
+/// 10: pointer events on nodes: the NODE_POINTER event and Pointer listener bit; mt_test_button.
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
-pub const ABI_VERSION: u32 = 9;
+pub const ABI_VERSION: u32 = 10;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -374,6 +375,17 @@ pub extern "C" fn mt_test_input(inst: u32, kind: u32, x: f32, y: f32) {
             i.pointer(kind, x, y);
         } else {
             send(UserEvent::TestPointer(kind, x, y));
+        }
+    })
+}
+
+/// Test hook: a button other than the primary one at (x, y), headless instances only. kind: 0 = down, 1 = up;
+/// button: the protocol's button code (1 middle, 2 secondary).
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_button(inst: u32, kind: u32, button: u32, x: f32, y: f32) {
+    with(inst, (), |i| {
+        if i.headless {
+            i.pointer_button(kind, button, x, y);
         }
     })
 }

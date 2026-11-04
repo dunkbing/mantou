@@ -115,6 +115,7 @@ pub mod event_mask {
     pub const LAYOUT: u32 = 2;
     pub const SCROLL: u32 = 4;
     pub const HOVER: u32 = 8;
+    pub const POINTER: u32 = 16;
 }
 
 pub mod scroll_flag {
@@ -264,6 +265,8 @@ pub mod event {
     pub const SERVICE_RESULT: u32 = 18;
     /// The user chose an item of the app menu. c = byte length; then the UTF-8 id of the menu item, padded to words.
     pub const MENU: u32 = 19;
+    /// The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch. a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot).
+    pub const NODE_POINTER: u32 = 25;
 }
 
 pub mod display {

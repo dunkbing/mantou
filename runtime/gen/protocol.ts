@@ -68,7 +68,7 @@ export const Op = {
 export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 30: "ACCESS" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
-export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8} as const;
+export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
 export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,"Radio":5,"Link":6,"Heading":7,"List":8,"ListItem":9,"Dialog":10,"Tab":11,"TabList":12,"Menu":13,"MenuItem":14,"Image":15,"Group":16,"Status":17,"Alert":18} as const;
@@ -131,6 +131,8 @@ export const Event = {
   SERVICE_RESULT: 18,
   /** The user chose an item of the app menu. c = byte length; then the UTF-8 id of the menu item, padded to words. */
   MENU: 19,
+  /** The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch. a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot). */
+  NODE_POINTER: 25,
 } as const;
 
 export type ValueKind = "f32" | "color" | "length" | "family" | "enum";

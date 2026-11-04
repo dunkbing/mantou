@@ -2,6 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
+import { KeyModifier } from "./gen/protocol";
 import { AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
@@ -130,6 +131,29 @@ export interface KeyEvent {
   meta: boolean;
 }
 
+/** A pointer going down, up or moving over a node (design §8.2). While a button is held, the node that was pressed hears everything, even outside its box. */
+export interface PointerEvent {
+  target: Node;
+  /** The node whose handler is running. */
+  currentTarget: Node;
+  /** Logical px from the window's top left. */
+  x: number;
+  y: number;
+  /** The button that changed: 0 primary, 1 middle, 2 secondary. For a move, 0. */
+  button: number;
+  /** The buttons held now, a bit per button (1 << button). */
+  buttons: number;
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+  meta: boolean;
+  /** Presses in a row at one spot: 1, 2 for a double click… (down events). */
+  clicks: number;
+  stopPropagation(): void;
+}
+
+const isMac = process.platform === "darwin";
+
 export interface PressEvent {
   target: Node;
   /** The node whose handler is running. */
@@ -204,6 +228,7 @@ export class Node {
   private layoutHandlers: ((rect: Rect) => void)[] = [];
   private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
   private hoverHandlers: ((hovered: boolean) => void)[] = [];
+  private pointerHandlers: Record<"down" | "up" | "move" | "context" | "double", ((e: PointerEvent) => void)[]> = { down: [], up: [], move: [], context: [], double: [] };
   /** Whether the pointer is over this node (or a descendant), as the core last reported; only tracked while it has hover handlers. */
   hovered = false;
   private imageHandlers: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] } = { load: [], error: [] };
@@ -613,6 +638,7 @@ export class Node {
     this.layoutHandlers.length = 0;
     this.scrollHandlers.length = 0;
     this.hoverHandlers.length = 0;
+    for (const k of Object.keys(this.pointerHandlers) as (keyof typeof this.pointerHandlers)[]) this.pointerHandlers[k].length = 0;
     this.inputHandlers = null;
     this.released = true;
     for (const a of this.running) this.ui.endAnimation(a);
@@ -710,7 +736,8 @@ export class Node {
       (this.pressHandlers.length ? EventMask.Press : 0) |
       (this.layoutHandlers.length ? EventMask.Layout : 0) |
       (this.scrollHandlers.length ? EventMask.Scroll : 0) |
-      (this.hoverHandlers.length ? EventMask.Hover : 0);
+      (this.hoverHandlers.length ? EventMask.Hover : 0) |
+      (Object.values(this.pointerHandlers).some((h) => h.length) ? EventMask.Pointer : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
   }
@@ -769,6 +796,62 @@ export class Node {
         this.listen();
       }
     };
+  }
+
+  private addPointer(kind: keyof typeof this.pointerHandlers, handler: (e: PointerEvent) => void): () => void {
+    this.alive();
+    const list = this.pointerHandlers[kind];
+    const was = Object.values(this.pointerHandlers).some((h) => h.length);
+    list.push(handler);
+    if (!was) this.listen();
+    return () => {
+      const i = list.indexOf(handler);
+      if (i < 0) return;
+      list.splice(i, 1);
+      if (!this.released && !Object.values(this.pointerHandlers).some((h) => h.length)) this.listen();
+    };
+  }
+
+  /** A button went down on this node (or inside it). Returns a function that removes the handler. */
+  onPointerDown(handler: (e: PointerEvent) => void): () => void {
+    return this.addPointer("down", handler);
+  }
+
+  /** The pointer moved over this node, or, while a button is held that went down on it, anywhere. At most one per batch. */
+  onPointerMove(handler: (e: PointerEvent) => void): () => void {
+    return this.addPointer("move", handler);
+  }
+
+  /** A button came up; after a press on this node, wherever the pointer is. */
+  onPointerUp(handler: (e: PointerEvent) => void): () => void {
+    return this.addPointer("up", handler);
+  }
+
+  /** The secondary button went down (on macOS also Control + the primary button): the place for `showMenu`. */
+  onContextMenu(handler: (e: PointerEvent) => void): () => void {
+    return this.addPointer("context", handler);
+  }
+
+  /** The primary button went down for the second time in a row at one spot. */
+  onDoubleClick(handler: (e: PointerEvent) => void): () => void {
+    return this.addPointer("double", handler);
+  }
+
+  /** @internal Runs the handlers for one pointer event; true when one stopped it from bubbling. */
+  handlePointer(kind: 0 | 1 | 2, e: Omit<PointerEvent, "currentTarget" | "stopPropagation">): boolean {
+    let stopped = false;
+    const ev = { ...e, currentTarget: this, stopPropagation: () => (stopped = true) };
+    const run = (list: ((e: PointerEvent) => void)[]) => {
+      for (const h of [...list]) h(ev);
+    };
+    const h = this.pointerHandlers;
+    if (kind === 0) {
+      run(h.down);
+      if (e.button === 2 || (isMac && e.button === 0 && e.ctrl)) run(h.context);
+      else if (e.button === 0 && e.clicks === 2) run(h.double);
+    } else if (kind === 1) run(h.up);
+    else run(h.move);
+    return stopped;
   }
 
   /** @internal */
@@ -1164,6 +1247,25 @@ export class Ui {
     const bytes = this.enc.take();
     this.commits++;
     this.sink.commit(bytes);
+  }
+
+  /** Delivers a pointer event to its target and bubbles it up the tree. */
+  dispatchPointer(e: { target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }) {
+    const target = this.nodes.get(e.target);
+    if (!target) return;
+    const info = {
+      target,
+      x: e.x,
+      y: e.y,
+      button: e.button,
+      buttons: e.buttons,
+      shift: !!(e.mods & KeyModifier.Shift),
+      ctrl: !!(e.mods & KeyModifier.Control),
+      alt: !!(e.mods & KeyModifier.Alt),
+      meta: !!(e.mods & KeyModifier.Meta),
+      clicks: e.clicks,
+    };
+    for (let n: Node | null = target; n; n = n.parent) if (n.handlePointer(e.kind, info)) break;
   }
 
   /** Delivers a press to its target and bubbles it up the tree. */
