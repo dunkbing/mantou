@@ -146,3 +146,22 @@ test("rows of different heights: a function of the item places them (#31)", () =
   expect(made).toBe(1); // only the row that came into range (29,998); the others moved
   expect(h.hit(4, 30 + 24)).toBe(rowNode); // row 30,001's own node, moved
 });
+
+test("a List whose itemHeight is a function can shrink (dunkbing/mantou#50)", () => {
+  const h = new HeadlessCore({ width: 300, height: 200 });
+  open.push(h);
+  let set!: (n: number[]) => void;
+  mount(h.ui, () => {
+    const [items, setItems] = createSignal([1, 2, 3, 4]);
+    set = setItems;
+    return (
+      <List each={items()} itemHeight={(n: number) => 20 + n} style={{ width: 300, height: 200 }}>
+        {(item) => <Text>{String(item())}</Text>}
+      </List>
+    );
+  });
+  h.step();
+  set([1]);
+  h.step();
+  expect([...h.ui.nodes.values()].filter((n) => n.isText).map((n) => n.textContent)).toEqual(["1"]);
+});

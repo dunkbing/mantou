@@ -198,7 +198,8 @@ export function List<T>(props: ListProps<T>): JSX.Element {
         const row = createElement("view") as Node;
         // Its place follows the heights: a row above that grows moves it, with no new row.
         createEffect(() => {
-          const { top } = layout();
+          const { n, top } = layout();
+          if (i >= n) return; // past the end: the range effect is about to dispose this row
           row.style({ position: "absolute", left: 0, right: 0, top: top(i), height: top(i + 1) - top(i) });
         });
         insert(row, () => props.children(() => props.each[i], i));
