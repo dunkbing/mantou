@@ -131,6 +131,14 @@ export class HeadlessCore {
     return StyleProp.cursor.values[this.lib.symbols.mt_test_cursor(this.handle)];
   }
 
+  /** Files (absolute paths) held over the window ("over"), leaving it ("leave") or dropped ("drop"), then step. The target is the node under the pointer's last position. */
+  dropFiles(kind: "over" | "leave" | "drop", files: string[] = []): this {
+    this.ui.flush();
+    const b = new TextEncoder().encode(JSON.stringify(files));
+    this.lib.symbols.mt_test_drop(this.handle, kind === "over" ? 0 : kind === "leave" ? 1 : 2, b, b.length);
+    return this.step();
+  }
+
   /** A secondary or middle button (1 middle, 2 secondary) going down or up at logical (x, y), then step. */
   pointerButton(kind: "down" | "up", button: 1 | 2, x: number, y: number): this {
     this.ui.flush();

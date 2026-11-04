@@ -116,6 +116,7 @@ pub mod event_mask {
     pub const SCROLL: u32 = 4;
     pub const HOVER: u32 = 8;
     pub const POINTER: u32 = 16;
+    pub const DROP: u32 = 32;
 }
 
 pub mod scroll_flag {
@@ -267,6 +268,8 @@ pub mod event {
     pub const MENU: u32 = 19;
     /// The pointer went down, up or moved, for a node whose path to the root has a Pointer listener. While a button is held, everything goes to the node that was pressed (even outside it); moves are coalesced into one per batch. a = target node, b = x, c = y (f32, logical px); then kind (0 down, 1 up, 2 move), button, buttons held (a bit per button), modifiers (KeyModifier bits), clicks (1, 2… for presses in a row at one spot).
     pub const NODE_POINTER: u32 = 25;
+    /// Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words.
+    pub const FILE_DROP: u32 = 26;
 }
 
 pub mod display {

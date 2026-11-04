@@ -104,3 +104,8 @@ export async function setMenu(menus: MenuItem[]): Promise<boolean> {
 export function onMenu(handler: (id: string) => void): () => void {
   return ui().onMenu(handler);
 }
+
+/** Window-level file drops: files held over the window (kind 0), leaving it (1) or dropped (2), when no view with `onDrop`/`onDragOver` took them. */
+export function onFileDrop(handler: (kind: 0 | 1 | 2, e: { x: number; y: number; files: string[] }) => void): () => void {
+  return ui().onFileDrop(handler);
+}

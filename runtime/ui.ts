@@ -154,6 +154,18 @@ export interface PointerEvent {
 
 const isMac = process.platform === "darwin";
 
+/** Files dragged over the window or dropped on it. */
+export interface DropEvent {
+  /** The node under the pointer with a drop handler (the innermost, or the one bubbled to). */
+  target: Node | null;
+  currentTarget: Node | null;
+  x: number;
+  y: number;
+  /** Absolute paths. */
+  files: string[];
+  stopPropagation(): void;
+}
+
 export interface PressEvent {
   target: Node;
   /** The node whose handler is running. */
@@ -228,6 +240,7 @@ export class Node {
   private layoutHandlers: ((rect: Rect) => void)[] = [];
   private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
   private hoverHandlers: ((hovered: boolean) => void)[] = [];
+  private dropHandlers: { drop: ((e: DropEvent) => void)[]; over: ((e: DropEvent | null) => void)[] } = { drop: [], over: [] };
   private pointerHandlers: Record<"down" | "up" | "move" | "context" | "double", ((e: PointerEvent) => void)[]> = { down: [], up: [], move: [], context: [], double: [] };
   /** Whether the pointer is over this node (or a descendant), as the core last reported; only tracked while it has hover handlers. */
   hovered = false;
@@ -638,6 +651,7 @@ export class Node {
     this.layoutHandlers.length = 0;
     this.scrollHandlers.length = 0;
     this.hoverHandlers.length = 0;
+    this.dropHandlers.drop.length = this.dropHandlers.over.length = 0;
     for (const k of Object.keys(this.pointerHandlers) as (keyof typeof this.pointerHandlers)[]) this.pointerHandlers[k].length = 0;
     this.inputHandlers = null;
     this.released = true;
@@ -737,6 +751,7 @@ export class Node {
       (this.layoutHandlers.length ? EventMask.Layout : 0) |
       (this.scrollHandlers.length ? EventMask.Scroll : 0) |
       (this.hoverHandlers.length ? EventMask.Hover : 0) |
+      (this.dropHandlers.drop.length || this.dropHandlers.over.length ? EventMask.Drop : 0) |
       (Object.values(this.pointerHandlers).some((h) => h.length) ? EventMask.Pointer : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
@@ -852,6 +867,41 @@ export class Node {
     } else if (kind === 1) run(h.up);
     else run(h.move);
     return stopped;
+  }
+
+  private addDrop<K extends "drop" | "over">(kind: K, handler: Node["dropHandlers"][K][number]): () => void {
+    this.alive();
+    const list = this.dropHandlers[kind] as unknown[];
+    list.push(handler);
+    if (list.length === 1) this.listen();
+    return () => {
+      const i = list.indexOf(handler);
+      if (i < 0) return;
+      list.splice(i, 1);
+      if (!this.released) this.listen();
+    };
+  }
+
+  /** Files were dropped on this node (or inside it). Returns a function that removes the handler. */
+  onDrop(handler: (e: DropEvent) => void): () => void {
+    return this.addDrop("drop", handler);
+  }
+
+  /** Files are held over this node (called with the event), or left it or the window (called with null). */
+  onDragOver(handler: (e: DropEvent | null) => void): () => void {
+    return this.addDrop("over", handler);
+  }
+
+  /** @internal */
+  handleDrop(kind: 0 | 1 | 2, e: Omit<DropEvent, "currentTarget" | "stopPropagation"> | null): { stopped: boolean; ran: boolean } {
+    let stopped = false;
+    const ran = kind === 2 ? this.dropHandlers.drop.length > 0 : this.dropHandlers.over.length > 0;
+    if (kind === 2 && e) {
+      for (const h of [...this.dropHandlers.drop]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+    } else if (kind === 0 && e) {
+      for (const h of [...this.dropHandlers.over]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+    } else for (const h of [...this.dropHandlers.over]) h(null);
+    return { stopped, ran };
   }
 
   /** @internal */
@@ -982,6 +1032,34 @@ export class Ui {
   onMenu(handler: (id: string) => void): () => void {
     this.menuHandlers.add(handler);
     return () => this.menuHandlers.delete(handler);
+  }
+
+  /** Files held over, left or dropped: the target and its ancestors hear it, then the window-level listeners. */
+  dispatchDrop(kind: 0 | 1 | 2, targetId: number, json: string) {
+    const { x, y, files } = JSON.parse(json) as { x: number; y: number; files: string[] };
+    const target = this.nodes.get(targetId) ?? null;
+    const e = { target, x, y, files };
+    // The node that was over is told when files move on or leave.
+    const was = this.dragOver;
+    this.dragOver = kind === 0 ? target : null;
+    let ran = false;
+    if (was && was !== target) for (let n: Node | null = was; n; n = n.parent) ran = n.handleDrop(1, null).ran || ran;
+    for (let n: Node | null = target; n; n = n.parent) {
+      const r = n.handleDrop(kind, e);
+      ran = ran || r.ran;
+      if (r.stopped) break;
+    }
+    // A drop that no view took goes to the window listeners.
+    if (!ran) for (const h of [...this.dropListeners]) h(kind, e);
+  }
+
+  private dragOver: Node | null = null;
+  private dropListeners = new Set<(kind: 0 | 1 | 2, e: { target: Node | null; x: number; y: number; files: string[] }) => void>();
+
+  /** Window-level: files held over the window (kind 0), left it (1) or dropped on it (2), when no node took them. */
+  onFileDrop(handler: (kind: 0 | 1 | 2, e: { target: Node | null; x: number; y: number; files: string[] }) => void): () => void {
+    this.dropListeners.add(handler);
+    return () => this.dropListeners.delete(handler);
   }
 
   dispatchMenu(id: string) {

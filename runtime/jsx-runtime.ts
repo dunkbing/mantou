@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { AccessRoleName, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, DropEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -32,6 +32,10 @@ export interface PointerProps {
   onContextMenu?: (e: PointerEvent) => void;
   /** The primary button went down for the second time in a row at one spot. */
   onDoubleClick?: (e: PointerEvent) => void;
+  /** Files were dropped on the node or inside it. Needs the OS to report the pointer's position, so the target is where it last was. */
+  onDrop?: (e: DropEvent) => void;
+  /** Files are held over the node (the event), or left it or the window (null): the place for a highlight. */
+  onDragOver?: (e: DropEvent | null) => void;
 }
 
 export interface ViewProps extends AccessProps, PointerProps {

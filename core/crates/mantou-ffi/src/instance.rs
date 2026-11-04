@@ -225,6 +225,16 @@ impl Instance {
         self.push_record(&[ev::SERVICE_RESULT, req, answer.is_none() as u32, words[0]], &words[1..]);
     }
 
+    /// Files held over the window (`kind` 0), left it (1) or were dropped (2). winit gives no position for
+    /// these, so the target is the node under the pointer's last known position.
+    pub fn file_drop(&self, kind: u32, files: &[String]) {
+        let (x, y) = lock(&self.pointer).position;
+        let target = lock(&self.tree).listener_target(x, y, mantou_tree::protocol::event_mask::DROP).unwrap_or(0);
+        let json = serde_json::json!({ "x": x, "y": y, "files": files }).to_string();
+        let words = mantou_tree::encode::string_words(&json);
+        self.push_record(&[ev::FILE_DROP, kind, target, words[0]], &words[1..]);
+    }
+
     /// Queues a chosen app-menu item.
     pub fn push_menu(&self, id: &str) {
         let words = mantou_tree::encode::string_words(id);

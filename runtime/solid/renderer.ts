@@ -4,7 +4,7 @@
 // them is disposed (design §7.4).
 import { createRenderer } from "solid-js/universal";
 import { createContext, getOwner, onCleanup, useContext } from "./solid";
-import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
+import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
 export const UiContext = createContext<Ui>();
@@ -109,6 +109,12 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       return;
     case "onDoubleClick":
       setHandler(node, name, value, (f: (e: PointerEvent) => void) => node.onDoubleClick(f));
+      return;
+    case "onDrop":
+      setHandler(node, name, value, (f: (e: DropEvent) => void) => node.onDrop(f));
+      return;
+    case "onDragOver":
+      setHandler(node, name, value, (f: (e: DropEvent | null) => void) => node.onDragOver(f));
       return;
     case "onWheel":
       setHandler(node, name, value, (f: (e: WheelEvent) => void) => node.onWheel(f));

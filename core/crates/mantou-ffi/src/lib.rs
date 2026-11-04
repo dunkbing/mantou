@@ -53,9 +53,10 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
 /// 7: the window config (mt_run) carries size limits and flags.
 /// 8: mt_input_selection; hover (POINTER_ENTER, POINTER_LEAVE), mt_test_input kind 3 (the pointer leaves), mt_test_cursor.
+/// 11: FILE_DROP and the Drop listener bit; mt_test_drop.
 /// 10: pointer events on nodes: the NODE_POINTER event and Pointer listener bit; mt_test_button.
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
-pub const ABI_VERSION: u32 = 10;
+pub const ABI_VERSION: u32 = 11;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -498,6 +499,22 @@ pub unsafe extern "C" fn mt_service(inst: u32, req: u32, ptr: *const u8, len: u3
             0
         } else {
             1
+        }
+    })
+}
+
+/// Test hook: files held over the window (`kind` 0), left it (1) or dropped (2); `ptr` is a JSON array of paths.
+/// Headless instances only.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_drop(inst: u32, kind: u32, ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let body = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
+    with(inst, (), |i| {
+        if i.headless {
+            i.file_drop(kind, &serde_json::from_str::<Vec<String>>(&body).unwrap_or_default());
         }
     })
 }

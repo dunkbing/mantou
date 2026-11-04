@@ -180,6 +180,9 @@ pub struct App {
     focused: bool,
     /// Secure keyboard entry is on (a password field has the focus in the key window).
     secure_keys: bool,
+    /// Files held over the window, and how many more DroppedFile events belong to the drop already sent.
+    dragging: Vec<String>,
+    skip_drops: usize,
     /// The cursor shown (protocol `cursor`).
     cursor: u32,
 }
@@ -209,7 +212,7 @@ fn cursor_icon(c: u32) -> CursorIcon {
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, focused: true, secure_keys: false, cursor: cursor::DEFAULT }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, focused: true, secure_keys: false, dragging: Vec::new(), skip_drops: 0, cursor: cursor::DEFAULT }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -473,6 +476,28 @@ impl App {
                 let s = self.scale();
                 self.redraw_if(inst.pointer(2, position.x as f32 / s, position.y as f32 / s));
                 self.sync_cursor();
+            }
+            WindowEvent::HoveredFile(p) => {
+                self.dragging.push(p.to_string_lossy().into_owned());
+                if self.dragging.len() == 1 {
+                    inst.file_drop(0, &self.dragging);
+                }
+            }
+            WindowEvent::HoveredFileCancelled => {
+                self.dragging.clear();
+                inst.file_drop(1, &[]);
+            }
+            WindowEvent::DroppedFile(p) => {
+                // winit sends one event per file; the held-over list is the whole drop, sent once.
+                // ponytail: without a hover list (a platform that skips it) each file is its own drop.
+                if !self.dragging.is_empty() {
+                    self.skip_drops = self.dragging.len() - 1;
+                    inst.file_drop(2, &std::mem::take(&mut self.dragging));
+                } else if self.skip_drops > 0 {
+                    self.skip_drops -= 1;
+                } else {
+                    inst.file_drop(2, &[p.to_string_lossy().into_owned()]);
+                }
             }
             WindowEvent::CursorLeft { .. } => {
                 inst.pointer(3, 0.0, 0.0);
