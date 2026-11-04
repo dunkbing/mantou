@@ -61,13 +61,15 @@ export const Op = {
   SELECT: 29,
   /** Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen. */
   FOCUS_SCOPE: 18,
+  /** Steps for the running ANIMATE `animation` on the node: two or more values (f32 bits, or colours as RGBA8) spaced evenly over one iteration; its easing applies to each step. They replace the animation's from and to. */
+  KEYFRAMES: 32,
   /** The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered. */
   INPUT_ALLOW: 31,
   /** What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it). */
   ACCESS: 30,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 31: "INPUT_ALLOW", 30: "ACCESS" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 30: "ACCESS" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16,"Drop":32,"Select":64} as const;
@@ -77,7 +79,7 @@ export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,
 export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16} as const;
 export const WindowFlag = {"NotResizable":1,"Frameless":2,"AlwaysOnTop":4,"Fullscreen":8,"Maximized":16,"HasPosition":32,"TitleOverlay":64} as const;
 export const WindowStateFlag = {"Focused":1,"Minimized":2,"Maximized":4,"Fullscreen":8,"Dark":16} as const;
-export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4} as const;
+export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4,"Spring":16} as const;
 export const AnimateFlag = {"Alternate":1} as const;
 export const ScrollFlag = {"By":1} as const;
 export const ScrollBlock = {"Nearest":0,"Start":1,"Center":2,"End":3} as const;

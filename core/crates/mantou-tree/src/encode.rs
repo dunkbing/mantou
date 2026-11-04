@@ -148,6 +148,11 @@ impl Ops {
         self.op(op::TRANSITION, &[id, prop as u32, duration.to_bits(), easing])
     }
     #[allow(clippy::too_many_arguments)]
+    pub fn keyframes(&mut self, id: u32, animation: u32, values: &[u32]) -> &mut Self {
+        let mut w = vec![id, animation];
+        w.extend_from_slice(values);
+        self.op(op::KEYFRAMES, &w)
+    }
     pub fn animate(&mut self, id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32) -> &mut Self {
         self.op(op::ANIMATE, &[id, animation, prop as u32, from, to, duration.to_bits(), easing, iterations.to_bits(), flags])
     }

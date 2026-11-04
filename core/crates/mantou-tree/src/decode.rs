@@ -50,6 +50,7 @@ pub enum Op {
     ImageData { id: u32, data: Vec<u8> },
     WindowSize { width: f32, height: f32 },
     Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
+    Keyframes { id: u32, animation: u32, values: Vec<u32> },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
     /// An Input's selection, in UTF-16 code units.
     Select { id: u32, anchor: u32, focus: u32 },
@@ -250,6 +251,12 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "TRANSITION needs a finite duration of 0 or more");
                 }
                 Op::Transition { id: a[0], prop: prop(a[1], i)?, duration, easing: a[3] }
+            }
+            op::KEYFRAMES => {
+                if n < 4 {
+                    return err(i, "KEYFRAMES needs an id, an animation and two or more values");
+                }
+                Op::Keyframes { id: a[0], animation: a[1], values: a[2..].to_vec() }
             }
             op::ANIMATE => {
                 fixed(9)?;

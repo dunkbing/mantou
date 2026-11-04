@@ -698,6 +698,7 @@ impl Tree {
                 self.set_focus((id != 0).then_some(id));
             }
             Op::Transition { id, prop, duration, easing } => self.set_transition(id, prop, duration, easing)?,
+            Op::Keyframes { id, animation, values } => self.set_keyframes(id, animation, values)?,
             Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => {
                 self.start_animation(id, animation, prop, from, to, duration, easing, iterations, flags)?
             }

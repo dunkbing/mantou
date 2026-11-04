@@ -90,7 +90,25 @@ fn bezier(x1: f32, y1: f32, x2: f32, y2: f32, x: f32) -> f32 {
     curve(y1, y2, (lo + hi) / 2.0)
 }
 
+/// A spring that settles by t = 1: `damping` is its ratio in hundredths (1.00 = critical); under 1 it overshoots.
+fn spring(ratio: f32, t: f32) -> f32 {
+    if t >= 1.0 {
+        return 1.0;
+    }
+    if ratio < 1.0 {
+        let w = 6.0 / ratio; // normalised natural frequency: the envelope is 0.25% by t = 1
+        let wd = w * (1.0 - ratio * ratio).sqrt();
+        1.0 - (-ratio * w * t).exp() * ((wd * t).cos() + ratio * w / wd * (wd * t).sin())
+    } else {
+        let w = 8.0;
+        1.0 - (1.0 + w * t) * (-w * t).exp()
+    }
+}
+
 fn ease(kind: u32, t: f32) -> f32 {
+    if kind >= easing::SPRING {
+        return spring(((kind - easing::SPRING) as f32 / 100.0).clamp(0.05, 1.0), t.max(0.0));
+    }
     let t = t.clamp(0.0, 1.0);
     match kind {
         easing::EASE => bezier(0.25, 0.1, 0.25, 1.0, t),
@@ -101,7 +119,7 @@ fn ease(kind: u32, t: f32) -> f32 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct Active {
     prop: Prop,
     from: Val,
@@ -114,6 +132,8 @@ struct Active {
     id: u32,
     iterations: f64,
     alternate: bool,
+    /// Keyframes (KEYFRAMES): evenly spaced values over one iteration, instead of from and to.
+    steps: Vec<Val>,
     current: Val,
 }
 
@@ -203,12 +223,26 @@ impl Tree {
             id: animation,
             iterations: if iterations.is_nan() { 1.0 } else { iterations as f64 },
             alternate: flags & animate_flag::ALTERNATE != 0,
+            steps: Vec::new(),
             current: from,
         });
         for a in ended {
             self.events.push(TreeEvent::AnimationEnd { id, animation: a });
         }
         self.after_anim_change(moves(prop));
+        Ok(())
+    }
+
+    pub(super) fn set_keyframes(&mut self, id: u32, animation: u32, values: Vec<u32>) -> Result<(), String> {
+        let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
+        let Some(act) = node.anim.as_mut().and_then(|a| a.active.iter_mut().find(|a| a.id == animation && animation != 0)) else {
+            return Err(format!("KEYFRAMES: node {id} has no running animation {animation}"));
+        };
+        let steps: Vec<Val> = values.iter().map(|&w| from_word(act.prop, w)).collect();
+        act.from = steps[0];
+        act.to = *steps.last().expect("two or more values");
+        act.current = act.from;
+        act.steps = steps;
         Ok(())
     }
 
@@ -231,7 +265,7 @@ impl Tree {
             }
             anims.active.retain(|a| a.prop != prop || a.id != 0);
             let from = get(&drawn_before, prop);
-            anims.active.push(Active { prop, from, to: new, start: now, duration: duration as f64, easing, id: 0, iterations: 1.0, alternate: false, current: from });
+            anims.active.push(Active { prop, from, to: new, start: now, duration: duration as f64, easing, id: 0, iterations: 1.0, alternate: false, steps: Vec::new(), current: from });
             moved |= moves(prop);
             started = true;
         }
@@ -273,7 +307,14 @@ impl Tree {
                 }
                 let (n, f) = (cycles.floor(), cycles.fract() as f32);
                 let f = if a.alternate && (n as u64) % 2 == 1 { 1.0 - f } else { f };
-                a.current = lerp(a.from, a.to, ease(a.easing, f));
+                a.current = if a.steps.len() > 2 {
+                    // Evenly spaced steps; the easing shapes each one.
+                    let x = f * (a.steps.len() - 1) as f32;
+                    let i = (x.floor() as usize).min(a.steps.len() - 2);
+                    lerp(a.steps[i], a.steps[i + 1], ease(a.easing, x - i as f32))
+                } else {
+                    lerp(a.from, a.to, ease(a.easing, f))
+                };
                 true
             });
         }

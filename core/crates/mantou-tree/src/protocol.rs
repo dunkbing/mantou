@@ -63,6 +63,8 @@ pub mod op {
     pub const SELECT: u32 = 29;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
+    /// Steps for the running ANIMATE `animation` on the node: two or more values (f32 bits, or colours as RGBA8) spaced evenly over one iteration; its easing applies to each step. They replace the animation's from and to.
+    pub const KEYFRAMES: u32 = 32;
     /// The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered.
     pub const INPUT_ALLOW: u32 = 31;
     /// What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it).
@@ -100,6 +102,7 @@ pub fn op_name(code: u32) -> &'static str {
         28 => "ANIMATE",
         29 => "SELECT",
         18 => "FOCUS_SCOPE",
+        32 => "KEYFRAMES",
         31 => "INPUT_ALLOW",
         30 => "ACCESS",
         _ => "UNKNOWN",
@@ -140,6 +143,7 @@ pub mod easing {
     pub const EASE_IN: u32 = 2;
     pub const EASE_OUT: u32 = 3;
     pub const EASE_IN_OUT: u32 = 4;
+    pub const SPRING: u32 = 16;
 }
 
 pub mod animate_flag {

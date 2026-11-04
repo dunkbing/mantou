@@ -121,3 +121,51 @@ test("transformed views, text inside, at 1× and 2×", () => {
     expect(h.capture()).toMatchImage(`transform@${scale}x`);
   }
 });
+
+test("animate with keyframes passes through each value, evenly spaced", () => {
+  let box!: Node;
+  const h = app(() => <View><View ref={box} style={{ width: 50, height: 50 }} /></View>);
+  box.animate("translateX", { keyframes: [0, 100, 40], duration: 200, easing: "linear" });
+  h.step();
+  h.step(50);
+  expect(h.rect(box)![0]).toBe(50); // halfway to the first step
+  h.step(50);
+  expect(h.rect(box)![0]).toBe(100);
+  h.step(50);
+  expect(h.rect(box)![0]).toBe(70);
+  h.step(60);
+  expect(h.rect(box)![0]).toBe(0); // done: back to the style
+});
+
+test("a spring overshoots when under-damped and settles at the target; the duration comes from it", () => {
+  let box!: Node;
+  const [open_, setOpen] = createSignal(false);
+  const h = app(() => (
+    <View>
+      <View ref={box} transition={{ translateX: { spring: { stiffness: 300, damping: 12 } } }} style={{ width: 50, height: 50, translateX: open_() ? 100 : 0 }} />
+    </View>
+  ));
+  setOpen(true);
+  h.step();
+  let max = 0;
+  for (let i = 0; i < 100; i++) {
+    h.step(16);
+    max = Math.max(max, h.rect(box)![0]);
+  }
+  expect(max).toBeGreaterThan(105); // overshoots
+  expect(h.rect(box)![0]).toBe(100); // settled
+  expect(h.ui.commits).toBeGreaterThan(0);
+});
+
+test("a critically damped spring never overshoots", () => {
+  let box!: Node;
+  const h = app(() => <View><View ref={box} style={{ width: 50, height: 50 }} /></View>);
+  box.animate("translateX", { from: 0, to: 100, spring: { stiffness: 200, damping: 2 * Math.sqrt(200) } });
+  h.step();
+  let max = 0;
+  for (let i = 0; i < 100; i++) {
+    h.step(16);
+    max = Math.max(max, h.rect(box)![0]);
+  }
+  expect(max).toBeLessThanOrEqual(100);
+});

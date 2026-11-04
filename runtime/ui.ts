@@ -35,17 +35,36 @@ const EASINGS: Record<Easing, number> = {
   linear: EasingCode.Linear, ease: EasingCode.Ease, "ease-in": EasingCode.EaseIn, "ease-out": EasingCode.EaseOut, "ease-in-out": EasingCode.EaseInOut,
 };
 
-/** A property's transition: a duration in ms, or a duration and an easing ("ease" by default). */
-export type TransitionSpec = number | { duration: number; easing?: Easing };
+/** A spring (unit mass): stiffer is faster, less damping overshoots more (about 2 × √stiffness is critical). */
+export interface Spring {
+  stiffness?: number;
+  damping?: number;
+}
+
+/** The duration and easing code that give a spring: it settles (to within a quarter of a percent) at the end. */
+function springTiming(s: Spring): { duration: number; easing: number } {
+  const k = s.stiffness ?? 170, c = s.damping ?? 26;
+  if (!(k > 0) || !(c >= 0)) throw new Error("mantou: a spring needs a stiffness above 0 and a damping of 0 or more");
+  const ratio = Math.min(1, Math.max(0.05, c / (2 * Math.sqrt(k))));
+  const seconds = ratio < 1 ? 6 / (ratio * Math.sqrt(k)) : 8 / Math.sqrt(k);
+  return { duration: Math.round(seconds * 1000), easing: EasingCode.Spring + Math.round(ratio * 100) };
+}
+
+/** A property's transition: a duration in ms, a duration and an easing ("ease" by default), or a spring. */
+export type TransitionSpec = number | { duration: number; easing?: Easing } | { spring: Spring };
 /** Which properties animate to their new values when the app changes them. */
 export type Transitions = Partial<Record<AnimatableProp, TransitionSpec>>;
 
 export interface AnimateOptions {
   /** Start and end values: numbers, or colours for colour properties. */
-  from: number | Color;
-  to: number | Color;
-  /** One iteration, in ms. */
-  duration: number;
+  from?: number | Color;
+  to?: number | Color;
+  /** Instead of from and to: two or more values, evenly spaced over one iteration (the easing shapes each step). */
+  keyframes?: (number | Color)[];
+  /** One iteration, in ms (not needed with a spring, which sets it). */
+  duration?: number;
+  /** A spring instead of a duration and easing: it overshoots and settles. */
+  spring?: Spring;
   easing?: Easing;
   /** How many times (default 1; Infinity = until stopped). */
   iterations?: number;
@@ -700,9 +719,9 @@ export class Node {
     const next = new Map<AnimatableProp, [number, number]>();
     for (const [prop, spec] of Object.entries(transitions)) {
       if (spec === undefined) continue;
-      const duration = typeof spec === "number" ? spec : spec.duration;
-      if (!Number.isFinite(duration) || duration < 0) throw new Error(`mantou: transition ${prop}: the duration must be a number of ms`);
-      next.set(animatable(prop), [duration, easingCode(typeof spec === "number" ? undefined : spec.easing)]);
+      const timing = typeof spec === "number" ? { duration: spec, easing: easingCode(undefined) } : "spring" in spec ? springTiming(spec.spring) : { duration: spec.duration, easing: easingCode(spec.easing) };
+      if (!Number.isFinite(timing.duration) || timing.duration < 0) throw new Error(`mantou: transition ${prop}: the duration must be a number of ms`);
+      next.set(animatable(prop), [timing.duration, timing.easing]);
     }
     for (const [prop, [d, e]] of next) {
       const old = this.transitions.get(prop);
@@ -723,7 +742,9 @@ export class Node {
   animate(prop: AnimatableProp, options: AnimateOptions): Animation {
     this.alive();
     const p = animatable(prop);
-    const { duration, iterations = 1 } = options;
+    const { iterations = 1 } = options;
+    const timing = options.spring ? springTiming(options.spring) : { duration: options.duration ?? NaN, easing: easingCode(options.easing) };
+    const duration = timing.duration;
     if (!Number.isFinite(duration) || duration < 0) throw new Error(`mantou: animate ${prop}: the duration must be a number of ms`);
     if (Number.isNaN(iterations) || iterations < 0) throw new Error(`mantou: animate ${prop}: iterations must be 0 or more (or Infinity)`);
     const value = (v: number | Color) => {
@@ -731,14 +752,18 @@ export class Node {
       if (typeof v !== "number" || !Number.isFinite(v)) throw new Error(`mantou: animate ${prop}: from and to must be numbers`);
       return f32bits(v);
     };
-    const [from, to] = [value(options.from), value(options.to)];
+    const steps = options.keyframes?.map(value);
+    if (steps && steps.length < 2) throw new Error(`mantou: animate ${prop}: keyframes needs two or more values`);
+    if (!steps && (options.from === undefined || options.to === undefined)) throw new Error(`mantou: animate ${prop}: give from and to, or keyframes`);
+    const [from, to] = steps ? [steps[0], steps[steps.length - 1]] : [value(options.from!), value(options.to!)];
     const id = this.ui.nextAnimation++;
     this.running.add(id);
     const finished = new Promise<void>((resolve) => this.ui.animations.set(id, () => {
       this.running.delete(id);
       resolve();
     }));
-    this.ui.enc.animate(this.id, id, StyleProp[p].code, from, to, duration, easingCode(options.easing), iterations, options.alternate ? AnimateFlag.Alternate : 0);
+    this.ui.enc.animate(this.id, id, StyleProp[p].code, from, to, duration, timing.easing, iterations, options.alternate ? AnimateFlag.Alternate : 0);
+    if (steps && steps.length > 2) this.ui.enc.keyframes(this.id, id, steps);
     this.ui.schedule();
     return {
       finished,

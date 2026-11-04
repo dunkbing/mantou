@@ -52,6 +52,7 @@ fn op_json(o: &Op) -> J {
         Op::Focus { id } => json!({"op": "FOCUS", "id": id}),
         Op::Transition { id, prop, duration, easing } => json!({"op": "TRANSITION", "id": id, "prop": prop.name(), "duration": *duration as f64, "easing": easing}),
         Op::Select { id, anchor, focus } => json!({"op": "SELECT", "id": id, "anchor": anchor, "focus": focus}),
+        Op::Keyframes { id, animation, values } => json!({"op": "KEYFRAMES", "id": id, "animation": animation, "values": values}),
         Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => json!({"op": "ANIMATE", "id": id, "animation": animation, "prop": prop.name(), "from": from, "to": to, "duration": *duration as f64, "easing": easing, "iterations": *iterations as f64, "flags": flags}),
         Op::WindowSize { width, height } => json!({"op": "WINDOW_SIZE", "width": *width as f64, "height": *height as f64}),
         Op::WindowLimits { min, max, flags } => json!({"op": "WINDOW_LIMITS", "minWidth": min[0] as f64, "minHeight": min[1] as f64, "maxWidth": max[0] as f64, "maxHeight": max[1] as f64, "flags": flags}),
