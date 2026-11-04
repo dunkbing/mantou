@@ -130,11 +130,12 @@ pub struct App {
     ime: bool,
     /// Whether the window told the OS a password field has the focus.
     ime_password: bool,
+    menus: crate::platform::Menus,
 }
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default() }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -274,6 +275,7 @@ impl App {
         let scale = window.scale_factor() as f32;
         self.window = Some(window.clone());
         self.inst.relayout(size.width, size.height, scale);
+        self.menus.install_default(&self.inst);
         self.inst.push_event([ev::WINDOW_READY, size.width, size.height, scale.to_bits()]);
         window.request_redraw();
     }
@@ -296,6 +298,7 @@ impl App {
             UserEvent::TestWheel(x, y, dx, dy) => self.redraw_if(self.inst.wheel(x, y, dx, dy)),
             UserEvent::TestText(t) => self.redraw_if(self.inst.insert_text(&t)),
             UserEvent::TestIme(t, cursor) => self.redraw_if(self.inst.ime_preedit(&t, cursor)),
+            UserEvent::Service(req, body) => guard((), || crate::platform::handle(&self.inst, self.window.as_ref(), &mut self.menus, req, &body)),
         }
     }
 

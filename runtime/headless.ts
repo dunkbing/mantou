@@ -68,6 +68,10 @@ export class HeadlessCore {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
+      service: (req, json) => {
+        const b = utf8.encode(json);
+        this.lib.symbols.mt_service(this.handle, req, b, b.byteLength);
+      },
       rect: (id) => {
         const r = new Float32Array(4);
         return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
@@ -256,6 +260,31 @@ export class HeadlessCore {
     const a = new BigUint64Array(STAT_NAMES.length);
     this.lib.symbols.mt_stats(this.handle, a, a.length);
     return statsFrom(a);
+  }
+
+  /**
+   * Queues the answer to the next platform service request (a dialog, a
+   * context menu…): the paths of openFile, the index of message's button…
+   * `null` cancels it. Unanswered requests are cancelled.
+   */
+  answer(value: unknown | null): this {
+    const b = value === null ? null : utf8.encode(JSON.stringify(value));
+    this.lib.symbols.mt_test_answer(this.handle, b, b?.byteLength ?? 0);
+    return this;
+  }
+
+  /** The last platform service request, as the core got it. */
+  lastService(): ({ kind: string } & Record<string, unknown>) | null {
+    const buf = new Uint8Array(64 * 1024);
+    const n = this.lib.symbols.mt_test_service(this.handle, buf, buf.byteLength);
+    return n ? JSON.parse(new TextDecoder().decode(buf.subarray(0, Math.min(n, buf.byteLength)))) : null;
+  }
+
+  /** The user chooses the app-menu item `id`; then steps. */
+  chooseMenu(id: string): this {
+    const b = utf8.encode(id);
+    this.lib.symbols.mt_test_menu(this.handle, b, b.byteLength);
+    return this.step();
   }
 
   /** Frees the instance in the core. */

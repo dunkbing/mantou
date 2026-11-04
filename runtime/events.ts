@@ -15,6 +15,8 @@ export type CoreEvent =
   | { type: "wheel"; target: number; dx: number; dy: number }
   | { type: "layout"; target: number; x: number; y: number; width: number; height: number }
   | { type: "scroll"; target: number; x: number; y: number }
+  | { type: "serviceResult"; req: number; cancelled: boolean; json: string }
+  | { type: "menu"; id: string }
   | InputCoreEvent;
 
 /** What the core says about Input nodes. */
@@ -65,6 +67,11 @@ function keyInfo(code: number, mods: number): KeyInfo {
 
 const utf8 = new TextDecoder();
 
+/** The UTF-8 text after a record's four words: `len` bytes, within the record's extra words. */
+function text(w: Uint32Array, i: number, len: number): string {
+  return utf8.decode(new Uint8Array(w.buffer, (i + 4) * 4, Math.min(len, (w[i] >>> 16) * 4)));
+}
+
 /** Decodes the record at word `i`, or null for an unknown type. */
 export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEvent | null {
   switch (w[i] & 0xffff) {
@@ -81,13 +88,12 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.WHEEL: return { type: "wheel", target: w[i + 1], dx: f[i + 2], dy: f[i + 3] };
     case Event.SCROLL: return { type: "scroll", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
+    case Event.SERVICE_RESULT: return { type: "serviceResult", req: w[i + 1], cancelled: w[i + 2] !== 0, json: text(w, i, w[i + 3]) };
+    case Event.MENU: return { type: "menu", id: text(w, i, w[i + 3]) };
     case Event.FOCUS: return { type: "focus", target: w[i + 1] };
     case Event.BLUR: return { type: "blur", target: w[i + 1] };
     case Event.SUBMIT: return { type: "submit", target: w[i + 1] };
-    case Event.TEXT_CHANGED: {
-      const text = utf8.decode(new Uint8Array(w.buffer, (i + 4) * 4, Math.min(w[i + 3], (w[i] >>> 16) * 4)));
-      return { type: "textChanged", target: w[i + 1], rev: w[i + 2], text };
-    }
+    case Event.TEXT_CHANGED: return { type: "textChanged", target: w[i + 1], rev: w[i + 2], text: text(w, i, w[i + 3]) };
     default: return null;
   }
 }
@@ -127,12 +133,16 @@ export function route(
     dispatchLayout(t: number, rect: { x: number; y: number; width: number; height: number }): void;
     dispatchResize(width: number, height: number, scale: number): void;
     dispatchScroll(t: number, x: number, y: number): void;
+    dispatchService(req: number, cancelled: boolean, json: string): void;
+    dispatchMenu(id: string): void;
     readonly windowSize: { scale: number } | null;
   },
   e: CoreEvent,
 ) {
   if (e.type === "press") ui.dispatchPress(e.target, e.x, e.y);
   else if (e.type === "scroll") ui.dispatchScroll(e.target, e.x, e.y);
+  else if (e.type === "serviceResult") ui.dispatchService(e.req, e.cancelled, e.json);
+  else if (e.type === "menu") ui.dispatchMenu(e.id);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });
   // Sizes arrive in device px; the app works in logical px.
   else if (e.type === "windowReady") ui.dispatchResize(e.width / e.scale, e.height / e.scale, e.scale);

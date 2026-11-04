@@ -14,6 +14,8 @@ export interface Sink {
   commit(bytes: Uint8Array): void;
   /** The node's laid-out box [x0, y0, x1, y1] in logical px, if the sink lays out. */
   rect?(id: number): [number, number, number, number] | null;
+  /** Sends a platform service request (JSON); the answer comes back through `Ui.dispatchService`. */
+  service?(req: number, json: string): void;
 }
 
 /** A laid-out box, in logical px from the window's top left. */
@@ -605,6 +607,37 @@ export class Ui {
   private resizeHandlers = new Set<(size: WindowSize) => void>();
 
   constructor(private sink: Sink) {}
+
+  private nextRequest = 1;
+  private requests = new Map<number, (answer: unknown | null) => void>();
+  private menuHandlers = new Set<(id: string) => void>();
+
+  /** Asks the platform for a service (design §10); resolves to its answer, or null when the user cancelled. */
+  service<T>(request: { kind: string } & Record<string, unknown>): Promise<T | null> {
+    if (!this.sink.service) return Promise.resolve(null);
+    const req = this.nextRequest++;
+    return new Promise((resolve) => {
+      this.requests.set(req, resolve as (a: unknown) => void);
+      this.sink.service!(req, JSON.stringify(request));
+    });
+  }
+
+  /** Delivers a service's answer to the promise that asked. */
+  dispatchService(req: number, cancelled: boolean, json: string) {
+    const resolve = this.requests.get(req);
+    this.requests.delete(req);
+    resolve?.(cancelled || !json ? null : JSON.parse(json));
+  }
+
+  /** Listens for the app menu's items being chosen; returns a function that stops. */
+  onMenu(handler: (id: string) => void): () => void {
+    this.menuHandlers.add(handler);
+    return () => this.menuHandlers.delete(handler);
+  }
+
+  dispatchMenu(id: string) {
+    for (const h of [...this.menuHandlers]) h(id);
+  }
 
   /** Creates an Input: a text field (multiline with setOptions). */
   input(...styles: (Style | SharedStyle)[]): Node {

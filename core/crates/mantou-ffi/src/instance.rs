@@ -2,7 +2,7 @@
 //! counters. The window is one instance; headless test instances are others
 //! (design §12.2). Nothing here touches winit or a GPU surface.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
@@ -104,6 +104,10 @@ pub struct Instance {
     /// The window's is created on the main thread, on first use (macOS wants that).
     clipboard: Mutex<Option<Box<dyn Clipboard + Send>>>,
     started: Instant,
+    /// Headless instances: the answers queued for platform services, one per request (None cancels).
+    answers: Mutex<VecDeque<Option<String>>>,
+    /// The last service request (JSON), for tests to assert on.
+    pub last_service: Mutex<String>,
 }
 
 impl Instance {
@@ -122,6 +126,8 @@ impl Instance {
             swallowed: Mutex::new(HashSet::new()),
             clipboard: Mutex::new(None),
             started: Instant::now(),
+            answers: Mutex::new(VecDeque::new()),
+            last_service: Mutex::new(String::new()),
         }
     }
 
@@ -152,6 +158,28 @@ impl Instance {
         }
         bump(&self.stats.events);
         self.wake_js();
+    }
+
+    /// Queues the answer to a service request (`None`: the user cancelled).
+    pub fn push_service_result(&self, req: u32, answer: Option<&str>) {
+        let words = mantou_tree::encode::string_words(answer.unwrap_or(""));
+        self.push_record(&[ev::SERVICE_RESULT, req, answer.is_none() as u32, words[0]], &words[1..]);
+    }
+
+    /// Queues a chosen app-menu item.
+    pub fn push_menu(&self, id: &str) {
+        let words = mantou_tree::encode::string_words(id);
+        self.push_record(&[ev::MENU, 0, 0, words[0]], &words[1..]);
+    }
+
+    /// Queues an answer for the next service request of a headless instance.
+    pub fn queue_answer(&self, answer: Option<String>) {
+        lock(&self.answers).push_back(answer);
+    }
+
+    /// Takes a headless instance's next queued answer: `None` when none is queued, `Some(None)` for a cancel.
+    pub fn next_answer(&self) -> Option<Option<String>> {
+        lock(&self.answers).pop_front()
     }
 
     /// Queues the tree's events (inputs' focus and text, layout changes) for JS.

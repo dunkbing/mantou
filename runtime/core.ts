@@ -30,6 +30,10 @@ export class MantouCore {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
+      service: (req, json) => {
+        const b = new TextEncoder().encode(json);
+        if (this.lib.symbols.mt_service(this.handle, req, b, b.byteLength) !== 0) this.ui.dispatchService(req, true, "");
+      },
       rect: (id) => {
         const r = new Float32Array(4);
         return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;

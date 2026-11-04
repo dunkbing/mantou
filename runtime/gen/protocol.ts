@@ -92,6 +92,10 @@ export const Event = {
   SCROLL: 17,
   /** A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left). */
   LAYOUT: 16,
+  /** A platform service (dialog, context menu) finished. a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words. */
+  SERVICE_RESULT: 18,
+  /** The user chose an item of the app menu. c = byte length; then the UTF-8 id of the menu item, padded to words. */
+  MENU: 19,
 } as const;
 
 export type ValueKind = "f32" | "color" | "length" | "enum";

@@ -4,13 +4,14 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 5;
+export const ABI_VERSION = 6;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
   mt_app: { args: [], returns: "u32" },
   mt_info: { args: ["ptr", "u32"], returns: "u32" },
   mt_run: { args: ["ptr", "u32"], returns: "i32" },
+  mt_service: { args: ["u32", "u32", "ptr", "u32"], returns: "u32" },
   mt_quit: { args: ["i32"], returns: "void" },
   // Per instance (the window's is mt_app()).
   mt_set_wake: { args: ["u32", "function"], returns: "void" },
@@ -36,6 +37,9 @@ export const symbols = {
   mt_test_clipboard: { args: ["u32", "ptr", "u32"], returns: "u32" },
   mt_test_value: { args: ["u32", "u32", "ptr", "u32"], returns: "u32" },
   mt_test_focused: { args: ["u32"], returns: "u32" },
+  mt_test_answer: { args: ["u32", "ptr", "u32"], returns: "void" },
+  mt_test_service: { args: ["u32", "ptr", "u32"], returns: "u32" },
+  mt_test_menu: { args: ["u32", "ptr", "u32"], returns: "void" },
 } as const;
 
 /** The npm package with the prebuilt core for this machine (an optional dependency of mantou-ui), e.g. mantou-ui-linux-x64. */

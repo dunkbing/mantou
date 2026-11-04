@@ -149,6 +149,8 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
   { name: "SCROLL", code: 17, fields: "a = scroll view, b = x, c = y (f32, logical px: the offset)", doc: "A scroll view with a Scroll listener scrolled (at most once per frame)." },
   { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
+  { name: "SERVICE_RESULT", code: 18, fields: "a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words", doc: "A platform service (dialog, context menu) finished." },
+  { name: "MENU", code: 19, fields: "c = byte length; then the UTF-8 id of the menu item, padded to words", doc: "The user chose an item of the app menu." },
 ];
 
 /** Bits of a key event's modifiers. */

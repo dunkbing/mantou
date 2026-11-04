@@ -31,6 +31,7 @@ macro_rules! log {
 }
 
 mod instance;
+mod platform;
 mod window;
 
 use std::collections::HashMap;
@@ -49,7 +50,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 4: text, wheel events, key modifiers; mt_test_key, mt_test_wheel; a glyphs counter.
 /// 5: text input: variable-length event records, mt_test_text, mt_test_ime, mt_test_clipboard,
 /// mt_test_set_clipboard, mt_test_value, mt_test_focused.
-pub const ABI_VERSION: u32 = 5;
+/// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
+pub const ABI_VERSION: u32 = 6;
 
 /// The window's instance.
 const APP: u32 = 1;
@@ -65,6 +67,8 @@ pub(crate) enum UserEvent {
     TestWheel(f32, f32, f32, f32),
     TestText(String),
     TestIme(String, Option<(usize, usize)>),
+    /// A platform service request (JSON) to run on the main thread: its id and body.
+    Service(u32, String),
 }
 
 /// Process-wide state: the instances and the window's event loop.
@@ -424,6 +428,68 @@ pub unsafe extern "C" fn mt_test_clipboard(inst: u32, dst: *mut u8, cap: u32) ->
     // SAFETY: guaranteed by the caller.
     let out = unsafe { bytes_mut(dst, cap) };
     with(inst, 0, |i| write_str(out, &i.with_clipboard(|cb| cb.get()).unwrap_or_default()))
+}
+
+/// Asks for a platform service (dialogs, context menus, the app menu) with a JSON
+/// request. The answer comes back as a `SERVICE_RESULT` event with the same `req`.
+/// A headless instance answers at once from the queue `mt_test_answer` fills (a
+/// cancel when it's empty) and remembers the request for `mt_test_service`.
+/// Returns 0, or 1 when the request couldn't be queued.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_service(inst: u32, req: u32, ptr: *const u8, len: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let body = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
+    with(inst, 1, |i| {
+        if i.headless {
+            *lock(&i.last_service) = body;
+            match i.next_answer() {
+                Some(Some(a)) => i.push_service_result(req, Some(&a)),
+                _ => i.push_service_result(req, None),
+            }
+            0
+        } else if send(UserEvent::Service(req, body)) {
+            0
+        } else {
+            1
+        }
+    })
+}
+
+/// Test hook: queues the answer (JSON) for the next service request of a headless
+/// instance; an empty one cancels it.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_answer(inst: u32, ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let a = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
+    with(inst, (), |i| i.queue_answer(if a.is_empty() { None } else { Some(a) }));
+}
+
+/// Test hook: the last service request (JSON). Writes at most `cap` bytes and returns the full length.
+///
+/// # Safety
+/// `dst` must be valid for writes of `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_service(inst: u32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, 0, |i| write_str(out, &lock(&i.last_service)))
+}
+
+/// Test hook: the user chooses the app-menu item `id`.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_menu(inst: u32, ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let id = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
+    with(inst, (), |i| i.push_menu(&id));
 }
 
 /// Test hook: an input's text as the core has it. Writes at most `cap` bytes
