@@ -110,6 +110,9 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "onDoubleClick":
       setHandler(node, name, value, (f: (e: PointerEvent) => void) => node.onDoubleClick(f));
       return;
+    case "selectable":
+      node.style({ userSelect: value ? "text" : "none" });
+      return;
     case "draggable":
       node.draggable(value);
       return;

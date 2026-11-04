@@ -23,6 +23,12 @@ Text is only drawn inside `<Text>`, whose children are strings and numbers.
 <Text style={{ fontSize: 14, color: "#374151", maxLines: 2 }}>Hello, {name()}</Text>
 ```
 
+Add `selectable` to let the user select it (drag, double click for a word, triple click for a line) and copy it with Cmd/Ctrl+C. One text at a time; clicking elsewhere clears it.
+
+```tsx
+<Text selectable>{message.body}</Text>
+```
+
 ## Input
 
 A text field with a caret, selection, undo, copy and paste, and IME. The core does the editing, so typing never waits for your code.

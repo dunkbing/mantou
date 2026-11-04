@@ -411,6 +411,11 @@ pub mod word_break {
     pub const BREAK_WORD: u32 = 3;
 }
 
+pub mod user_select {
+    pub const NONE: u32 = 0;
+    pub const TEXT: u32 = 1;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -491,10 +496,11 @@ pub enum Prop {
     WhiteSpace = 64,
     TextOverflow = 65,
     WordBreak = 66,
+    UserSelect = 67,
 }
 
 impl Prop {
-    pub const COUNT: usize = 66;
+    pub const COUNT: usize = 67;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -564,6 +570,7 @@ impl Prop {
             64 => Prop::WhiteSpace,
             65 => Prop::TextOverflow,
             66 => Prop::WordBreak,
+            67 => Prop::UserSelect,
             _ => return None,
         })
     }
@@ -636,6 +643,7 @@ impl Prop {
             Prop::WhiteSpace => "whiteSpace",
             Prop::TextOverflow => "textOverflow",
             Prop::WordBreak => "wordBreak",
+            Prop::UserSelect => "userSelect",
         }
     }
 
@@ -707,6 +715,7 @@ impl Prop {
             Prop::WhiteSpace => ValueKind::Enum(3),
             Prop::TextOverflow => ValueKind::Enum(2),
             Prop::WordBreak => ValueKind::Enum(4),
+            Prop::UserSelect => ValueKind::Enum(2),
         }
     }
 
@@ -767,6 +776,7 @@ impl Prop {
             Prop::WhiteSpace => &["normal", "nowrap", "pre"],
             Prop::TextOverflow => &["ellipsis", "clip"],
             Prop::WordBreak => &["normal", "breakAll", "keepAll", "breakWord"],
+            Prop::UserSelect => &["none", "text"],
             _ => &[],
         }
     }

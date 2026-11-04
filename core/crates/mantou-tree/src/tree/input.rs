@@ -71,7 +71,73 @@ pub(super) fn origin(ed: &Editor, engine: &mut TextEngine, content: [f32; 4], k:
     (content[0], content[1] + ((content[3] - content[1]) - lh).max(0.0) / 2.0)
 }
 
+/// Makes a text selection's editor show `node`'s text in its box (logical px at scale `k`).
+pub(super) fn sync_selection(ed: &mut Editor, engine: &mut TextEngine, node: &super::Node, content: [f32; 4], k: f32) {
+    ed.read_only = true;
+    ed.set_multiline(true);
+    ed.set_style(engine, &node.v.text);
+    ed.set_size(((content[2] - content[0]) / k).max(0.0), ((content[3] - content[1]) / k).max(0.0));
+    if ed.text() != node.text {
+        ed.set_text(engine, &node.text);
+    }
+}
+
 impl Tree {
+    /// Whether some static text is selected (it takes Copy and Select All).
+    pub fn has_text_selection(&self) -> bool {
+        self.tsel.is_some()
+    }
+
+    /// The primary button went down off the inputs: on selectable text, place the caret (a word on
+    /// 2 clicks, a line on 3; shift extends); elsewhere, drop the text selection. Returns whether the scene changed.
+    fn text_select_down(&mut self, x: f32, y: f32, clicks: u32, extend: bool) -> bool {
+        let hit = self.hit(x, y).filter(|id| self.nodes[id].kind == crate::protocol::node_kind::TEXT && self.nodes[id].v.user_select);
+        let Some(id) = hit else {
+            return self.tsel.take().is_some();
+        };
+        let Some(b) = self.boxes.iter().find(|b| b.id == id) else { return false };
+        let (content, k) = (b.content, b.k);
+        let Some(engine) = self.text.as_mut() else { return false };
+        if self.tsel.as_ref().is_none_or(|(s, _)| *s != id) {
+            self.tsel = Some((id, Editor::new(&self.nodes[&id].v.text)));
+        }
+        let (_, ed) = self.tsel.as_mut().expect("just set");
+        sync_selection(ed, engine, &self.nodes[&id], content, k);
+        let (px, py) = ((x - content[0]) / k, (y - content[1]) / k);
+        match clicks {
+            0 | 1 if extend => ed.extend_to_point(engine, px, py),
+            0 | 1 => ed.move_to_point(engine, px, py),
+            2 => ed.select_word_at(engine, px, py),
+            _ => ed.select_line_at(engine, px, py),
+        }
+        self.drag = Some(id);
+        self.scene_dirty = true;
+        true
+    }
+
+    /// Copy and Select All on selected static text.
+    fn text_selection_key(&mut self, key: u32, mods: u32, clipboard: &mut dyn Clipboard) -> bool {
+        let primary = if self.mac { mods & m::META != 0 } else { mods & m::CONTROL != 0 };
+        if !primary || mods & m::ALT != 0 {
+            return false;
+        }
+        let (Some((_, ed)), Some(engine)) = (self.tsel.as_mut(), self.text.as_mut()) else { return false };
+        match char::from_u32(key).map(|c| c.to_ascii_lowercase()) {
+            Some('c') => {
+                if let Some(s) = ed.selected_text() {
+                    clipboard.set(&s);
+                }
+                true
+            }
+            Some('a') => {
+                ed.navigate(engine, |d| d.select_all());
+                self.scene_dirty = true;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Key bindings: macOS (Command for shortcuts, Option for words) or the others (Control for both).
     pub fn set_mac_keys(&mut self, mac: bool) {
         self.mac = mac;
@@ -159,8 +225,9 @@ impl Tree {
             self.drag = None;
             let had = self.focus.is_some();
             self.set_focus(None);
-            return had;
+            return self.text_select_down(x, y, clicks, extend) || had;
         };
+        self.tsel = None;
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };
         self.set_focus(Some(id));
         let (px, py) = ((x - ox) / k, (y - oy) / k);
@@ -179,6 +246,14 @@ impl Tree {
     pub fn pointer_drag(&mut self, x: f32, y: f32) -> bool {
         if self.thumb_drag.is_some() {
             return self.thumb_move(x, y);
+        }
+        if let Some(sid) = self.drag.filter(|&d| self.tsel.as_ref().is_some_and(|(s, _)| *s == d)) {
+            let Some(b) = self.boxes.iter().find(|b| b.id == sid) else { return false };
+            let (content, k) = (b.content, b.k);
+            let (Some((_, ed)), Some(engine)) = (self.tsel.as_mut(), self.text.as_mut()) else { return false };
+            ed.extend_to_point(engine, (x - content[0]) / k, (y - content[1]) / k);
+            self.scene_dirty = true;
+            return true;
         }
         let Some(id) = self.drag.filter(|&d| Some(d) == self.focus) else { return false };
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };
@@ -265,7 +340,7 @@ impl Tree {
     /// types, if anything. Returns whether the input used the key; keys it
     /// doesn't use (Escape, shortcuts it doesn't know…) go on to the app.
     pub fn key(&mut self, key: u32, text: Option<&str>, mods: u32, clipboard: &mut dyn Clipboard) -> bool {
-        let Some(id) = self.focus else { return false };
+        let Some(id) = self.focus else { return self.text_selection_key(key, mods, clipboard) };
         let Some(inp) = self.nodes.get(&id).and_then(|n| n.input.as_ref()) else { return false };
         let (multiline, composing) = {
             let ed = inp.editor.borrow();

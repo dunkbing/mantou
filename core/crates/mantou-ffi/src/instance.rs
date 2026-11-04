@@ -552,7 +552,7 @@ impl Instance {
         }
         let mut used = false;
         let changed = self.edit(|t| {
-            if t.focused().is_none() {
+            if t.focused().is_none() && !t.has_text_selection() {
                 return false;
             }
             used = self.with_clipboard(|cb| t.key(key, text, modifiers, cb));

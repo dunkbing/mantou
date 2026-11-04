@@ -133,6 +133,8 @@ export interface ScrollProps extends AccessProps, PointerProps {
 
 /** Text: its children are strings and numbers (no views inside). */
 export interface TextProps extends AccessProps, PointerProps {
+  /** The user can select the text (drag, double click for a word, triple click for a line) and copy it. Same as `style={{ userSelect: "text" }}`. */
+  selectable?: boolean;
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;

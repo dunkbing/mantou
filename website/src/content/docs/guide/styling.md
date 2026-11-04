@@ -44,6 +44,7 @@ Two things catch people out:
 | `textTransform` | `"uppercase"`, `"lowercase"`, `"capitalize"` |
 | `whiteSpace` | `"nowrap"` or `"pre"`: one line per paragraph (line breaks in the text are kept) |
 | `wordBreak` | `"breakAll"`, `"keepAll"`, `"breakWord"` (only a word too long for the line breaks) |
+| `userSelect` | `"text"` lets the user select a `<Text>` (same as the `selectable` prop) |
 | `textOverflow` | `"ellipsis"` (default) or `"clip"` for what `maxLines` or `nowrap` cuts off |
  Inputs also take `placeholderColor`, `caretColor`, `selectionColor`.
 

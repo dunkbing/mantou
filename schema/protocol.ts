@@ -176,6 +176,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "whiteSpace", code: 64, type: { enum: ["normal", "nowrap", "pre"] }, default: "normal (wraps; nowrap and pre keep one line per paragraph, pre is the same as nowrap: line breaks in the text are kept either way)" },
   { name: "textOverflow", code: 65, type: { enum: ["ellipsis", "clip"] }, default: "ellipsis (what is cut off by maxLines or a nowrap line that is too wide ends in …)" },
   { name: "wordBreak", code: 66, type: { enum: ["normal", "breakAll", "keepAll", "breakWord"] }, default: "normal (breakAll: break anywhere; keepAll: never inside a word; breakWord: only a word too long for the line breaks anywhere)" },
+  // A Text node whose text the user can select and copy (the selection is the core's, like an input's).
+  { name: "userSelect", code: 67, type: { enum: ["none", "text"] }, default: "none" },
 ];
 
 /**

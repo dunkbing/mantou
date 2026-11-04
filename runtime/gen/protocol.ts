@@ -205,9 +205,10 @@ export const StyleProp = {
   whiteSpace: { code: 64, kind: "enum", values: ["normal","nowrap","pre"] },
   textOverflow: { code: 65, kind: "enum", values: ["ellipsis","clip"] },
   wordBreak: { code: 66, kind: "enum", values: ["normal","breakAll","keepAll","breakWord"] },
+  userSelect: { code: 67, kind: "enum", values: ["none","text"] },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -348,4 +349,6 @@ export interface WireStyle {
   textOverflow?: "ellipsis" | "clip";
   /** Default: normal (breakAll: break anywhere; keepAll: never inside a word; breakWord: only a word too long for the line breaks anywhere). */
   wordBreak?: "normal" | "breakAll" | "keepAll" | "breakWord";
+  /** Default: none. */
+  userSelect?: "none" | "text";
 }

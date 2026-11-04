@@ -171,6 +171,8 @@ pub struct TreeStats {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Visual {
+    /// `userSelect: text`.
+    user_select: bool,
     background: u32,
     radius: f32,
     border: f32,
@@ -267,6 +269,8 @@ pub struct Tree {
     focus: Option<u32>,
     /// The input a press started in, while the button is down.
     drag: Option<u32>,
+    /// The Text node whose text is selected (`userSelect`), and its read-only editor: only one at a time.
+    tsel: Option<(u32, mantou_text::Editor)>,
     events: Vec<TreeEvent>,
     /// macOS key bindings (see `set_mac_keys`).
     mac: bool,
@@ -344,6 +348,7 @@ impl Tree {
             stats: TreeStats::default(),
             focus: None,
             drag: None,
+            tsel: None,
             events: Vec::new(),
             mac: cfg!(target_os = "macos"),
             reports_pending: false,
@@ -483,6 +488,9 @@ impl Tree {
                 }
                 if self.drag == Some(id) {
                     self.drag = None;
+                }
+                if self.tsel.as_ref().is_some_and(|(s, _)| *s == id) {
+                    self.tsel = None;
                 }
                 self.hovered.retain(|&h| h != id); // gone: no event, there's no one to tell
                 if node.anim.as_ref().is_some_and(|a| a.is_active()) {
@@ -1080,6 +1088,16 @@ impl Tree {
                         l
                     }
                 };
+                if let Some((sid, ed)) = self.tsel.as_mut()
+                    && *sid == b.id
+                {
+                    input::sync_selection(ed, text, node, c, k);
+                    let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
+                    for r in ed.selection(text) {
+                        let rect = [snap(c[0] + r[0] * k), snap(c[1] + r[1] * k), snap(c[0] + r[2] * k), snap(c[1] + r[3] * k)];
+                        quads.push(Quad { rect, color: sel, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
+                    }
+                }
                 glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, color, clip);
                 for d in &layout.decorations {
                     let rect = [snap((c[0] + d[0] * k) * s), snap((c[1] + d[1] * k) * s), snap((c[0] + d[2] * k) * s), snap((c[1] + d[3] * k) * s).max(snap((c[1] + d[1] * k) * s) + 1.0)];
@@ -1441,6 +1459,7 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
                 _ => mantou_text::Transform::None,
             }
         }
+        Prop::UserSelect => v.user_select = e == p::user_select::TEXT,
         Prop::WhiteSpace => v.text.nowrap = e != p::white_space::NORMAL,
         Prop::WordBreak => {
             v.text.word_break = match e {
