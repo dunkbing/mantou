@@ -215,9 +215,20 @@ export const StyleProp = {
   gridRowSpan: { code: 71, kind: "f32" },
   aspectRatio: { code: 72, kind: "f32" },
   pointerEvents: { code: 73, kind: "enum", values: ["auto","none"] },
+  gradientColor: { code: 74, kind: "color" },
+  gradientAngle: { code: 75, kind: "f32" },
+  borderTopLeftRadius: { code: 76, kind: "f32" },
+  borderTopRightRadius: { code: 77, kind: "f32" },
+  borderBottomRightRadius: { code: 78, kind: "f32" },
+  borderBottomLeftRadius: { code: 79, kind: "f32" },
+  borderTopWidth: { code: 80, kind: "f32" },
+  borderRightWidth: { code: 81, kind: "f32" },
+  borderBottomWidth: { code: 82, kind: "f32" },
+  borderLeftWidth: { code: 83, kind: "f32" },
+  zIndex: { code: 84, kind: "f32" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents", 74: "gradientColor", 75: "gradientAngle", 76: "borderTopLeftRadius", 77: "borderTopRightRadius", 78: "borderBottomRightRadius", 79: "borderBottomLeftRadius", 80: "borderTopWidth", 81: "borderRightWidth", 82: "borderBottomWidth", 83: "borderLeftWidth", 84: "zIndex" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -372,4 +383,26 @@ export interface WireStyle {
   aspectRatio?: number;
   /** Default: auto (none: the node is not under the pointer: presses, hover and the cursor go to what is below it). */
   pointerEvents?: "auto" | "none";
+  /** Default: transparent (no gradient): the colour at the end of a linear gradient that starts with backgroundColor. */
+  gradientColor?: Color;
+  /** Default: 180 (degrees as in CSS: 180 runs top to bottom, 90 left to right). */
+  gradientAngle?: number;
+  /** Default: borderRadius. */
+  borderTopLeftRadius?: number;
+  /** Default: borderRadius. */
+  borderTopRightRadius?: number;
+  /** Default: borderRadius. */
+  borderBottomRightRadius?: number;
+  /** Default: borderRadius. */
+  borderBottomLeftRadius?: number;
+  /** Default: borderWidth. */
+  borderTopWidth?: number;
+  /** Default: borderWidth. */
+  borderRightWidth?: number;
+  /** Default: borderWidth. */
+  borderBottomWidth?: number;
+  /** Default: borderWidth. */
+  borderLeftWidth?: number;
+  /** Default: 0: among its siblings, higher is painted (and hit) on top; ties keep tree order. */
+  zIndex?: number;
 }

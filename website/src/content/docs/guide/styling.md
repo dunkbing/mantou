@@ -52,7 +52,9 @@ Two things catch people out:
 | | |
 |---|---|
 | Colour | `backgroundColor`, `opacity` |
-| Borders | `borderRadius`, `borderWidth`, `borderColor` |
+| Borders | `borderRadius`, `borderWidth`, `borderColor`; one corner: `borderTopLeftRadius`…; one side: `borderTopWidth`… (one colour for all) |
+| Gradient | `backgroundColor` to `gradientColor`, at `gradientAngle` degrees (180, the default, runs top to bottom; 90 left to right) |
+| Stacking | `zIndex`: higher is painted and hit on top of its siblings |
 | Shadow | `shadowX`, `shadowY`, `shadowBlur`, `shadowSpread`, `shadowColor` |
 | Clipping | `overflow: "visible" \| "hidden" \| "scroll"` |
 | Transform | `translateX`, `translateY`, `scale` (they move what is drawn, not the layout) |

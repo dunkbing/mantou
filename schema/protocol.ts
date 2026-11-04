@@ -188,6 +188,18 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "gridRowSpan", code: 71, type: "f32", default: "1: rows an item covers" },
   { name: "aspectRatio", code: 72, type: "f32", default: "0 (none): width / height, for a box with one of them set" },
   { name: "pointerEvents", code: 73, type: { enum: ["auto", "none"] }, default: "auto (none: the node is not under the pointer: presses, hover and the cursor go to what is below it)" },
+  // More box decoration. Unset corners and sides follow borderRadius and borderWidth.
+  { name: "gradientColor", code: 74, type: "color", default: "transparent (no gradient): the colour at the end of a linear gradient that starts with backgroundColor" },
+  { name: "gradientAngle", code: 75, type: "f32", default: "180 (degrees as in CSS: 180 runs top to bottom, 90 left to right)" },
+  { name: "borderTopLeftRadius", code: 76, type: "f32", default: "borderRadius" },
+  { name: "borderTopRightRadius", code: 77, type: "f32", default: "borderRadius" },
+  { name: "borderBottomRightRadius", code: 78, type: "f32", default: "borderRadius" },
+  { name: "borderBottomLeftRadius", code: 79, type: "f32", default: "borderRadius" },
+  { name: "borderTopWidth", code: 80, type: "f32", default: "borderWidth" },
+  { name: "borderRightWidth", code: 81, type: "f32", default: "borderWidth" },
+  { name: "borderBottomWidth", code: 82, type: "f32", default: "borderWidth" },
+  { name: "borderLeftWidth", code: 83, type: "f32", default: "borderWidth" },
+  { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 
 /**

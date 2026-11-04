@@ -60,6 +60,21 @@ pub enum TreeEvent {
 /// Selections of inputs whose style doesn't set one: #3b82f666.
 const SELECTION: u32 = 0x66f6823b;
 
+/// What a box adds to a quad: corners and sides of their own, and a gradient.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Extra {
+    /// Top left, top right, bottom right, bottom left radii (device px).
+    pub radii: [f32; 4],
+    /// Top, right, bottom, left border widths (device px).
+    pub widths: [f32; 4],
+    /// The gradient's end colour and its angle in radians (CSS: 0 points up, clockwise), if it has one.
+    pub gradient: Option<([f32; 4], f32)>,
+}
+
+impl Extra {
+    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None };
+}
+
 /// One quad, in device pixels: a filled rectangle, or a glyph from the atlas.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quad {
@@ -82,6 +97,8 @@ pub struct Quad {
     pub shadow: Option<f32>,
     /// An image: `uv` are texels of this image's pixels instead of the glyph atlas.
     pub image: Option<ImageRef>,
+    /// Corners, sides and gradient; negative radii and widths mean `radius` and `border`.
+    pub extra: Extra,
 }
 
 impl Quad {
@@ -140,6 +157,15 @@ impl Scene {
             if q.border > 0.0 {
                 out.push_str(&format!(" border {} {}", q.border, hex(q.border_color)));
             }
+            if q.extra.radii.iter().any(|r| *r >= 0.0) {
+                out.push_str(&format!(" radii {:?}", q.extra.radii));
+            }
+            if q.extra.widths.iter().any(|w| *w >= 0.0) {
+                out.push_str(&format!(" widths {:?}", q.extra.widths));
+            }
+            if let Some((end, angle)) = q.extra.gradient {
+                out.push_str(&format!(" gradient {} {}", hex(end), angle.to_degrees().round()));
+            }
             out.push('\n');
         }
         if glyphs > 0 {
@@ -171,6 +197,13 @@ pub struct TreeStats {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Visual {
+    /// Radii and widths of single corners and sides, each stored plus one so that 0 means "not set".
+    radii_p1: [f32; 4],
+    widths_p1: [f32; 4],
+    /// The gradient's end colour (RGBA8) and angle in degrees; a transparent end colour means no gradient.
+    gradient: u32,
+    gradient_angle: f32,
+    z: i32,
     /// 0 relative, 1 absolute, 2 fixed, 3 sticky.
     position: u8,
     /// top, right, bottom, left in px, as set (None: auto or a percentage).
@@ -994,7 +1027,11 @@ impl Tree {
         } else {
             (view, rect)
         };
-        for c in node.children.clone() {
+        let mut kids = node.children.clone();
+        if kids.iter().any(|c| self.nodes[c].v.z != 0) {
+            kids.sort_by_key(|c| self.nodes[c].v.z); // stable: ties keep tree order
+        }
+        for c in kids {
             self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf, child_view, child_box);
         }
         let node = &self.nodes[&id];
@@ -1050,6 +1087,7 @@ impl Tree {
                 border_color: [0.0; 4],
                 shadow: None,
                 image: None,
+                extra: Extra::NONE,
             }
         };
         let mut thumbs = self.thumbs.iter().peekable();
@@ -1087,11 +1125,19 @@ impl Tree {
                 let reach = [shape[0] - 3.0 * sigma, shape[1] - 3.0 * sigma, shape[2] + 3.0 * sigma, shape[3] + 3.0 * sigma];
                 if shape[2] > shape[0] && shape[3] > shape[1] && overlaps(reach, clip) {
                     let radius = ((v.radius * k + spread) * s).max(0.0);
-                    quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma), image: None });
+                    quads.push(Quad { rect: shape, color: sc, uv: [0.0; 4], clip, radius, border: 0.0, border_color: [0.0; 4], shadow: Some(sigma), image: None, extra: Extra::NONE });
                 }
             }
-            if (bg[3] > 0.0 || border > 0.0) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
-                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None });
+            // Corners and sides of their own; a gradient to its end colour.
+            let radii = v.radii_p1.map(|r| if r > 0.0 { (r - 1.0) * k * s } else { -1.0 });
+            let widths = v.widths_p1.map(|w| if w > 0.0 { (w - 1.0) * k * s } else { -1.0 });
+            let widths = if border_color[3] > 0.0 { widths } else { [0.0; 4].map(|_| -1.0) };
+            let own_sides = widths.iter().any(|w| *w >= 0.0);
+            let gradient_end = rgba(v.gradient, alpha);
+            let gradient = (gradient_end[3] > 0.0).then(|| (gradient_end, (v.gradient_angle + 180.0).to_radians()));
+            let extra = Extra { radii, widths, gradient };
+            if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
+                quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
                 let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());
@@ -1109,7 +1155,7 @@ impl Tree {
                         let uv = [frac[0] * pw, frac[1] * ph, frac[2] * pw, frac[3] * ph];
                         let tint = v.color_set;
                         let color = if tint { rgba(v.color, alpha) } else { [1.0, 1.0, 1.0, alpha] };
-                        quads.push(Quad { rect, color, uv, clip, radius: v.radius * k * s, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint }) });
+                        quads.push(Quad { rect, color, uv, clip, radius: v.radius * k * s, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint }), extra: Extra::NONE });
                         images.insert(px.id, px);
                     }
                 }
@@ -1145,14 +1191,14 @@ impl Tree {
                     let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
                     for r in ed.selection(text) {
                         let rect = [snap(c[0] + r[0] * k), snap(c[1] + r[1] * k), snap(c[0] + r[2] * k), snap(c[1] + r[3] * k)];
-                        quads.push(Quad { rect, color: sel, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
+                        quads.push(Quad { rect, color: sel, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
                     }
                 }
                 glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, color, clip);
                 for d in &layout.decorations {
                     let rect = [snap((c[0] + d[0] * k) * s), snap((c[1] + d[1] * k) * s), snap((c[0] + d[2] * k) * s), snap((c[1] + d[3] * k) * s).max(snap((c[1] + d[1] * k) * s) + 1.0)];
                     if overlaps(rect, clip) {
-                        quads.push(Quad { rect, color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
+                        quads.push(Quad { rect, color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
                     }
                 }
             }
@@ -1179,6 +1225,7 @@ impl Tree {
                     border_color: [0.0; 4],
                     shadow: None,
                     image: None,
+                    extra: Extra::NONE,
                 };
                 if ed.text().is_empty() && !ed.is_composing() && !inp.placeholder.is_empty() {
                     let pc = v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
@@ -1341,7 +1388,7 @@ fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGly
             continue;
         }
         let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
-        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None });
+        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
         any = true;
     }
     any
@@ -1594,9 +1641,37 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
             }
         }
         Prop::BorderRadius => v.radius = num().max(0.0),
+        Prop::BorderTopLeftRadius => v.radii_p1[0] = num().max(0.0) + 1.0,
+        Prop::BorderTopRightRadius => v.radii_p1[1] = num().max(0.0) + 1.0,
+        Prop::BorderBottomRightRadius => v.radii_p1[2] = num().max(0.0) + 1.0,
+        Prop::BorderBottomLeftRadius => v.radii_p1[3] = num().max(0.0) + 1.0,
+        Prop::BorderTopWidth => {
+            v.widths_p1[0] = num().max(0.0) + 1.0;
+            s.border.top = LengthPercentage::length(num().max(0.0));
+        }
+        Prop::BorderRightWidth => {
+            v.widths_p1[1] = num().max(0.0) + 1.0;
+            s.border.right = LengthPercentage::length(num().max(0.0));
+        }
+        Prop::BorderBottomWidth => {
+            v.widths_p1[2] = num().max(0.0) + 1.0;
+            s.border.bottom = LengthPercentage::length(num().max(0.0));
+        }
+        Prop::BorderLeftWidth => {
+            v.widths_p1[3] = num().max(0.0) + 1.0;
+            s.border.left = LengthPercentage::length(num().max(0.0));
+        }
+        Prop::GradientColor => {
+            if let Value::Color(c) = value {
+                v.gradient = c
+            }
+        }
+        Prop::GradientAngle => v.gradient_angle = finite(num(), 180.0) - 180.0, // 0 stored = the default, 180
+        Prop::ZIndex => v.z = finite(num(), 0.0).clamp(-1e6, 1e6) as i32,
         Prop::BorderWidth => {
             let w = num().max(0.0);
             v.border = w;
+            v.widths_p1 = [0.0; 4]; // a width for all sides replaces any set for one
             let l = LengthPercentage::length(w);
             s.border = taffy::geometry::Rect { left: l, right: l, top: l, bottom: l };
         }

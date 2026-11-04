@@ -526,10 +526,21 @@ pub enum Prop {
     GridRowSpan = 71,
     AspectRatio = 72,
     PointerEvents = 73,
+    GradientColor = 74,
+    GradientAngle = 75,
+    BorderTopLeftRadius = 76,
+    BorderTopRightRadius = 77,
+    BorderBottomRightRadius = 78,
+    BorderBottomLeftRadius = 79,
+    BorderTopWidth = 80,
+    BorderRightWidth = 81,
+    BorderBottomWidth = 82,
+    BorderLeftWidth = 83,
+    ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 73;
+    pub const COUNT: usize = 84;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -606,6 +617,17 @@ impl Prop {
             71 => Prop::GridRowSpan,
             72 => Prop::AspectRatio,
             73 => Prop::PointerEvents,
+            74 => Prop::GradientColor,
+            75 => Prop::GradientAngle,
+            76 => Prop::BorderTopLeftRadius,
+            77 => Prop::BorderTopRightRadius,
+            78 => Prop::BorderBottomRightRadius,
+            79 => Prop::BorderBottomLeftRadius,
+            80 => Prop::BorderTopWidth,
+            81 => Prop::BorderRightWidth,
+            82 => Prop::BorderBottomWidth,
+            83 => Prop::BorderLeftWidth,
+            84 => Prop::ZIndex,
             _ => return None,
         })
     }
@@ -685,6 +707,17 @@ impl Prop {
             Prop::GridRowSpan => "gridRowSpan",
             Prop::AspectRatio => "aspectRatio",
             Prop::PointerEvents => "pointerEvents",
+            Prop::GradientColor => "gradientColor",
+            Prop::GradientAngle => "gradientAngle",
+            Prop::BorderTopLeftRadius => "borderTopLeftRadius",
+            Prop::BorderTopRightRadius => "borderTopRightRadius",
+            Prop::BorderBottomRightRadius => "borderBottomRightRadius",
+            Prop::BorderBottomLeftRadius => "borderBottomLeftRadius",
+            Prop::BorderTopWidth => "borderTopWidth",
+            Prop::BorderRightWidth => "borderRightWidth",
+            Prop::BorderBottomWidth => "borderBottomWidth",
+            Prop::BorderLeftWidth => "borderLeftWidth",
+            Prop::ZIndex => "zIndex",
         }
     }
 
@@ -763,6 +796,17 @@ impl Prop {
             Prop::GridRowSpan => ValueKind::F32,
             Prop::AspectRatio => ValueKind::F32,
             Prop::PointerEvents => ValueKind::Enum(2),
+            Prop::GradientColor => ValueKind::Color,
+            Prop::GradientAngle => ValueKind::F32,
+            Prop::BorderTopLeftRadius => ValueKind::F32,
+            Prop::BorderTopRightRadius => ValueKind::F32,
+            Prop::BorderBottomRightRadius => ValueKind::F32,
+            Prop::BorderBottomLeftRadius => ValueKind::F32,
+            Prop::BorderTopWidth => ValueKind::F32,
+            Prop::BorderRightWidth => ValueKind::F32,
+            Prop::BorderBottomWidth => ValueKind::F32,
+            Prop::BorderLeftWidth => ValueKind::F32,
+            Prop::ZIndex => ValueKind::F32,
         }
     }
 

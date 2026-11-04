@@ -10,8 +10,9 @@ use std::sync::Arc;
 use mantou_tree::{Pixels, Scene};
 use mantou_text::AtlasImage;
 
-/// Bytes per instance: rect (NDC), colour, uv, clip, rect (px), border colour, params (7 × vec4<f32>).
-const INSTANCE_BYTES: u64 = 112;
+/// Bytes per instance: rect (NDC), colour, uv, clip, rect (px), border colour, params, corner radii, border widths,
+/// gradient end colour, gradient (angle, 1 = on) (11 × vec4<f32>).
+const INSTANCE_BYTES: u64 = 176;
 
 pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
@@ -41,7 +42,7 @@ impl Renderer {
             label: Some("mantou quads"),
             source: wgpu::ShaderSource::Wgsl(include_str!("rect.wgsl").into()),
         });
-        let attributes = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4];
+        let attributes = wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4, 3 => Float32x4, 4 => Float32x4, 5 => Float32x4, 6 => Float32x4, 7 => Float32x4, 8 => Float32x4, 9 => Float32x4, 10 => Float32x4];
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("mantou quads"),
             layout: None,
@@ -224,6 +225,14 @@ impl Renderer {
                 _ => [q.radius, q.border, 0.0, 0.0],
             };
             self.scratch.extend_from_slice(&params);
+            // Corners and sides of their own (each falls back to the quad's radius and border), and the gradient.
+            let radii = q.extra.radii.map(|r| if r >= 0.0 { r } else { q.radius });
+            let widths = q.extra.widths.map(|w| if w >= 0.0 { w } else { q.border });
+            self.scratch.extend_from_slice(&radii);
+            self.scratch.extend_from_slice(&widths);
+            let (end, angle, on) = q.extra.gradient.map_or(([0.0; 4], 0.0, 0.0), |(c, a)| (self.color(c), a, 1.0));
+            self.scratch.extend_from_slice(&end);
+            self.scratch.extend_from_slice(&[angle, on, 0.0, 0.0]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {

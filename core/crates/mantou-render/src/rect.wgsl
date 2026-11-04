@@ -11,6 +11,10 @@ struct Instance {
     @location(4) rect_px: vec4<f32>,      // the quad in pixels
     @location(5) border_color: vec4<f32>, // linear RGB, straight alpha
     @location(6) params: vec4<f32>,       // corner radius, border width, shadow sigma (pixels), 1 = a shadow
+    @location(7) radii: vec4<f32>,        // top left, top right, bottom right, bottom left corner radius (pixels)
+    @location(8) widths: vec4<f32>,       // top, right, bottom, left border width (pixels)
+    @location(9) color2: vec4<f32>,       // the gradient's end colour: linear RGB, straight alpha
+    @location(10) grad: vec4<f32>,        // gradient angle (radians, CSS: 0 up, clockwise), 1 = a gradient
 };
 
 struct VsOut {
@@ -22,6 +26,10 @@ struct VsOut {
     @location(4) @interpolate(flat) rect_px: vec4<f32>,
     @location(5) @interpolate(flat) border_color: vec4<f32>,
     @location(6) @interpolate(flat) params: vec4<f32>,
+    @location(7) @interpolate(flat) radii: vec4<f32>,
+    @location(8) @interpolate(flat) widths: vec4<f32>,
+    @location(9) @interpolate(flat) color2: vec4<f32>,
+    @location(10) @interpolate(flat) grad: vec4<f32>,
 };
 
 @group(0) @binding(0) var atlas: texture_2d<f32>;
@@ -44,6 +52,10 @@ fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
     out.rect_px = inst.rect_px;
     out.border_color = inst.border_color;
     out.params = inst.params;
+    out.radii = inst.radii;
+    out.widths = inst.widths;
+    out.color2 = inst.color2;
+    out.grad = inst.grad;
     return out;
 }
 
@@ -51,6 +63,21 @@ fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
 fn rounded_box(p: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>, radius: f32) -> f32 {
     let center = (lo + hi) * 0.5;
     let half = (hi - lo) * 0.5;
+    let r = min(radius, min(half.x, half.y));
+    let q = abs(p - center) - half + vec2<f32>(r, r);
+    return length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - r;
+}
+
+// Like rounded_box, with a radius for each corner (top left, top right, bottom right, bottom left).
+fn rounded_box4(p: vec2<f32>, lo: vec2<f32>, hi: vec2<f32>, radii: vec4<f32>) -> f32 {
+    let center = (lo + hi) * 0.5;
+    let half = (hi - lo) * 0.5;
+    let right = p.x > center.x;
+    let below = p.y > center.y;
+    var radius = select(radii.x, radii.y, right);
+    if (below) {
+        radius = select(radii.w, radii.z, right);
+    }
     let r = min(radius, min(half.x, half.y));
     let q = abs(p - center) - half + vec2<f32>(r, r);
     return length(max(q, vec2<f32>(0.0, 0.0))) + min(max(q.x, q.y), 0.0) - r;
@@ -102,15 +129,33 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
         let a = in.color.a * cover;
         return vec4<f32>(in.color.rgb * a, a);
     }
-    if (radius <= 0.0 && border <= 0.0) {
-        return vec4<f32>(in.color.rgb * in.color.a, in.color.a);
+    // The fill colour: flat, or a linear gradient along the angle across the box.
+    var color = in.color;
+    if (in.grad.y > 0.5) {
+        let dir = vec2<f32>(sin(in.grad.x), -cos(in.grad.x));
+        let half = (in.rect_px.zw - in.rect_px.xy) * 0.5;
+        let reach = max(abs(half.x * dir.x) + abs(half.y * dir.y), 0.0001);
+        let t = clamp(dot(p - (in.rect_px.xy + half), dir) / reach * 0.5 + 0.5, 0.0, 1.0);
+        color = mix(in.color, in.color2, t);
     }
-    let d = rounded_box(p, in.rect_px.xy, in.rect_px.zw, radius);
+    let own = in.radii.x != in.radii.y || in.radii.y != in.radii.z || in.radii.z != in.radii.w
+        || in.widths.x != in.widths.y || in.widths.y != in.widths.z || in.widths.z != in.widths.w;
+    let widest = max(max(in.widths.x, in.widths.y), max(in.widths.z, in.widths.w));
+    if (!own && radius <= 0.0 && border <= 0.0) {
+        return vec4<f32>(color.rgb * color.a, color.a);
+    }
+    let d = rounded_box4(p, in.rect_px.xy, in.rect_px.zw, in.radii);
     let outer = clamp(0.5 - d, 0.0, 1.0);
-    // The border is a ring `border` px wide inside the edge; the fill is what's left.
-    let inner = select(outer, clamp(0.5 - (d + border), 0.0, 1.0), border > 0.0);
-    let fill = in.color.a * inner;
+    // The border is a ring inside the edge, as wide as each side says; the fill is what's left.
+    var inner = outer;
+    if (widest > 0.0) {
+        let lo = in.rect_px.xy + vec2<f32>(in.widths.w, in.widths.x);
+        let hi = in.rect_px.zw - vec2<f32>(in.widths.y, in.widths.z);
+        let shrink = vec4<f32>(max(in.widths.x, in.widths.w), max(in.widths.x, in.widths.y), max(in.widths.z, in.widths.y), max(in.widths.z, in.widths.w));
+        inner = clamp(0.5 - rounded_box4(p, lo, hi, max(in.radii - shrink, vec4<f32>(0.0))), 0.0, 1.0) * select(0.0, 1.0, hi.x > lo.x && hi.y > lo.y);
+    }
+    let fill = color.a * inner;
     let ring = in.border_color.a * (outer - inner);
     let a = fill + ring;
-    return vec4<f32>(in.color.rgb * fill + in.border_color.rgb * ring, a);
+    return vec4<f32>(color.rgb * fill + in.border_color.rgb * ring, a);
 }
