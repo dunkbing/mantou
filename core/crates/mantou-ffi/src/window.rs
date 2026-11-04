@@ -141,6 +141,28 @@ enum Drawn {
     Skipped,
 }
 
+/// Secure keyboard entry (macOS): while it's on, other processes can't read the keys typed.
+/// winit leaves `set_ime_purpose` empty on macOS, so the window asks Carbon itself.
+#[cfg(target_os = "macos")]
+mod secure_keys {
+    #[link(name = "Carbon", kind = "framework")]
+    unsafe extern "C" {
+        fn EnableSecureEventInput() -> i32;
+        fn DisableSecureEventInput() -> i32;
+    }
+    /// Counted by the OS per process: call with the state that changed, never twice in a row.
+    pub fn set(on: bool) {
+        // SAFETY: plain Carbon calls with no arguments, made on the main thread.
+        unsafe {
+            if on { EnableSecureEventInput() } else { DisableSecureEventInput() };
+        }
+    }
+}
+#[cfg(not(target_os = "macos"))]
+mod secure_keys {
+    pub fn set(_on: bool) {}
+}
+
 pub struct App {
     config: Config,
     inst: Arc<Instance>,
@@ -154,6 +176,10 @@ pub struct App {
     menus: crate::platform::Menus,
     /// The AccessKit adapter: tells screen readers about the tree while one is running.
     access: Option<accesskit_winit::Adapter>,
+    /// The window is the key window.
+    focused: bool,
+    /// Secure keyboard entry is on (a password field has the focus in the key window).
+    secure_keys: bool,
     /// The cursor shown (protocol `cursor`).
     cursor: u32,
 }
@@ -183,7 +209,7 @@ fn cursor_icon(c: u32) -> CursorIcon {
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, cursor: cursor::DEFAULT }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), access: None, focused: true, secure_keys: false, cursor: cursor::DEFAULT }
     }
 
     fn redraw_if(&self, changed: bool) {
@@ -220,6 +246,7 @@ impl App {
             self.ime_password = secure;
             window.set_ime_purpose(if secure { ImePurpose::Password } else { ImePurpose::Normal });
         }
+        self.sync_secure_keys();
         if let Some([x0, y0, x1, y1]) = area {
             window.set_ime_cursor_area(LogicalPosition::new(x0, y0), LogicalSize::new((x1 - x0).max(1.0), (y1 - y0).max(1.0)));
         }
@@ -233,6 +260,15 @@ impl App {
         let inst = self.inst.clone();
         if let Some(a) = self.access.as_mut() {
             a.update_if_active(|| lock(&inst.tree).accessibility());
+        }
+    }
+
+    /// Secure keyboard entry follows "a password field has the focus in the key window".
+    fn sync_secure_keys(&mut self) {
+        let want = self.ime_password && self.focused;
+        if want != self.secure_keys {
+            self.secure_keys = want;
+            secure_keys::set(want);
         }
     }
 
@@ -480,9 +516,21 @@ impl App {
                 let (x, y) = inst.pointer_position();
                 self.redraw_if(inst.wheel(x, y, dx, dy));
             }
+            WindowEvent::Focused(f) => {
+                self.focused = f;
+                self.sync_secure_keys();
+            }
             WindowEvent::RedrawRequested => self.draw(),
             WindowEvent::Occluded(false) => self.redraw_if(true),
             _ => {}
+        }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        if self.secure_keys {
+            secure_keys::set(false);
         }
     }
 }
