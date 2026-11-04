@@ -1,6 +1,6 @@
 // Written by schema/gen.ts from schema/protocol.ts. Don't edit it; change the schema and run `bun run gen`.
 
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 export const Op = {
   /** Create a node; it starts detached. */
@@ -45,16 +45,21 @@ export const Op = {
   FONT: 21,
   /** Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts. */
   FONT_FAMILY: 22,
+  /** Resize the window's content area (logical px). A headless instance resizes its viewport. */
+  WINDOW_SIZE: 23,
+  /** The window's smallest and largest content size (logical px, 0 = no limit), and WindowFlag bits. */
+  WINDOW_LIMITS: 24,
   /** Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen. */
   FOCUS_SCOPE: 18,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 18: "FOCUS_SCOPE" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 18: "FOCUS_SCOPE" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
+export const WindowFlag = {"NotResizable":1} as const;
 export const ScrollFlag = {"By":1} as const;
 export const ScrollBlock = {"Nearest":0,"Start":1,"Center":2,"End":3} as const;
 export const Unit = { px: 0, percent: 1, auto: 2 } as const;

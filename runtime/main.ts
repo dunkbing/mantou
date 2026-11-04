@@ -6,6 +6,18 @@
 //   (apps outside this repo use the `mantou` command: runtime/cli.ts)
 import { resolve } from "node:path";
 import { openCore } from "./ffi";
+import { WindowFlag } from "./gen/protocol";
+
+/** What the app asks of its window before it opens (run()'s options), in logical px. */
+export interface WindowOptions {
+  width?: number;
+  height?: number;
+  minWidth?: number;
+  minHeight?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  resizable?: boolean;
+}
 
 /**
  * Opens the window and runs `entry` (an app module, .ts or .tsx) in the app
@@ -13,10 +25,12 @@ import { openCore } from "./ffi";
  * quits, then the process exits with its code.
  */
 export async function start(entry: string, args: string[] = [], worker?: Worker): Promise<never> {
-  const opt = (name: string, d: string) => {
+  // Command-line flags win over what the app asks for, which wins over the defaults.
+  const flag = (name: string) => {
     const i = args.indexOf(`--${name}`);
-    return i >= 0 && args[i + 1] ? args[i + 1] : d;
+    return i >= 0 && args[i + 1] ? args[i + 1] : undefined;
   };
+  let asked: WindowOptions = {};
 
   process.env.MANTOU_T0 ??= String(Date.now());
   const core = openCore();
@@ -28,8 +42,9 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
     const timer = setTimeout(() => fail(new Error("mantou: the app Worker did not start within 10 s")), 10_000);
     w.addEventListener("message", (e) => {
       const data = (e as MessageEvent).data;
-      if (data === "mantou:ready") {
+      if (data === "mantou:ready" || data?.type === "mantou:ready") {
         clearTimeout(timer);
+        asked = data?.window ?? {};
         ok();
       } else if (data === "mantou:failed") {
         clearTimeout(timer);
@@ -48,10 +63,23 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
 
   // From here on this thread runs no JavaScript: Worker messages and errors go
   // unread, so the Worker reports its own failures and quits (runtime/core.ts).
-  const title = new TextEncoder().encode(opt("title", "Mantou"));
-  const cfg = new Uint8Array(12 + title.length);
-  new Uint32Array(cfg.buffer, 0, 3).set([Number(opt("width", "640")), Number(opt("height", "400")), title.length]);
-  cfg.set(title, 12);
+  const num = (name: string, fromApp: number | undefined, d: number) => {
+    const v = Number(flag(name) ?? fromApp ?? d);
+    return Number.isFinite(v) && v >= 0 ? Math.round(v) : d;
+  };
+  const title = new TextEncoder().encode(flag("title") ?? "Mantou");
+  const cfg = new Uint8Array(32 + title.length);
+  new Uint32Array(cfg.buffer, 0, 8).set([
+    num("width", asked.width, 640),
+    num("height", asked.height, 400),
+    title.length,
+    num("min-width", asked.minWidth, 0),
+    num("min-height", asked.minHeight, 0),
+    num("max-width", asked.maxWidth, 0),
+    num("max-height", asked.maxHeight, 0),
+    asked.resizable === false ? WindowFlag.NotResizable : 0,
+  ]);
+  cfg.set(title, 32);
   const code = core.symbols.mt_run(cfg, cfg.byteLength);
   process.exit(code);
 }

@@ -52,8 +52,8 @@ export class MantouCore {
   }
 
   /** Tells the bootstrap the Worker is ready; it then starts the native loop. */
-  ready() {
-    postMessage("mantou:ready");
+  ready(window: object = {}) {
+    postMessage({ type: "mantou:ready", window });
   }
 
   clearColor(r: number, g: number, b: number, a = 1) {

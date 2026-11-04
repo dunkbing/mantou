@@ -1,10 +1,11 @@
 // The app's entry point in the Worker: opens the window's instance and renders.
 import { readFileSync } from "node:fs";
 import { MantouCore } from "./core";
+import type { WindowOptions } from "./main";
 import type { JSX } from "./jsx-runtime";
 import { mount } from "./solid/mount";
 
-export interface RunOptions {
+export interface RunOptions extends WindowOptions {
   /** The window's title until the app sets one. */
   title?: string;
   /** Quit when the user closes the window (default true). */
@@ -24,6 +25,7 @@ export function run(app: () => JSX.Element, options: RunOptions = {}): MantouCor
       if (e.type === "closeRequested") core.quit(0);
     };
   }
-  core.ready();
+  const { width, height, minWidth, minHeight, maxWidth, maxHeight, resizable } = options;
+  core.ready({ width, height, minWidth, minHeight, maxWidth, maxHeight, resizable });
   return core;
 }

@@ -231,6 +231,17 @@ pub struct Tree {
     requests: Vec<Request>,
     /// Something drawn may have changed since the last scene.
     scene_dirty: bool,
+    /// The app asked for a window size, or limits, since they were last taken.
+    window_size: Option<[f32; 2]>,
+    window_limits: Option<WindowLimits>,
+}
+
+/// What WINDOW_LIMITS asked for: sizes in logical px (0 = no limit).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowLimits {
+    pub min: [f32; 2],
+    pub max: [f32; 2],
+    pub resizable: bool,
 }
 
 // SAFETY: Taffy 0.15 stores lengths as tagged pointers (`CompactLength`), which
@@ -280,6 +291,8 @@ impl Tree {
             thumb_drag: None,
             requests: Vec::new(),
             scene_dirty: true,
+            window_size: None,
+            window_limits: None,
         }
     }
 
@@ -295,6 +308,16 @@ impl Tree {
 
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Takes the window size the app asked for since the last call (logical px).
+    pub fn take_window_size(&mut self) -> Option<[f32; 2]> {
+        self.window_size.take()
+    }
+
+    /// Takes the window limits the app set since the last call.
+    pub fn take_window_limits(&mut self) -> Option<WindowLimits> {
+        self.window_limits.take()
     }
 
     /// Takes the title set since the last call, if any.
@@ -496,6 +519,10 @@ impl Tree {
             Op::ScrollIntoView { id, block } => {
                 self.node(id)?;
                 self.request_into_view(id, block);
+            }
+            Op::WindowSize { width, height } => self.window_size = Some([width, height]),
+            Op::WindowLimits { min, max, flags } => {
+                self.window_limits = Some(WindowLimits { min, max, resizable: flags & p::window_flag::NOT_RESIZABLE == 0 });
             }
             Op::Font(data) => {
                 let engine = self.text.get_or_insert_with(TextEngine::new);

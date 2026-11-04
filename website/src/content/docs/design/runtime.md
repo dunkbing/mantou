@@ -16,6 +16,8 @@ core.symbols.mt_run(configPtr, configLen);                        // never retur
 process.exit(core.symbols.mt_exit_code());
 ```
 
+**The window's size** ([#29](https://github.com/dunkbing/mantou/issues/29)): the window opens only once the app Worker is ready, so the app chooses it. `run(app, { width, height, minWidth, minHeight, maxWidth, maxHeight, resizable })` sends those options with the Worker's ready message, and the bootstrap passes them to `mt_run` (sizes in logical px; 0 = no limit). `mantou run`'s and a built app's `--width`, `--height`, `--min-width` and `--min-height` flags win over them, and the window opens at 640×400 when neither says. At run time, `ui.setWindowSize()` and `ui.setWindowLimits()` send `WINDOW_SIZE` and `WINDOW_LIMITS`; a headless instance resizes its viewport for the first, so tests see the layout and `useWindowSize()` follow. Minimum and maximum sizes are hints the OS or window manager enforces.
+
 ### 7.2 Components, reactivity, compiled JSX
 - **Reactivity:** Solid's signals in plain JS (`signal`, `computed`, `effect`), re-exported from `mantou-ui`. JavaScriptCore's JIT makes this fast, so there's no reason to move the reactive graph into native code.
 - **JSX:** Bun's built-in transform is React-style (`jsx()` calls), so it doesn't fit. A `Bun.plugin` runs `babel-preset-solid` with `generate: "universal"` and `moduleName` pointing at our renderer. The plugin runs in `dev`, in `build` and in the test runner. A faster Oxc-based compiler can come later.

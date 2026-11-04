@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
@@ -41,10 +41,15 @@ export const ops: OpDef[] = [
   { name: "SCROLL_INTO_VIEW", code: 20, operands: [["id", "id"], ["block", "u32"]], doc: "Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout." },
   { name: "FONT", code: 21, operands: [["data", "bytes"]], doc: "Register a font file (TTF, OTF or a collection) with the instance; text uses it by its family name." },
   { name: "FONT_FAMILY", code: 22, operands: [["family", "u32"], ["names", "string"]], doc: "Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts." },
+  { name: "WINDOW_SIZE", code: 23, operands: [["width", "f32"], ["height", "f32"]], doc: "Resize the window's content area (logical px). A headless instance resizes its viewport." },
+  { name: "WINDOW_LIMITS", code: 24, operands: [["minWidth", "f32"], ["minHeight", "f32"], ["maxWidth", "f32"], ["maxHeight", "f32"], ["flags", "u32"]], doc: "The window's smallest and largest content size (logical px, 0 = no limit), and WindowFlag bits." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3 } as const;
+
+/** WINDOW_LIMITS flags (and the window config's). */
+export const windowFlags = { NotResizable: 1 } as const;
 
 /** FOCUS_SCOPE flags. */
 export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;

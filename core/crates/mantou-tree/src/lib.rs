@@ -10,4 +10,4 @@ pub mod tree;
 
 pub use decode::{DecodeError, Length, Op, Value, decode};
 pub use encode::Ops;
-pub use tree::{ApplyReport, Clipboard, TreeEvent, MemoryClipboard, Quad, Scene, Tree, TreeStats};
+pub use tree::{ApplyReport, WindowLimits, Clipboard, TreeEvent, MemoryClipboard, Quad, Scene, Tree, TreeStats};

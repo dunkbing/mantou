@@ -2,7 +2,7 @@
 // The `mantou` command, for apps that depend on mantou-ui:
 //
 //   mantou build-core                 build the native core from source (only without a prebuilt one, or to change it)
-//   mantou run <entry> [options]      run an app: --width N --height N --title T
+//   mantou run <entry> [options]      run an app: --width N --height N --min-width N --min-height N --title T (flags win over run()'s options)
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
 //   mantou package <entry> [options]  macOS: a signed .app and .dmg (see USAGE)
 import { existsSync } from "node:fs";
@@ -12,7 +12,7 @@ import { libPath } from "./ffi";
 const USAGE = `usage:
   mantou build-core                       build the native core from source (needs Rust: https://rustup.rs);
                                           not needed where mantou-ui ships a prebuilt one
-  mantou run <entry.tsx> [--width N] [--height N] [--title T]
+  mantou run <entry.tsx> [--width N] [--height N] [--min-width N] [--min-height N] [--title T]
   mantou build <entry.tsx> [--out DIR] [--name N]
                                           compile the app to one executable; the native core is copied beside it
   mantou package <entry.tsx> [--out DIR] [--name N] [--id com.example.app] [--version 1.0.0]

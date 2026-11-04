@@ -2,7 +2,7 @@
 // appends an op; the batch is committed once per JS turn (design §7, §8).
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
-import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, type StylePropName } from "./gen/protocol";
+import { EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { expandStyle, type Style } from "./style";
@@ -803,6 +803,19 @@ export class Ui {
 
   title(s: string) {
     this.enc.title(s);
+    this.schedule();
+  }
+
+  /** Resizes the window's content area (logical px). A headless instance resizes its viewport. */
+  setWindowSize(size: { width: number; height: number }) {
+    this.enc.windowSize(size.width, size.height);
+    this.schedule();
+  }
+
+  /** The window's smallest and largest content size (logical px; leave one out for no limit), and whether the user can resize it. */
+  setWindowLimits(limits: { minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number; resizable?: boolean }) {
+    const v = (n: number | undefined) => Math.max(0, n ?? 0);
+    this.enc.windowLimits(v(limits.minWidth), v(limits.minHeight), v(limits.maxWidth), v(limits.maxHeight), limits.resizable === false ? WindowFlag.NotResizable : 0);
     this.schedule();
   }
 

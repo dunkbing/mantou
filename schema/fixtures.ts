@@ -48,6 +48,8 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.scrollTo(3, 0, 120, 0);
   e.scrollTo(3, 0, -40, 1);
   e.scrollIntoView(4, 0);
+  e.windowSize(1200, 760);
+  e.windowLimits(900, 560, 0, 0, 0);
   e.fontFamily(1, "Lucide, monospace");
   e.style(4, "fontFamily", 1);
   e.font(new Uint8Array([0, 1, 0, 0, 0, 7]));

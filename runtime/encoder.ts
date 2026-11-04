@@ -71,6 +71,10 @@ export class OpEncoder {
     this.op(Op.FONT, [data.length, ...words]);
   }
   fontFamily(family: number, names: string) { this.op(Op.FONT_FAMILY, [family, ...stringWords(names)]); }
+  windowSize(width: number, height: number) { this.op(Op.WINDOW_SIZE, [f32bits(width), f32bits(height)]); }
+  windowLimits(minW: number, minH: number, maxW: number, maxH: number, flags: number) {
+    this.op(Op.WINDOW_LIMITS, [f32bits(minW), f32bits(minH), f32bits(maxW), f32bits(maxH), flags]);
+  }
   focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
   scrollTo(id: number, x: number, y: number, flags: number) { this.op(Op.SCROLL_TO, [id, f32bits(x), f32bits(y), flags]); }
   scrollIntoView(id: number, block: number) { this.op(Op.SCROLL_INTO_VIEW, [id, block]); }

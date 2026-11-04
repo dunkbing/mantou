@@ -287,6 +287,16 @@ impl Instance {
                 return -1;
             }
         }
+        // A headless instance has no window: a size the app asks for resizes its viewport.
+        if self.headless
+            && let Some([w, h]) = tree.take_window_size()
+        {
+            let scale = tree.scale();
+            let (wp, hp) = ((w * scale).round() as u32, (h * scale).round() as u32);
+            tree.set_viewport(wp.max(1), hp.max(1), scale);
+            bump(&self.stats.resizes);
+            self.push_event([ev::RESIZED, wp, hp, scale.to_bits()]);
+        }
         self.publish(&mut tree);
         bump(&self.stats.commits);
         0

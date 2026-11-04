@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 9;
+pub const PROTOCOL_VERSION: u32 = 10;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -47,6 +47,10 @@ pub mod op {
     pub const FONT: u32 = 21;
     /// Define a font family id (1 and up) for fontFamily styles: a comma-separated list of family names, tried in order before Mantou's own fonts.
     pub const FONT_FAMILY: u32 = 22;
+    /// Resize the window's content area (logical px). A headless instance resizes its viewport.
+    pub const WINDOW_SIZE: u32 = 23;
+    /// The window's smallest and largest content size (logical px, 0 = no limit), and WindowFlag bits.
+    pub const WINDOW_LIMITS: u32 = 24;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -74,6 +78,8 @@ pub fn op_name(code: u32) -> &'static str {
         20 => "SCROLL_INTO_VIEW",
         21 => "FONT",
         22 => "FONT_FAMILY",
+        23 => "WINDOW_SIZE",
+        24 => "WINDOW_LIMITS",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -100,6 +106,10 @@ pub mod scroll_block {
     pub const START: u32 = 1;
     pub const CENTER: u32 = 2;
     pub const END: u32 = 3;
+}
+
+pub mod window_flag {
+    pub const NOT_RESIZABLE: u32 = 1;
 }
 
 pub mod focus_scope_flag {

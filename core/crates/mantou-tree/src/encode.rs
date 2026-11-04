@@ -119,6 +119,12 @@ impl Ops {
         w.extend(string_words(names));
         self.op(op::FONT_FAMILY, &w)
     }
+    pub fn window_size(&mut self, width: f32, height: f32) -> &mut Self {
+        self.op(op::WINDOW_SIZE, &[width.to_bits(), height.to_bits()])
+    }
+    pub fn window_limits(&mut self, min: [f32; 2], max: [f32; 2], flags: u32) -> &mut Self {
+        self.op(op::WINDOW_LIMITS, &[min[0].to_bits(), min[1].to_bits(), max[0].to_bits(), max[1].to_bits(), flags])
+    }
     pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
         self.op(op::FOCUS_SCOPE, &[id, flags])
     }

@@ -51,7 +51,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 5: text input: variable-length event records, mt_test_text, mt_test_ime, mt_test_clipboard,
 /// mt_test_set_clipboard, mt_test_value, mt_test_focused.
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
-pub const ABI_VERSION: u32 = 6;
+/// 7: the window config (mt_run) carries size limits and flags.
+pub const ABI_VERSION: u32 = 7;
 
 /// The window's instance.
 const APP: u32 = 1;
@@ -195,8 +196,9 @@ pub unsafe extern "C" fn mt_info(dst: *mut u8, cap: u32) -> u32 {
 }
 
 /// Runs the window's event loop on the calling thread, which must be the
-/// process's main thread, until `mt_quit`. Config: `[width, height, titleLen]`
-/// as u32 words, then the title's UTF-8 bytes.
+/// process's main thread, until `mt_quit`. Config: `[width, height, titleLen,
+/// minWidth, minHeight, maxWidth, maxHeight, flags]` as u32 words (logical px,
+/// 0 = no limit), then the title's UTF-8 bytes.
 ///
 /// # Safety
 /// `cfg` must be valid for `len` bytes.

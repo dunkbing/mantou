@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 6;
+export const ABI_VERSION = 7;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },

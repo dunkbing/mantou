@@ -44,6 +44,9 @@ pub enum Op {
     Focus { id: u32 },
     FocusScope { id: u32, flags: u32 },
     Font(Vec<u8>),
+    WindowSize { width: f32, height: f32 },
+    /// Logical px, 0 = no limit.
+    WindowLimits { min: [f32; 2], max: [f32; 2], flags: u32 },
     FontFamily { family: u32, names: String },
     /// x or y NaN: keep that axis.
     ScrollTo { id: u32, x: f32, y: f32, flags: u32 },
@@ -224,6 +227,22 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUS => {
                 fixed(1)?;
                 Op::Focus { id: a[0] }
+            }
+            op::WINDOW_SIZE => {
+                fixed(2)?;
+                let (w, h) = (f32::from_bits(a[0]), f32::from_bits(a[1]));
+                if !(w.is_finite() && h.is_finite() && w >= 1.0 && h >= 1.0) {
+                    return err(i, "WINDOW_SIZE needs a finite size of at least 1 × 1");
+                }
+                Op::WindowSize { width: w, height: h }
+            }
+            op::WINDOW_LIMITS => {
+                fixed(5)?;
+                let v: [f32; 4] = [0, 1, 2, 3].map(|k| f32::from_bits(a[k]));
+                if v.iter().any(|x| !x.is_finite() || *x < 0.0) {
+                    return err(i, "WINDOW_LIMITS needs finite sizes of 0 or more");
+                }
+                Op::WindowLimits { min: [v[0], v[1]], max: [v[2], v[3]], flags: a[4] }
             }
             op::FONT => {
                 let Some(&len) = a.first() else { return err(i, "FONT needs a length") };

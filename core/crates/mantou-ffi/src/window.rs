@@ -18,7 +18,8 @@ use winit::window::{ImePurpose, Window, WindowId};
 use crate::instance::{Instance, bump, lock};
 use crate::{G, UserEvent, app, guard, key_text};
 
-use mantou_tree::protocol::{key_modifier, named_key as key};
+use mantou_tree::WindowLimits;
+use mantou_tree::protocol::{key_modifier, named_key as key, window_flag};
 use winit::event::MouseScrollDelta;
 use winit::keyboard::ModifiersState;
 
@@ -29,17 +30,36 @@ pub struct Config {
     pub width: u32,
     pub height: u32,
     pub title: String,
+    pub limits: WindowLimits,
 }
 
 impl Config {
-    /// `[width, height, titleLen]` as u32 words, then the title's UTF-8 bytes.
+    /// `[width, height, titleLen, minWidth, minHeight, maxWidth, maxHeight, flags]`
+    /// as u32 words (sizes in logical px, 0 = no limit; flags: `window_flag`),
+    /// then the title's UTF-8 bytes.
     pub fn parse(b: &[u8]) -> Config {
-        let w: Vec<u32> = b[..b.len().min(12)].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+        const WORDS: usize = 8;
+        let w: Vec<u32> = b[..b.len().min(WORDS * 4)].chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
         let get = |i: usize, d: u32| w.get(i).copied().unwrap_or(d);
         let n = get(2, 0) as usize;
-        let title = b.get(12..12 + n).and_then(|t| std::str::from_utf8(t).ok()).unwrap_or("Mantou");
-        Config { width: get(0, 800).max(1), height: get(1, 600).max(1), title: title.to_owned() }
+        let title = b.get(WORDS * 4..WORDS * 4 + n).and_then(|t| std::str::from_utf8(t).ok()).unwrap_or("Mantou");
+        let limits = WindowLimits {
+            min: [get(3, 0) as f32, get(4, 0) as f32],
+            max: [get(5, 0) as f32, get(6, 0) as f32],
+            resizable: get(7, 0) & window_flag::NOT_RESIZABLE == 0,
+        };
+        Config { width: get(0, 800).max(1), height: get(1, 600).max(1), title: title.to_owned(), limits }
     }
+}
+
+/// Applies size limits (logical px, 0 = none) to the window.
+fn apply_limits(window: &Window, l: &WindowLimits) {
+    let size = |v: [f32; 2]| (v[0] > 0.0 || v[1] > 0.0).then(|| LogicalSize::new(v[0].max(1.0), v[1].max(1.0)));
+    window.set_min_inner_size(size(l.min));
+    // A max of 0 on one axis means no limit on it.
+    let max = (l.max[0] > 0.0 || l.max[1] > 0.0).then(|| LogicalSize::new(if l.max[0] > 0.0 { l.max[0] } else { 1e6 }, if l.max[1] > 0.0 { l.max[1] } else { 1e6 }));
+    window.set_max_inner_size(max);
+    window.set_resizable(l.resizable);
 }
 
 struct Gpu {
@@ -167,8 +187,18 @@ impl App {
 
     fn draw(&mut self) {
         let Some(window) = self.window.clone() else { return };
-        if let Some(t) = lock(&self.inst.tree).take_title() {
+        let (title, size, limits) = {
+            let mut tree = lock(&self.inst.tree);
+            (tree.take_title(), tree.take_window_size(), tree.take_window_limits())
+        };
+        if let Some(t) = title {
             window.set_title(&t);
+        }
+        if let Some(l) = limits {
+            apply_limits(&window, &l);
+        }
+        if let Some([w, h]) = size {
+            let _ = window.request_inner_size(LogicalSize::new(w, h));
         }
         self.sync_ime(&window);
         let scene = lock(&self.inst.scene).clone();
@@ -253,7 +283,10 @@ impl App {
             .with_title(self.config.title.clone())
             .with_inner_size(LogicalSize::new(self.config.width, self.config.height));
         let window = match el.create_window(attrs) {
-            Ok(w) => Arc::new(w),
+            Ok(w) => {
+                apply_limits(&w, &self.config.limits);
+                Arc::new(w)
+            }
             Err(e) => {
                 log!("cannot create a window: {e}");
                 G.exit_code.store(104, Ordering::Release);

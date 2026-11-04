@@ -257,6 +257,19 @@
     "block": 0
   },
   {
+    "op": "WINDOW_SIZE",
+    "width": 1200,
+    "height": 760
+  },
+  {
+    "op": "WINDOW_LIMITS",
+    "minWidth": 900,
+    "minHeight": 560,
+    "maxWidth": 0,
+    "maxHeight": 0,
+    "flags": 0
+  },
+  {
     "op": "FONT_FAMILY",
     "family": 1,
     "names": "Lucide, monospace"
