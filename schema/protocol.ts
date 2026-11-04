@@ -173,8 +173,9 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "textDecoration", code: 61, type: { enum: ["none", "underline", "lineThrough"] }, default: "none" },
   { name: "letterSpacing", code: 62, type: "f32", default: "0 (px added after each character)" },
   { name: "textTransform", code: 63, type: { enum: ["none", "uppercase", "lowercase", "capitalize"] }, default: "none" },
-  { name: "whiteSpace", code: 64, type: { enum: ["normal", "nowrap"] }, default: "normal" },
+  { name: "whiteSpace", code: 64, type: { enum: ["normal", "nowrap", "pre"] }, default: "normal (wraps; nowrap and pre keep one line per paragraph, pre is the same as nowrap: line breaks in the text are kept either way)" },
   { name: "textOverflow", code: 65, type: { enum: ["ellipsis", "clip"] }, default: "ellipsis (what is cut off by maxLines or a nowrap line that is too wide ends in …)" },
+  { name: "wordBreak", code: 66, type: { enum: ["normal", "breakAll", "keepAll", "breakWord"] }, default: "normal (breakAll: break anywhere; keepAll: never inside a word; breakWord: only a word too long for the line breaks anywhere)" },
 ];
 
 /**

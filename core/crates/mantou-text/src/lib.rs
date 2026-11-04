@@ -61,6 +61,16 @@ pub struct TextStyle {
     pub nowrap: bool,
     /// What is cut off ends in an ellipsis (true) or just stops (false).
     pub ellipsis: bool,
+    pub word_break: WordBreakMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WordBreakMode {
+    #[default]
+    Normal,
+    BreakAll,
+    KeepAll,
+    BreakWord,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -102,7 +112,7 @@ impl Transform {
 
 impl Default for TextStyle {
     fn default() -> Self {
-        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false, family: 0, letter_spacing: 0.0, transform: Transform::None, decoration: Decoration::None, nowrap: false, ellipsis: true }
+        TextStyle { size: 14.0, weight: 400.0, line_height: 0.0, align: Align::Start, max_lines: 0, italic: false, family: 0, letter_spacing: 0.0, transform: Transform::None, decoration: Decoration::None, nowrap: false, ellipsis: true, word_break: WordBreakMode::Normal }
     }
 }
 
@@ -117,7 +127,7 @@ impl TextStyle {
             self.max_lines,
             self.italic as u32,
             self.letter_spacing.to_bits(),
-            self.transform as u32 | (self.decoration as u32) << 4 | (self.nowrap as u32) << 8 | (self.ellipsis as u32) << 9,
+            self.transform as u32 | (self.decoration as u32) << 4 | (self.nowrap as u32) << 8 | (self.ellipsis as u32) << 9 | (self.word_break as u32) << 10,
         ]
     }
 }
@@ -365,6 +375,12 @@ impl TextEngine {
         b.push_default(StyleProperty::FontSize(style.size));
         b.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
         b.push_default(StyleProperty::FontStyle(if style.italic { FontStyle::Italic } else { FontStyle::Normal }));
+        match style.word_break {
+            WordBreakMode::Normal => {}
+            WordBreakMode::BreakAll => b.push_default(StyleProperty::WordBreak(parley::WordBreak::BreakAll)),
+            WordBreakMode::KeepAll => b.push_default(StyleProperty::WordBreak(parley::WordBreak::KeepAll)),
+            WordBreakMode::BreakWord => b.push_default(StyleProperty::OverflowWrap(parley::OverflowWrap::Anywhere)),
+        }
         if style.letter_spacing != 0.0 {
             b.push_default(StyleProperty::LetterSpacing(style.letter_spacing));
         }

@@ -396,11 +396,19 @@ pub mod text_transform {
 pub mod white_space {
     pub const NORMAL: u32 = 0;
     pub const NOWRAP: u32 = 1;
+    pub const PRE: u32 = 2;
 }
 
 pub mod text_overflow {
     pub const ELLIPSIS: u32 = 0;
     pub const CLIP: u32 = 1;
+}
+
+pub mod word_break {
+    pub const NORMAL: u32 = 0;
+    pub const BREAK_ALL: u32 = 1;
+    pub const KEEP_ALL: u32 = 2;
+    pub const BREAK_WORD: u32 = 3;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -482,10 +490,11 @@ pub enum Prop {
     TextTransform = 63,
     WhiteSpace = 64,
     TextOverflow = 65,
+    WordBreak = 66,
 }
 
 impl Prop {
-    pub const COUNT: usize = 65;
+    pub const COUNT: usize = 66;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -554,6 +563,7 @@ impl Prop {
             63 => Prop::TextTransform,
             64 => Prop::WhiteSpace,
             65 => Prop::TextOverflow,
+            66 => Prop::WordBreak,
             _ => return None,
         })
     }
@@ -625,6 +635,7 @@ impl Prop {
             Prop::TextTransform => "textTransform",
             Prop::WhiteSpace => "whiteSpace",
             Prop::TextOverflow => "textOverflow",
+            Prop::WordBreak => "wordBreak",
         }
     }
 
@@ -693,8 +704,9 @@ impl Prop {
             Prop::TextDecoration => ValueKind::Enum(3),
             Prop::LetterSpacing => ValueKind::F32,
             Prop::TextTransform => ValueKind::Enum(4),
-            Prop::WhiteSpace => ValueKind::Enum(2),
+            Prop::WhiteSpace => ValueKind::Enum(3),
             Prop::TextOverflow => ValueKind::Enum(2),
+            Prop::WordBreak => ValueKind::Enum(4),
         }
     }
 
@@ -752,8 +764,9 @@ impl Prop {
             ],
             Prop::TextDecoration => &["none", "underline", "lineThrough"],
             Prop::TextTransform => &["none", "uppercase", "lowercase", "capitalize"],
-            Prop::WhiteSpace => &["normal", "nowrap"],
+            Prop::WhiteSpace => &["normal", "nowrap", "pre"],
             Prop::TextOverflow => &["ellipsis", "clip"],
+            Prop::WordBreak => &["normal", "breakAll", "keepAll", "breakWord"],
             _ => &[],
         }
     }

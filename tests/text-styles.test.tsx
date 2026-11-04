@@ -53,3 +53,17 @@ test("textDecoration draws a line under or through each line", () => {
   expect(lay("underline me", { textDecoration: "underline" }).quads).toBe(plain + 1);
   expect(lay("underline me", { textDecoration: "lineThrough" }).quads).toBe(plain + 1);
 });
+
+test("whiteSpace pre keeps line breaks and one line per paragraph", () => {
+  const long = "one two three four five six seven eight nine ten eleven twelve";
+  expect(lay(long, { whiteSpace: "pre" }).h).toBeLessThan(20);
+  expect(lay("a\nb\nc", { whiteSpace: "pre" }).h).toBeGreaterThan(40);
+});
+
+test("wordBreak: breakAll and breakWord split a long word; keepAll doesn't", () => {
+  const word = "Supercalifragilisticexpialidocious";
+  const normal = lay(word, {}, 80);
+  expect(lay(word, { wordBreak: "breakAll" }, 80).h).toBeGreaterThan(normal.h);
+  expect(lay(word, { wordBreak: "breakWord" }, 80).h).toBeGreaterThan(normal.h);
+  expect(lay(word, { wordBreak: "keepAll" }, 80).h).toBe(normal.h);
+});

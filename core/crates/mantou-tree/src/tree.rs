@@ -1441,7 +1441,15 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
                 _ => mantou_text::Transform::None,
             }
         }
-        Prop::WhiteSpace => v.text.nowrap = e == p::white_space::NOWRAP,
+        Prop::WhiteSpace => v.text.nowrap = e != p::white_space::NORMAL,
+        Prop::WordBreak => {
+            v.text.word_break = match e {
+                p::word_break::BREAK_ALL => mantou_text::WordBreakMode::BreakAll,
+                p::word_break::KEEP_ALL => mantou_text::WordBreakMode::KeepAll,
+                p::word_break::BREAK_WORD => mantou_text::WordBreakMode::BreakWord,
+                _ => mantou_text::WordBreakMode::Normal,
+            }
+        }
         Prop::TextOverflow => v.text.ellipsis = e != p::text_overflow::CLIP,
         Prop::ShadowX => v.shadow[0] = num(),
         Prop::ShadowY => v.shadow[1] = num(),

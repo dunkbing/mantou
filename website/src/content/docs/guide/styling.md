@@ -42,7 +42,8 @@ Two things catch people out:
 | `textDecoration` | `"none"`, `"underline"`, `"lineThrough"` |
 | `letterSpacing` | px added after each character |
 | `textTransform` | `"uppercase"`, `"lowercase"`, `"capitalize"` |
-| `whiteSpace` | `"nowrap"` keeps one line |
+| `whiteSpace` | `"nowrap"` or `"pre"`: one line per paragraph (line breaks in the text are kept) |
+| `wordBreak` | `"breakAll"`, `"keepAll"`, `"breakWord"` (only a word too long for the line breaks) |
 | `textOverflow` | `"ellipsis"` (default) or `"clip"` for what `maxLines` or `nowrap` cuts off |
  Inputs also take `placeholderColor`, `caretColor`, `selectionColor`.
 
