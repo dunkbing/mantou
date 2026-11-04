@@ -63,4 +63,4 @@ test("a reference image of a registered font", () => {
     </View>
   ));
   expect(h.step().capture()).toMatchImage("fonts");
-});
+}, 60_000); // the first capture on a software GPU (CI) takes several seconds
