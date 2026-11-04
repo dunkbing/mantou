@@ -78,7 +78,23 @@ win.onState((s) => save(s));                      // { focused, minimized, maxim
 
 // A custom title bar: a frameless window with a view that moves it.
 <View dragRegion style={{ height: 32 }}>…</View>
+win.close();                                      // like the close button: the app gets closeRequested
 ```
+
+### Keep the traffic lights (macOS)
+
+`frameless` removes the system's buttons too. To draw your own header but keep them, ask for an overlay title bar: the content runs to the top edge and the buttons float over it. Close, minimize, zoom, full screen and snapping keep working.
+
+```tsx
+run(App, { titleBar: "overlay" });                // "native" (default) or "overlay"
+
+function Header() {
+  const { top, left } = win.safeArea;             // { top: 28, left: 72 } on macOS; zeros elsewhere
+  return <View dragRegion style={{ height: top, paddingLeft: left }}>…</View>;
+}
+```
+
+On Windows and Linux `"overlay"` is the native title bar for now.
 
 Each call answers with the window's state right after asking; the OS may take a moment (full screen animates), so use `onState` for the result. A window without a title bar or a resizable frame doesn't report `maximized`. A transparent window and the window icon aren't supported yet.
 

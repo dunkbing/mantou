@@ -149,6 +149,7 @@ pub mod window_flag {
     pub const FULLSCREEN: u32 = 8;
     pub const MAXIMIZED: u32 = 16;
     pub const HAS_POSITION: u32 = 32;
+    pub const TITLE_OVERLAY: u32 = 64;
 }
 
 pub mod window_state_flag {

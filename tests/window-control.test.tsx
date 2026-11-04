@@ -45,3 +45,11 @@ test("pressing a dragRegion asks to move the window", () => {
   expect(h.lastService()).toEqual({ kind: "window", op: "drag" });
   h.pointer("up", 20, 10);
 });
+
+test("win.close asks the core to close like the button, and the safe area is zero without an overlay", () => {
+  const { h } = app();
+  win.close();
+  h.step();
+  expect(h.lastService()).toEqual({ kind: "window", op: "close" });
+  expect(win.safeArea).toEqual({ top: 0, left: 0 });
+});

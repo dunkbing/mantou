@@ -61,7 +61,7 @@ export const easings = { Linear: 0, Ease: 1, EaseIn: 2, EaseOut: 3, EaseInOut: 4
 export const animateFlags = { Alternate: 1 } as const;
 
 /** WINDOW_LIMITS flags (and the window config's). */
-export const windowFlags = { NotResizable: 1, Frameless: 2, AlwaysOnTop: 4, Fullscreen: 8, Maximized: 16, HasPosition: 32 } as const;
+export const windowFlags = { NotResizable: 1, Frameless: 2, AlwaysOnTop: 4, Fullscreen: 8, Maximized: 16, HasPosition: 32, TitleOverlay: 64 } as const;
 
 /** WINDOW_STATE flags. */
 export const windowStateFlags = { Focused: 1, Minimized: 2, Maximized: 4, Fullscreen: 8, Dark: 16 } as const;

@@ -389,6 +389,12 @@ impl App {
             .with_inner_size(LogicalSize::new(self.config.width, self.config.height))
             .with_decorations(self.config.flags & window_flag::FRAMELESS == 0)
             .with_maximized(self.config.flags & window_flag::MAXIMIZED != 0);
+        #[cfg(target_os = "macos")]
+        if self.config.flags & window_flag::TITLE_OVERLAY != 0 {
+            use winit::platform::macos::WindowAttributesExtMacOS;
+            // Content under a transparent title bar; the traffic lights stay.
+            attrs = attrs.with_titlebar_transparent(true).with_fullsize_content_view(true).with_title_hidden(true);
+        }
         if self.config.flags & window_flag::ALWAYS_ON_TOP != 0 {
             attrs = attrs.with_window_level(winit::window::WindowLevel::AlwaysOnTop);
         }

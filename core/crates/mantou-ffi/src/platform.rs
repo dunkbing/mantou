@@ -23,7 +23,7 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         Some("openFile") => open_file(&v, window),
         Some("saveFile") => save_file(&v, window),
         Some("message") => message(&v, window),
-        Some("window") => window_op(&v, window),
+        Some("window") => window_op(&v, window, inst),
         Some("openExternal") => v["url"].as_str().map(|u| json!(open_external(u))),
         Some("reveal") => v["path"].as_str().map(|p| json!(reveal(p))),
         Some("notify") => Some(json!(notify(&v))),
@@ -122,7 +122,7 @@ pub fn window_state(w: &Window) -> (u32, i32, i32) {
 
 /// A window request: `{kind: "window", op, value, x, y, width, height}`. Answers with the window's state,
 /// which for a change the OS makes slowly (full screen) is still the old one: WINDOW_STATE follows.
-fn window_op(v: &Value, window: Option<&Arc<Window>>) -> Option<Value> {
+fn window_op(v: &Value, window: Option<&Arc<Window>>, inst: &Instance) -> Option<Value> {
     use winit::dpi::{LogicalPosition, LogicalSize};
     use winit::window::{Fullscreen, WindowLevel};
     let w = window?;
@@ -138,6 +138,8 @@ fn window_op(v: &Value, window: Option<&Arc<Window>>) -> Option<Value> {
             let _ = w.request_inner_size(LogicalSize::new(v["width"].as_f64()?.max(1.0), v["height"].as_f64()?.max(1.0)));
         }
         "focus" => w.focus_window(),
+        // As the close button: the app hears CLOSE_REQUESTED (and may keep the window open).
+        "close" => inst.push_event([mantou_tree::protocol::event::CLOSE_REQUESTED, 0, 0, 0]),
         "drag" => {
             let _ = w.drag_window();
         }

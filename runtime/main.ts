@@ -19,6 +19,11 @@ export interface WindowOptions {
   resizable?: boolean;
   /** No title bar or border (draw your own, with a `dragRegion` view to move the window). */
   frameless?: boolean;
+  /**
+   * "overlay" (macOS): no visible title bar but the traffic-light buttons, with the content drawn up to the top edge;
+   * leave `win.safeArea` free for the buttons. Elsewhere it is the native bar. Default "native".
+   */
+  titleBar?: "native" | "overlay";
   alwaysOnTop?: boolean;
   fullscreen?: boolean;
   maximized?: boolean;
@@ -89,6 +94,7 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
     (asked.resizable === false ? WindowFlag.NotResizable : 0) |
       (asked.frameless ? WindowFlag.Frameless : 0) |
       (asked.alwaysOnTop ? WindowFlag.AlwaysOnTop : 0) |
+      (asked.titleBar === "overlay" ? WindowFlag.TitleOverlay : 0) |
       (asked.fullscreen ? WindowFlag.Fullscreen : 0) |
       (asked.maximized ? WindowFlag.Maximized : 0) |
       (placed ? WindowFlag.HasPosition : 0),

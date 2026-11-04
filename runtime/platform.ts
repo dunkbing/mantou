@@ -127,7 +127,19 @@ const windowOp = (op: string, extra: object = {}) => ui().service<WindowInfo>({ 
  * The window. Each call asks the OS, which may take a moment (full screen animates), so the answer is the
  * state right after asking; `onState` hears the change when it happens. Resolve to null when there's no window.
  */
+let overlay = false;
+/** Called by `run` with the window's title bar choice. */
+export function setTitleBar(on: boolean) {
+  overlay = on;
+}
+
 export const win = {
+  /** Where the content must leave room for the system's buttons with `titleBar: "overlay"` (macOS: the traffic lights); zeros otherwise. */
+  get safeArea() {
+    return overlay && process.platform === "darwin" ? { top: 28, left: 72 } : { top: 0, left: 0 };
+  },
+  /** Asks the window to close like its button does: the app gets `closeRequested` (and quits, unless `quitOnClose: false`). */
+  close: () => windowOp("close"),
   setFullscreen: (on = true) => windowOp("fullscreen", { value: on }),
   setMaximized: (on = true) => windowOp("maximize", { value: on }),
   minimize: () => windowOp("minimize", { value: true }),
