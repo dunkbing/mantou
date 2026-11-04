@@ -4,6 +4,7 @@
 import { JSCallback } from "bun:ffi";
 import { openCore, type CoreLib } from "./ffi";
 import { EventReader, route, statsFrom, STAT_NAMES, type CoreEvent, type Stats } from "./events";
+import { StyleProp } from "./gen/protocol";
 import { Ui } from "./ui";
 
 export type { CoreEvent, Stats } from "./events";
@@ -37,6 +38,10 @@ export class MantouCore {
       rect: (id) => {
         const r = new Float32Array(4);
         return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
+      },
+      selection: (id) => {
+        const r = new Uint32Array(2);
+        return this.lib.symbols.mt_input_selection(this.handle, id, r) === 0 ? [r[0], r[1]] : null;
       },
     });
     this.wake = new JSCallback(() => this.drain(), { args: [], returns: "void", threadsafe: true });
@@ -111,6 +116,11 @@ export class MantouCore {
   /** Test hook: a wheel scroll at logical (x, y). */
   testWheel(x: number, y: number, dy: number, dx = 0) {
     this.lib.symbols.mt_test_wheel(this.handle, x, y, dx, dy);
+  }
+
+  /** Test hook: the cursor the pointer shows now ("default", "pointer", "text"…). */
+  cursor(): string {
+    return StyleProp.cursor.values[this.lib.symbols.mt_test_cursor(this.handle)];
   }
 
   /** Test hook: a node's laid-out box [x0, y0, x1, y1] in logical px, or null. */

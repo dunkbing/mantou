@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 7;
+export const ABI_VERSION = 8;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -18,6 +18,7 @@ export const symbols = {
   mt_commit: { args: ["u32", "ptr", "u32"], returns: "i32" },
   mt_take_events: { args: ["u32", "ptr", "u32"], returns: "u32" },
   mt_stats: { args: ["u32", "ptr", "u32"], returns: "u32" },
+  mt_input_selection: { args: ["u32", "u32", "ptr"], returns: "i32" },
   // Headless instances and test hooks.
   mt_headless_new: { args: ["u32", "u32", "f32"], returns: "u32" },
   mt_headless_free: { args: ["u32"], returns: "void" },
@@ -28,6 +29,7 @@ export const symbols = {
   mt_test_step: { args: ["u32", "f64"], returns: "u32" },
   mt_test_hit: { args: ["u32", "f32", "f32"], returns: "u32" },
   mt_test_node_rect: { args: ["u32", "u32", "ptr"], returns: "i32" },
+  mt_test_cursor: { args: ["u32"], returns: "u32" },
   mt_test_scene: { args: ["u32", "ptr", "u32"], returns: "u32" },
   mt_test_capture: { args: ["u32", "ptr", "u32"], returns: "i32" },
   mt_test_resize: { args: ["u32", "u32", "u32", "u32", "u32", "u32"], returns: "void" },

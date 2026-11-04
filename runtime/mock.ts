@@ -47,6 +47,11 @@ export class MockCore {
     this.ui.dispatchScroll(nodeId, x, y);
   }
 
+  /** The pointer came over a node (or left it, with `false`). */
+  hover(nodeId: number, hovered = true) {
+    this.ui.dispatchHover(nodeId, hovered);
+  }
+
   /** An animation ended (its id is the ANIMATE op's `animation`). */
   animationEnd(animation: number) {
     this.ui.dispatchAnimationEnd(animation);

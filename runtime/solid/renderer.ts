@@ -110,6 +110,15 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "transition":
       node.transition((value ?? {}) as Transitions);
       return;
+    case "onHover":
+      setHandler(node, name, value, (f: (hovered: boolean) => void) => node.onHover(f));
+      return;
+    case "onPointerEnter":
+      setHandler(node, name, value, (f: () => void) => node.onHover((h) => h && f()));
+      return;
+    case "onPointerLeave":
+      setHandler(node, name, value, (f: () => void) => node.onHover((h) => h || f()));
+      return;
   }
   if (node.isInput && setInputProperty(node, name, value, prev)) return;
   if (node.isImage) {

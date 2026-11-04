@@ -141,6 +141,9 @@ impl Ops {
     pub fn animate(&mut self, id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32) -> &mut Self {
         self.op(op::ANIMATE, &[id, animation, prop as u32, from, to, duration.to_bits(), easing, iterations.to_bits(), flags])
     }
+    pub fn select(&mut self, id: u32, anchor: u32, focus: u32) -> &mut Self {
+        self.op(op::SELECT, &[id, anchor, focus])
+    }
     pub fn window_size(&mut self, width: f32, height: f32) -> &mut Self {
         self.op(op::WINDOW_SIZE, &[width.to_bits(), height.to_bits()])
     }

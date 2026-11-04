@@ -34,7 +34,7 @@ description: "The frame pipeline, scene, wgpu renderer, scrolling and animation,
 
 ## 10. Input, focus, accessibility, platform services
 
-- **Hit-testing and focus:** the core, on the main thread, against the last layout. Tab order comes from tree order plus `tabIndex`. Focus rings are drawn by the core.
+- **Hit-testing and focus:** the core, on the main thread, against the last layout. **Status:** hover (`POINTER_ENTER`/`POINTER_LEAVE` for nodes that listen, kept right as boxes move under a still pointer) and the `cursor` style are implemented ([Hover and cursors](/progress/hover/)). Tab order comes from tree order plus `tabIndex`. Focus rings are drawn by the core.
 - **IME:** winit's `Ime` events plus `set_ime_cursor_area`, from the caret of the focused input. The composition is drawn inline.
 - **Accessibility:** the core builds an AccessKit tree from the shadow tree: roles and labels from props, values, ranges and states. It updates it after each commit when assistive technology is active. Actions are performed natively where possible (focus, scroll, set a value); otherwise they arrive as `A11Y_ACTION` events.
 - **Platform services:** menus (app, context, tray), file dialogs, the clipboard, notifications, multiple windows and DPI changes, exposed as async TS functions that go through `COMMAND` / `COMMAND_RESULT`.

@@ -36,7 +36,30 @@ const [draft, setDraft] = createSignal("");
 
 Without a width from its style or its parent, an input is 200 px wide (like a browser's), and it has no minimum width, so it shrinks in a row. A single-line input is one line tall plus its padding, with its text centred vertically.
 
-The `Node` behind it has `focus()`, `blur()`, `focused`, `value` (the text as the core last reported it), `setValue()`, `placeholder()` and `setOptions()`, for code that uses the node tree directly.
+The `Node` behind it has `focus()`, `blur()`, `focused`, `value` (the text as the core last reported it), `setValue()`, `placeholder()`, `setOptions()`, `setSelection()` and `selection()`, for code that uses the node tree directly.
+
+### The caret when the app changes the text
+
+When the app sets a value that differs from what was typed (a controlled input's transform, an autocompletion), the selection follows the text around it ([#30](https://github.com/dunkbing/mantou/issues/30)):
+
+- if the text before it is unchanged, it stays put (appending after the caret doesn't move it);
+- if the text after it is unchanged, it keeps its distance from the end (a filter that drops or rewrites what was just typed);
+- if the new text is as long as the old, it stays put (upper-casing);
+- otherwise it goes to the end, as when a browser's `input.value` is set: taking the suggestion for "ali" gives `Alice <alice@x.com>, ` with the caret after it.
+
+For anything else, place it:
+
+```tsx
+let to!: Node;
+<Input ref={to} value={line()} onChange={setLine} />;
+
+setLine(`${name} <${email}>, `);
+to.setSelection(line().length);      // a caret
+to.setSelection(0, 5);               // a selection; the caret at 5
+to.selection();                      // { start, end }
+```
+
+Offsets are UTF-16 code units, as in the DOM (`string.length`, `selectionStart`), clamped to the text. `setSelection` is sent with the turn's other changes, after its value. `selection()` commits first, then asks the core (it's `null` on the mock core).
 
 ## Editing
 
@@ -54,14 +77,14 @@ The core does all of it, on the main thread for the window, without a round trip
 
 ## How it works
 
-- `CREATE` kind `Input`, then `PLACEHOLDER`, `INPUT_OPTIONS` (flags and the maximum length) and `VALUE` ops; `FOCUS` gives or takes the focus ([§8.3](/design/protocols/#83-text-input)).
+- `CREATE` kind `Input`, then `PLACEHOLDER`, `INPUT_OPTIONS` (flags and the maximum length), `VALUE` and `SELECT` ops; `FOCUS` gives or takes the focus ([§8.3](/design/protocols/#83-text-input)).
 - When the user changes the text, the core sends `TEXT_CHANGED` with the text in the event record and a `rev` that counts the user's edits. Event records now have a variable length: the first word's high half says how many words follow the usual four.
 - `VALUE` carries the `rev` the app last saw. The core ignores a value older than the user's latest edit, so the app's answer to "ab" can't erase the "c" typed since; the app then hears about "abc" and answers again.
 - **Op counts:** typing in an uncontrolled input sends nothing from JS. In a controlled one the echo (`onChange` setting the signal to the same text) sends nothing either; a value that differs is one `VALUE` op. Typing two letters in the window's self-test draws them with no commit and no key events in JS.
 
 ## Not yet
 
-Caret blinking; character filters (`allow`) and `inputMode`; the selection in the API (reading it, or setting it from the app); focus for views other than inputs; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
+Caret blinking; character filters (`allow`) and `inputMode`; focus for views other than inputs; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
 
 ## Tests
 

@@ -81,6 +81,7 @@ export class OpEncoder {
   animate(id: number, animation: number, prop: number, from: number, to: number, duration: number, easing: number, iterations: number, flags: number) {
     this.op(Op.ANIMATE, [id, animation, prop, from, to, f32bits(duration), easing, f32bits(iterations), flags]);
   }
+  select(id: number, anchor: number, focus: number) { this.op(Op.SELECT, [id, anchor, focus]); }
   windowSize(width: number, height: number) { this.op(Op.WINDOW_SIZE, [f32bits(width), f32bits(height)]); }
   windowLimits(minW: number, minH: number, maxW: number, maxH: number, flags: number) {
     this.op(Op.WINDOW_LIMITS, [f32bits(minW), f32bits(minH), f32bits(maxW), f32bits(maxH), flags]);

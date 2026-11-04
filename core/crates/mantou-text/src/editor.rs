@@ -63,6 +63,40 @@ fn byte_of(s: &str, n: usize) -> usize {
     s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
 }
 
+/// Where a character offset `pos` of `old` lands in `new`, when the app
+/// replaces one with the other: unchanged text before it keeps it in place,
+/// unchanged text after it keeps its distance from the end (an edit before
+/// the caret, like a filter), text of the same length is rewritten in place
+/// (upper-casing), and otherwise it goes to the end, as when a browser's
+/// `input.value` is set (an autocompletion).
+fn map_offset(old: &[char], new: &[char], pos: usize) -> usize {
+    let prefix = old.iter().zip(new).take_while(|(a, b)| a == b).count();
+    if pos <= prefix || old.len() == new.len() {
+        return pos.min(new.len());
+    }
+    let most = old.len().min(new.len()) - prefix;
+    let suffix = old.iter().rev().zip(new.iter().rev()).take(most).take_while(|(a, b)| a == b).count();
+    if old.len() - pos <= suffix { new.len() - (old.len() - pos) } else { new.len() }
+}
+
+/// UTF-16 offsets to character offsets in `s` (clamped to its end), and back.
+fn chars_of_utf16(s: &str, units: usize) -> usize {
+    let mut n = 0;
+    let mut seen = 0;
+    for c in s.chars() {
+        if seen >= units {
+            break;
+        }
+        seen += c.len_utf16();
+        n += 1;
+    }
+    n
+}
+
+fn utf16_of_chars(s: &str, chars: usize) -> usize {
+    s.chars().take(chars).map(char::len_utf16).sum()
+}
+
 /// Rectangles are [x0, y0, x1, y1] in logical px from the content box's top
 /// left, already scrolled.
 pub type Rect = [f32; 4];
@@ -217,22 +251,55 @@ impl Editor {
     }
 
     /// Replaces the text from the app after the user has edited it (a
-    /// controlled value): one undo step, and the caret stays where it was,
-    /// clamped to the new text.
+    /// controlled value): one undo step. The selection follows the text
+    /// around it (`map_offset`): it stays put when the text before it is
+    /// unchanged, keeps its distance from the end when the text after it is,
+    /// and otherwise goes to the end.
     pub fn replace(&mut self, engine: &mut TextEngine, text: &str) {
         if self.ed.is_composing() {
             self.ed.driver(&mut engine.fcx, &mut engine.lcx).clear_compose();
         }
         let t = self.clean(text).into_owned();
-        if t == self.text() {
+        let old = self.text();
+        if t == old {
             return;
         }
         self.checkpoint(Edit::Other);
-        self.ed.set_text(&self.shown(&t)); // keeps the selection's offsets, clamped
+        let (anchor, focus) = self.char_selection();
+        let (o, n): (Vec<char>, Vec<char>) = (old.chars().collect(), t.chars().collect());
+        let (anchor, focus) = (map_offset(&o, &n, anchor), map_offset(&o, &n, focus));
+        self.ed.set_text(&self.shown(&t));
         if self.is_secure() {
             self.real = Some(t);
         }
+        self.select_chars(engine, anchor, focus);
         self.last_edit = None;
+    }
+
+    /// Selects characters `anchor..focus` (the focus is the caret), clamped.
+    fn select_chars(&mut self, engine: &mut TextEngine, anchor: usize, focus: usize) {
+        let raw = self.ed.raw_text().to_owned();
+        self.ed.driver(&mut engine.fcx, &mut engine.lcx).select_byte_range(byte_of(&raw, anchor), byte_of(&raw, focus));
+    }
+
+    /// Selects from `anchor` to `focus` (the caret), in UTF-16 code units of
+    /// the text, as the DOM counts them; clamped. Ends a composition, and
+    /// starts a new undo step.
+    pub fn select_utf16(&mut self, engine: &mut TextEngine, anchor: usize, focus: usize) {
+        if self.ed.is_composing() {
+            self.ed.driver(&mut engine.fcx, &mut engine.lcx).clear_compose();
+        }
+        let t = self.text();
+        let (a, f) = (chars_of_utf16(&t, anchor), chars_of_utf16(&t, focus));
+        self.select_chars(engine, a, f);
+        self.last_edit = None;
+    }
+
+    /// The selection (anchor, focus) in UTF-16 code units of the text.
+    pub fn selection_utf16(&self) -> (usize, usize) {
+        let (a, f) = self.char_selection();
+        let t = self.text();
+        (utf16_of_chars(&t, a), utf16_of_chars(&t, f))
     }
 
     fn snapshot(&self) -> Snapshot {
@@ -546,6 +613,46 @@ mod tests {
         ed.set_size(120.0, 60.0);
         ed.set_text(&mut e, "");
         (e, ed)
+    }
+
+    #[test]
+    fn replacing_the_text_moves_the_caret_with_it() {
+        let (mut e, mut ed) = editor(false);
+        for ch in ["a", "l", "i"] {
+            ed.insert(&mut e, ch);
+        }
+        // An autocompletion: nothing around the caret survives, so it goes to the end.
+        ed.replace(&mut e, "Alice <alice@x.com>, ");
+        assert_eq!(ed.selection_utf16(), (21, 21));
+        ed.insert(&mut e, "b");
+        assert_eq!(ed.text(), "Alice <alice@x.com>, b");
+        // A filter: the text after the caret is unchanged, so it keeps its distance from the end.
+        ed.set_text(&mut e, "AB");
+        ed.navigate(&mut e, |d| d.move_left());
+        ed.insert(&mut e, "x");
+        assert_eq!(ed.text(), "AxB");
+        ed.replace(&mut e, "AXB");
+        assert_eq!(ed.selection_utf16(), (2, 2));
+        // Appending after the caret leaves it where it was.
+        ed.replace(&mut e, "AXB and more");
+        assert_eq!(ed.selection_utf16(), (2, 2));
+        // Cleared.
+        ed.replace(&mut e, "");
+        assert_eq!(ed.selection_utf16(), (0, 0));
+    }
+
+    #[test]
+    fn selections_count_utf16_units() {
+        let (mut e, mut ed) = editor(false);
+        ed.set_text(&mut e, "a😀b");
+        assert_eq!(ed.selection_utf16(), (4, 4), "the emoji is two units");
+        ed.select_utf16(&mut e, 1, 3);
+        assert_eq!(ed.selected_text().as_deref(), Some("😀"));
+        assert_eq!(ed.selection_utf16(), (1, 3));
+        ed.select_utf16(&mut e, 0, 99);
+        assert_eq!(ed.selection_utf16(), (0, 4), "clamped");
+        ed.select_utf16(&mut e, 2, 2);
+        assert_eq!(ed.selection_utf16(), (3, 3), "inside a pair: after it");
     }
 
     #[test]

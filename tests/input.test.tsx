@@ -244,3 +244,40 @@ test("a dialog's focus scope keeps Tab inside, then gives the focus back (#6)", 
   h.step();
   expect(h.focused()).toBe(search);
 });
+
+test("the caret goes to the end when the app replaces the text (#30)", () => {
+  const [v, setV] = createSignal("");
+  const h = app(() => <View><Input value={v()} onChange={setV} autoFocus /></View>);
+  h.type("ali");
+  setV("Alice <alice@x.com>, ");
+  h.step();
+  h.type("b");
+  expect(v()).toBe("Alice <alice@x.com>, b");
+});
+
+test("a filter keeps the caret where the user is typing (#30)", () => {
+  let input!: Node;
+  const [v, setV] = createSignal("AB");
+  const h = app(() => <View><Input ref={input} value={v()} onChange={(t) => setV(t.toUpperCase())} autoFocus /></View>);
+  h.key("ArrowLeft");
+  h.type("x");
+  expect(v()).toBe("AXB");
+  expect(input.selection()).toEqual({ start: 2, end: 2 });
+  h.type("y");
+  expect(v()).toBe("AXYB");
+});
+
+test("setSelection places the caret or selects, in UTF-16 units, after the turn's value (#30)", () => {
+  let input!: Node;
+  const h = app(() => <View><Input ref={input} defaultValue="hello" autoFocus /></View>);
+  expect(input.selection()).toEqual({ start: 5, end: 5 });
+  input.setSelection(0, 4);
+  expect(input.selection()).toEqual({ start: 0, end: 4 });
+  h.type("J");
+  expect(input.value).toBe("Jo");
+  input.setValue("😀 smile");
+  input.setSelection(2);
+  h.step();
+  h.type("!");
+  expect(input.value).toBe("😀! smile");
+});

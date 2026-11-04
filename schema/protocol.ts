@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
@@ -47,6 +47,7 @@ export const ops: OpDef[] = [
   { name: "IMAGE_DATA", code: 26, operands: [["id", "id"], ["data", "bytes"]], doc: "An Image's source as the file's bytes." },
   { name: "TRANSITION", code: 27, operands: [["id", "id"], ["prop", "u32"], ["duration", "f32"], ["easing", "u32"]], doc: "When the node's `prop` changes, animate to the new value over `duration` ms (Easing; 0 = no transition). Animatable: opacity, translateX, translateY, scale, backgroundColor, borderColor, color." },
   { name: "ANIMATE", code: 28, operands: [["id", "id"], ["animation", "u32"], ["prop", "u32"], ["from", "u32"], ["to", "u32"], ["duration", "f32"], ["easing", "u32"], ["iterations", "f32"], ["flags", "u32"]], doc: "Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows." },
+  { name: "SELECT", code: 29, operands: [["id", "id"], ["anchor", "u32"], ["focus", "u32"]], doc: "Select an Input's text from `anchor` to `focus` (the caret), in UTF-16 code units like the DOM's selectionStart (clamped; equal = a caret)." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
 ];
 
@@ -68,7 +69,7 @@ export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
-export const eventMask = { Press: 1, Layout: 2, Scroll: 4 } as const;
+export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;
@@ -156,6 +157,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "translateX", code: 57, type: "f32", default: "0" },
   { name: "translateY", code: 58, type: "f32", default: "0" },
   { name: "scale", code: 59, type: "f32", default: "1" },
+  // The pointer's shape over the node (and its descendants that don't set one), set by the core as the pointer moves. "auto": an Input's text cursor, else the arrow.
+  { name: "cursor", code: 60, type: { enum: ["auto", "default", "pointer", "text", "grab", "grabbing", "notAllowed", "move", "crosshair", "wait", "progress", "help", "ewResize", "nsResize", "neswResize", "nwseResize", "colResize", "rowResize", "none"] }, default: "auto" },
 ];
 
 /**
@@ -182,6 +185,8 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "SCROLL", code: 17, fields: "a = scroll view, b = x, c = y (f32, logical px: the offset)", doc: "A scroll view with a Scroll listener scrolled (at most once per frame)." },
   { name: "IMAGE_LOAD", code: 20, fields: "a = image node, b = natural width, c = natural height (f32, logical px)", doc: "An Image's source was decoded." },
   { name: "IMAGE_ERROR", code: 21, fields: "a = image node, c = byte length; then the UTF-8 message, padded to words", doc: "An Image's source couldn't be read or decoded." },
+  { name: "POINTER_ENTER", code: 23, fields: "a = node", doc: "The pointer came over a node with a Hover listener (or one of its descendants). Ancestors first." },
+  { name: "POINTER_LEAVE", code: 24, fields: "a = node", doc: "The pointer left a node with a Hover listener: it moved off, left the window, or the node moved, hid or was removed under it. Descendants first." },
   { name: "ANIMATION_END", code: 22, fields: "a = node, b = animation id", doc: "An ANIMATE finished (or was replaced or its node released)." },
   { name: "LAYOUT", code: 16, fields: "a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left)", doc: "A node with a Layout listener was laid out at a new box (or for the first time since it listened)." },
   { name: "SERVICE_RESULT", code: 18, fields: "a = request id, b = 0 answered or 1 cancelled, c = byte length; then the UTF-8 JSON answer, padded to words", doc: "A platform service (dialog, context menu) finished." },

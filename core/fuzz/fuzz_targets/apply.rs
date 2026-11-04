@@ -43,6 +43,8 @@ libfuzzer_sys::fuzz_target!(|data: &[u8]| {
             tree.pointer_down(q.rect[0] + 1.0, q.rect[1] + 1.0, 1 + (len % 3) as u32, len & 4 != 0);
             tree.pointer_drag(q.rect[2], q.rect[3]);
             tree.pointer_up();
+            tree.pointer_at((len & 8 == 0).then_some((q.rect[2] - 1.0, q.rect[3] - 1.0)));
+            let _ = tree.cursor();
         }
         for pair in batch.chunks(2).take(16) {
             let (code, text) = key(pair[0]);

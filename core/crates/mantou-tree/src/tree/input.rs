@@ -425,6 +425,11 @@ impl Tree {
         Some([ox + r[0] * k, oy + r[1] * k, ox + r[2] * k, oy + r[3] * k])
     }
 
+    /// An input's selection (anchor, focus = the caret) in UTF-16 code units.
+    pub fn selection_utf16(&self, id: u32) -> Option<(usize, usize)> {
+        self.nodes.get(&id)?.input.as_ref().map(|i| i.editor.borrow().selection_utf16())
+    }
+
     /// The focused input's selection as byte offsets (anchor, focus), for tests.
     pub fn selection_of(&self, id: u32) -> Option<(usize, usize)> {
         self.nodes.get(&id)?.input.as_ref().map(|i| i.editor.borrow().selection_range())

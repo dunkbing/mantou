@@ -57,6 +57,9 @@ export function Scroll(props: ScrollProps): JSX.Element {
       get onWheel() {
         return props.onWheel;
       },
+      get onHover() {
+        return props.onHover;
+      },
       get ref() {
         return props.ref;
       },

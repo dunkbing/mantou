@@ -15,6 +15,7 @@ use crate::decode::{DecodeError, Length, Op, Value, decode};
 use crate::protocol::{self as p, Prop, event_mask};
 
 mod anim;
+mod hover;
 mod image;
 mod input;
 mod scroll;
@@ -50,6 +51,9 @@ pub enum TreeEvent {
     ImageError { id: u32, message: String },
     /// An ANIMATE finished, or another animation of its property replaced it.
     AnimationEnd { id: u32, animation: u32 },
+    /// The pointer came over a node with a Hover listener, or left it.
+    PointerEnter(u32),
+    PointerLeave(u32),
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -191,6 +195,8 @@ struct Visual {
     /// The transform: a translation (logical px) and a scale about the box's centre.
     translate: [f32; 2],
     scale: f32,
+    /// The `cursor` style (protocol::cursor; AUTO = whatever's below).
+    cursor: u32,
 }
 
 struct Node {
@@ -284,6 +290,9 @@ pub struct Tree {
     /// The clock animations run on (ms), and how many nodes are animating.
     now: f64,
     animating: usize,
+    /// Where the pointer is (logical px; None = outside the window), and the nodes under it, outermost first.
+    pointer: Option<(f32, f32)>,
+    hovered: Vec<u32>,
 }
 
 /// What WINDOW_LIMITS asked for: sizes in logical px (0 = no limit).
@@ -346,6 +355,8 @@ impl Tree {
             window_limits: None,
             now: 0.0,
             animating: 0,
+            pointer: None,
+            hovered: Vec::new(),
         }
     }
 
@@ -469,6 +480,7 @@ impl Tree {
                 if self.drag == Some(id) {
                     self.drag = None;
                 }
+                self.hovered.retain(|&h| h != id); // gone: no event, there's no one to tell
                 if node.anim.as_ref().is_some_and(|a| a.is_active()) {
                     self.animating = self.animating.saturating_sub(1);
                 }
@@ -502,11 +514,15 @@ impl Tree {
             Op::Listen { id, mask } => {
                 let node = self.node(id)?;
                 let new_layout = mask & event_mask::LAYOUT != 0 && node.listen & event_mask::LAYOUT == 0;
+                let new_hover = mask & event_mask::HOVER != 0 && node.listen & event_mask::HOVER == 0;
                 node.listen = mask;
                 if new_layout {
                     // A new listener hears the current box at the next layout, even if it's unchanged.
                     node.reported = None;
                     self.reports_pending = true;
+                }
+                if new_hover {
+                    self.hover_listener_added(id);
                 }
             }
             Op::SetRoot { id } => {
@@ -556,6 +572,12 @@ impl Tree {
                         self.layout_dirty = true;
                     }
                 }
+            }
+            Op::Select { id, anchor, focus } => {
+                let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
+                let Some(inp) = node.input.as_mut() else { return Err(format!("SELECT: {id} is not an input")) };
+                let engine = self.text.as_mut().expect("inputs create the text engine");
+                inp.editor.get_mut().select_utf16(engine, anchor as usize, focus as usize);
             }
             Op::Placeholder { id, text } => {
                 let Some(inp) = self.node(id)?.input.as_mut() else { return Err(format!("PLACEHOLDER: {id} is not an input")) };
@@ -746,6 +768,7 @@ impl Tree {
         self.layout_dirty = false;
         let Some(root) = self.root else {
             self.boxes.clear();
+            self.update_hover();
             return true;
         };
         let (vw, vh) = self.viewport_logical();
@@ -802,6 +825,7 @@ impl Tree {
         self.report_layouts();
         self.report_scrolls();
         self.update_scopes();
+        self.update_hover();
     }
 
     fn place_boxes(&mut self) {
@@ -1362,6 +1386,7 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
             }
         }
         Prop::ObjectFit => v.fit = e,
+        Prop::Cursor => v.cursor = e,
         Prop::TranslateX => v.translate[0] = finite(num(), 0.0),
         Prop::TranslateY => v.translate[1] = finite(num(), 0.0),
         Prop::Scale => v.scale = finite(num(), 1.0).max(0.0),

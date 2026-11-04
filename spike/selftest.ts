@@ -179,6 +179,12 @@ async function main() {
     check("typing in an input", (core.received.keyDown ?? 0) === keys && core.ui.commits === commits && d.frames >= 1, {
       value: input.value, keyDownsInJs: (core.received.keyDown ?? 0) - keys, commits: core.ui.commits - commits, frames: d.frames, glyphs: d.glyphs,
     });
+    // The cursor follows the pointer on the main thread: the text cursor over the input.
+    core.testPointer("move", (r[0] + r[2]) / 2, (r[1] + r[3]) / 2);
+    await until("the text cursor over the input", () => core.cursor() === "text", 5_000);
+    core.testPointer("move", ...BOARD);
+    await until("the arrow off it", () => core.cursor() === "default", 5_000);
+    check("cursor over an input", true, { over: "text", off: "default" });
   }
 
   // 9. A scroll view scrolls on the main thread while the Worker is blocked (design §9.4).

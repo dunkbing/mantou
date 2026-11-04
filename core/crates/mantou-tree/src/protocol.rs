@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 12;
+pub const PROTOCOL_VERSION: u32 = 13;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -59,6 +59,8 @@ pub mod op {
     pub const TRANSITION: u32 = 27;
     /// Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows.
     pub const ANIMATE: u32 = 28;
+    /// Select an Input's text from `anchor` to `focus` (the caret), in UTF-16 code units like the DOM's selectionStart (clamped; equal = a caret).
+    pub const SELECT: u32 = 29;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
 }
@@ -92,6 +94,7 @@ pub fn op_name(code: u32) -> &'static str {
         26 => "IMAGE_DATA",
         27 => "TRANSITION",
         28 => "ANIMATE",
+        29 => "SELECT",
         18 => "FOCUS_SCOPE",
         _ => "UNKNOWN",
     }
@@ -108,6 +111,7 @@ pub mod event_mask {
     pub const PRESS: u32 = 1;
     pub const LAYOUT: u32 = 2;
     pub const SCROLL: u32 = 4;
+    pub const HOVER: u32 = 8;
 }
 
 pub mod scroll_flag {
@@ -215,6 +219,10 @@ pub mod event {
     pub const IMAGE_LOAD: u32 = 20;
     /// An Image's source couldn't be read or decoded. a = image node, c = byte length; then the UTF-8 message, padded to words.
     pub const IMAGE_ERROR: u32 = 21;
+    /// The pointer came over a node with a Hover listener (or one of its descendants). Ancestors first. a = node.
+    pub const POINTER_ENTER: u32 = 23;
+    /// The pointer left a node with a Hover listener: it moved off, left the window, or the node moved, hid or was removed under it. Descendants first. a = node.
+    pub const POINTER_LEAVE: u32 = 24;
     /// An ANIMATE finished (or was replaced or its node released). a = node, b = animation id.
     pub const ANIMATION_END: u32 = 22;
     /// A node with a Layout listener was laid out at a new box (or for the first time since it listened). a = node, b = x, c = y; then width, height (f32, logical px, from the window's top left).
@@ -311,6 +319,28 @@ pub mod object_fit {
     pub const COVER: u32 = 2;
 }
 
+pub mod cursor {
+    pub const AUTO: u32 = 0;
+    pub const DEFAULT: u32 = 1;
+    pub const POINTER: u32 = 2;
+    pub const TEXT: u32 = 3;
+    pub const GRAB: u32 = 4;
+    pub const GRABBING: u32 = 5;
+    pub const NOT_ALLOWED: u32 = 6;
+    pub const MOVE: u32 = 7;
+    pub const CROSSHAIR: u32 = 8;
+    pub const WAIT: u32 = 9;
+    pub const PROGRESS: u32 = 10;
+    pub const HELP: u32 = 11;
+    pub const EW_RESIZE: u32 = 12;
+    pub const NS_RESIZE: u32 = 13;
+    pub const NESW_RESIZE: u32 = 14;
+    pub const NWSE_RESIZE: u32 = 15;
+    pub const COL_RESIZE: u32 = 16;
+    pub const ROW_RESIZE: u32 = 17;
+    pub const NONE: u32 = 18;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -384,10 +414,11 @@ pub enum Prop {
     TranslateX = 57,
     TranslateY = 58,
     Scale = 59,
+    Cursor = 60,
 }
 
 impl Prop {
-    pub const COUNT: usize = 59;
+    pub const COUNT: usize = 60;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -450,6 +481,7 @@ impl Prop {
             57 => Prop::TranslateX,
             58 => Prop::TranslateY,
             59 => Prop::Scale,
+            60 => Prop::Cursor,
             _ => return None,
         })
     }
@@ -515,6 +547,7 @@ impl Prop {
             Prop::TranslateX => "translateX",
             Prop::TranslateY => "translateY",
             Prop::Scale => "scale",
+            Prop::Cursor => "cursor",
         }
     }
 
@@ -579,6 +612,7 @@ impl Prop {
             Prop::TranslateX => ValueKind::F32,
             Prop::TranslateY => ValueKind::F32,
             Prop::Scale => ValueKind::F32,
+            Prop::Cursor => ValueKind::Enum(19),
         }
     }
 
@@ -613,6 +647,27 @@ impl Prop {
             Prop::Overflow => &["visible", "hidden", "scroll"],
             Prop::Scrollbar => &["auto", "none"],
             Prop::ObjectFit => &["fill", "contain", "cover"],
+            Prop::Cursor => &[
+                "auto",
+                "default",
+                "pointer",
+                "text",
+                "grab",
+                "grabbing",
+                "notAllowed",
+                "move",
+                "crosshair",
+                "wait",
+                "progress",
+                "help",
+                "ewResize",
+                "nsResize",
+                "neswResize",
+                "nwseResize",
+                "colResize",
+                "rowResize",
+                "none",
+            ],
             _ => &[],
         }
     }

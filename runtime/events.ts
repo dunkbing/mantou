@@ -18,6 +18,7 @@ export type CoreEvent =
   | { type: "imageLoad"; target: number; width: number; height: number }
   | { type: "imageError"; target: number; message: string }
   | { type: "animationEnd"; target: number; animation: number }
+  | { type: "pointerEnter" | "pointerLeave"; target: number }
   | { type: "serviceResult"; req: number; cancelled: boolean; json: string }
   | { type: "menu"; id: string }
   | InputCoreEvent;
@@ -91,6 +92,8 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.WHEEL: return { type: "wheel", target: w[i + 1], dx: f[i + 2], dy: f[i + 3] };
     case Event.IMAGE_LOAD: return { type: "imageLoad", target: w[i + 1], width: f[i + 2], height: f[i + 3] };
     case Event.IMAGE_ERROR: return { type: "imageError", target: w[i + 1], message: utf8.decode(new Uint8Array(w.buffer, (i + 4) * 4, Math.min(w[i + 3], (w[i] >>> 16) * 4))) };
+    case Event.POINTER_ENTER: return { type: "pointerEnter", target: w[i + 1] };
+    case Event.POINTER_LEAVE: return { type: "pointerLeave", target: w[i + 1] };
     case Event.ANIMATION_END: return { type: "animationEnd", target: w[i + 1], animation: w[i + 2] };
     case Event.SCROLL: return { type: "scroll", target: w[i + 1], x: f[i + 2], y: f[i + 3] };
     case Event.LAYOUT: return { type: "layout", target: w[i + 1], x: f[i + 2], y: f[i + 3], width: f[i + 4], height: f[i + 5] };
@@ -141,6 +144,7 @@ export function route(
     dispatchScroll(t: number, x: number, y: number): void;
     dispatchImage(t: number, result: { width: number; height: number } | { error: string }): void;
     dispatchAnimationEnd(animation: number): void;
+    dispatchHover(t: number, hovered: boolean): void;
     dispatchService(req: number, cancelled: boolean, json: string): void;
     dispatchMenu(id: string): void;
     readonly windowSize: { scale: number } | null;
@@ -152,6 +156,7 @@ export function route(
   else if (e.type === "imageLoad") ui.dispatchImage(e.target, { width: e.width, height: e.height });
   else if (e.type === "imageError") ui.dispatchImage(e.target, { error: e.message });
   else if (e.type === "animationEnd") ui.dispatchAnimationEnd(e.animation);
+  else if (e.type === "pointerEnter" || e.type === "pointerLeave") ui.dispatchHover(e.target, e.type === "pointerEnter");
   else if (e.type === "serviceResult") ui.dispatchService(e.req, e.cancelled, e.json);
   else if (e.type === "menu") ui.dispatchMenu(e.id);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });

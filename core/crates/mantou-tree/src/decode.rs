@@ -49,6 +49,8 @@ pub enum Op {
     WindowSize { width: f32, height: f32 },
     Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
+    /// An Input's selection, in UTF-16 code units.
+    Select { id: u32, anchor: u32, focus: u32 },
     /// Logical px, 0 = no limit.
     WindowLimits { min: [f32; 2], max: [f32; 2], flags: u32 },
     FontFamily { family: u32, names: String },
@@ -247,6 +249,10 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "ANIMATE needs a finite duration and iterations of 0 or more");
                 }
                 Op::Animate { id: a[0], animation: a[1], prop: prop(a[2], i)?, from: a[3], to: a[4], duration, easing: a[6], iterations, flags: a[8] }
+            }
+            op::SELECT => {
+                fixed(3)?;
+                Op::Select { id: a[0], anchor: a[1], focus: a[2] }
             }
             op::WINDOW_SIZE => {
                 fixed(2)?;

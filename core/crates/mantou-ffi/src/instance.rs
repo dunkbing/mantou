@@ -203,6 +203,8 @@ impl Instance {
                     self.push_record(&[ev::LAYOUT, id, x.to_bits(), y.to_bits()], &[w.to_bits(), h.to_bits()]);
                 }
                 TreeEvent::AnimationEnd { id, animation } => self.push_event([ev::ANIMATION_END, id, animation, 0]),
+                TreeEvent::PointerEnter(id) => self.push_event([ev::POINTER_ENTER, id, 0, 0]),
+                TreeEvent::PointerLeave(id) => self.push_event([ev::POINTER_LEAVE, id, 0, 0]),
             }
         }
     }
@@ -352,6 +354,11 @@ impl Instance {
     /// A press is a down and an up on the same press target. Returns whether
     /// the scene changed (an input got the focus or a selection).
     pub fn pointer(&self, kind: u32, x: f32, y: f32) -> bool {
+        if kind == 3 {
+            self.hover(None);
+            return false;
+        }
+        self.hover(Some((x, y)));
         let mut p = lock(&self.pointer);
         p.position = (x, y);
         match kind {
@@ -388,6 +395,18 @@ impl Instance {
                 dragging && self.edit(|t| t.pointer_drag(x, y))
             }
         }
+    }
+
+    /// The pointer is at (x, y), or left the window: hover listeners hear what it came over and left.
+    fn hover(&self, at: Option<(f32, f32)>) {
+        let mut tree = lock(&self.tree);
+        tree.pointer_at(at);
+        self.flush_events(&mut tree);
+    }
+
+    /// The cursor the pointer should show (protocol `cursor`).
+    pub fn cursor(&self) -> u32 {
+        lock(&self.tree).cursor()
     }
 
     /// A wheel or trackpad scroll at (x, y) logical px; positive dy scrolls content up.

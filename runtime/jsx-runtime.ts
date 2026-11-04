@@ -10,6 +10,10 @@ export interface ViewProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
+  /** The pointer came over this node (or anything inside it): `true`; it left: `false`. Tracked by the core. Set the pointer's shape with the `cursor` style. */
+  onHover?: (hovered: boolean) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
   /**
    * A focus scope, for dialogs: while it's on screen, Tab and Shift+Tab stay
    * among the inputs inside the topmost scope, and when it leaves the screen
@@ -63,6 +67,10 @@ export interface ImageProps {
   onError?: (message: string) => void;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
+  /** The pointer came over this node (or anything inside it): `true`; it left: `false`. Tracked by the core. Set the pointer's shape with the `cursor` style. */
+  onHover?: (hovered: boolean) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
   onPress?: (e: PressEvent) => void;
   onLayout?: (rect: Rect) => void;
   ref?: Node | ((node: Node) => void);
@@ -80,6 +88,7 @@ export interface ScrollProps {
   onScroll?: (offset: ScrollOffset) => void;
   onLayout?: (rect: Rect) => void;
   onWheel?: (e: WheelEvent) => void;
+  onHover?: (hovered: boolean) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
 }
@@ -89,6 +98,10 @@ export interface TextProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
+  /** The pointer came over this node (or anything inside it): `true`; it left: `false`. Tracked by the core. Set the pointer's shape with the `cursor` style. */
+  onHover?: (hovered: boolean) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
   onPress?: (e: PressEvent) => void;
   onWheel?: (e: WheelEvent) => void;
   /** This node's box (logical px from the window's top left), after the first layout and whenever it changes. */
@@ -130,6 +143,10 @@ export interface InputProps {
   onLayout?: (rect: Rect) => void;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
+  /** The pointer came over this node (or anything inside it): `true`; it left: `false`. Tracked by the core. Set the pointer's shape with the `cursor` style. */
+  onHover?: (hovered: boolean) => void;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
   style?: StyleProp;
   ref?: Node | ((node: Node) => void);
 }

@@ -50,8 +50,10 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.scrollIntoView(4, 0);
   e.style(3, "translateY", 12);
   e.style(3, "scale", 0.95);
+  e.style(3, "cursor", "pointer");
   e.transition(3, 32, 200, 3);
   e.animate(3, 1, 32, 0, 1065353216, 300, 0, 2, 1);
+  e.select(5, 2, 4);
   e.windowSize(1200, 760);
   e.windowLimits(900, 560, 0, 0, 0);
   e.fontFamily(1, "Lucide, monospace");

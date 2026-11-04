@@ -52,7 +52,26 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// mt_test_set_clipboard, mt_test_value, mt_test_focused.
 /// 6: platform services: mt_service, SERVICE_RESULT and MENU events; mt_test_answer, mt_test_service, mt_test_menu.
 /// 7: the window config (mt_run) carries size limits and flags.
-pub const ABI_VERSION: u32 = 7;
+/// 8: mt_input_selection; hover (POINTER_ENTER, POINTER_LEAVE), mt_test_input kind 3 (the pointer leaves), mt_test_cursor.
+pub const ABI_VERSION: u32 = 8;
+
+/// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
+/// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
+///
+/// # Safety
+/// `dst` must be valid for writes of 2 u32 values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_input_selection(inst: u32, id: u32, dst: *mut u32) -> i32 {
+    with(inst, -1, |i| {
+        let Some((a, f)) = lock(&i.tree).selection_utf16(id) else { return -1 };
+        if dst.is_null() {
+            return -1;
+        }
+        // SAFETY: dst is valid for 2 u32 writes.
+        unsafe { std::ptr::copy_nonoverlapping([a as u32, f as u32].as_ptr(), dst, 2) };
+        0
+    })
+}
 
 /// The window's instance.
 const APP: u32 = 1;
@@ -336,7 +355,7 @@ pub extern "C" fn mt_headless_free(inst: u32) {
     })
 }
 
-/// Test input at (x, y) in logical px: kind 0 = primary down, 1 = up, 2 = move.
+/// Test input at (x, y) in logical px: kind 0 = primary down, 1 = up, 2 = move, 3 = the pointer left the window.
 /// Headless: handled at once on this thread. Window: handled on the main
 /// thread exactly as the window's own input.
 #[unsafe(no_mangle)]
@@ -563,6 +582,12 @@ pub extern "C" fn mt_test_step(inst: u32, advance_ms: f64) -> u32 {
         }
         (i.events_pending() as u32) | ((ran as u32) << 1)
     })
+}
+
+/// Test hook: the cursor the pointer shows now (protocol `cursor`; never AUTO).
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_cursor(inst: u32) -> u32 {
+    with(inst, 0, |i| i.cursor())
 }
 
 /// Test hook: the topmost node at (x, y) logical px, or 0.

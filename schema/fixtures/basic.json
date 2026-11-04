@@ -269,6 +269,12 @@
     "value": 0.949999988079071
   },
   {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "cursor",
+    "value": "pointer"
+  },
+  {
     "op": "TRANSITION",
     "id": 3,
     "prop": "opacity",
@@ -286,6 +292,12 @@
     "easing": 0,
     "iterations": 2,
     "flags": 1
+  },
+  {
+    "op": "SELECT",
+    "id": 5,
+    "anchor": 2,
+    "focus": 4
   },
   {
     "op": "WINDOW_SIZE",

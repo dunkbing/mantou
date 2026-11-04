@@ -15,6 +15,8 @@ export interface Sink {
   commit(bytes: Uint8Array): void;
   /** The node's laid-out box [x0, y0, x1, y1] in logical px, if the sink lays out. */
   rect?(id: number): [number, number, number, number] | null;
+  /** An Input's selection [anchor, focus] in UTF-16 code units, if the sink edits text. */
+  selection?(id: number): [number, number] | null;
   /** Sends a platform service request (JSON); the answer comes back through `Ui.dispatchService`. */
   service?(req: number, json: string): void;
 }
@@ -185,6 +187,9 @@ export class Node {
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
   private layoutHandlers: ((rect: Rect) => void)[] = [];
   private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
+  private hoverHandlers: ((hovered: boolean) => void)[] = [];
+  /** Whether the pointer is over this node (or a descendant), as the core last reported; only tracked while it has hover handlers. */
+  hovered = false;
   private imageHandlers: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] } = { load: [], error: [] };
   /** The transitions last sent, by property: duration and easing code. */
   private transitions = new Map<AnimatableProp, [number, number]>();
@@ -207,6 +212,7 @@ export class Node {
   private controlled: string | undefined;
   /** A value set this turn, with the rev it was derived from; sent after the options. */
   private pendingValue: { text: string; rev: number } | null = null;
+  private pendingSelection: [number, number] | null = null;
   private placeholderText = "";
   private options = { flags: 0, maxLength: 0 };
   private sentOptions = { flags: 0, maxLength: 0 };
@@ -343,6 +349,32 @@ export class Node {
   }
   private scopeFlags = 0;
 
+  /**
+   * Selects an Input's text from `start` to `end` (a caret at `start` if
+   * left out), in UTF-16 code units, as the DOM's setSelectionRange counts;
+   * clamped. The caret is at `end`. Applied after this turn's value, so
+   * `setValue(t)` then `setSelection(t.length)` puts it after the new text.
+   */
+  setSelection(start: number, end = start): this {
+    this.assertInput("setSelection");
+    const ok = (n: number) => Number.isInteger(n) && n >= 0;
+    if (!ok(start) || !ok(end)) throw new Error("mantou: setSelection takes offsets of 0 or more");
+    this.pendingSelection = [Math.min(start, 0xffffffff), Math.min(end, 0xffffffff)];
+    this.ui.markPending(this);
+    return this;
+  }
+
+  /**
+   * An Input's selection in UTF-16 code units (`start <= end`; equal for a
+   * caret), after the changes made so far (committed first). Null without a
+   * core (the mock).
+   */
+  selection(): { start: number; end: number } | null {
+    this.assertInput("selection");
+    const r = this.ui.selection(this);
+    return r ? { start: Math.min(r[0], r[1]), end: Math.max(r[0], r[1]) } : null;
+  }
+
   /** Takes the keyboard focus away from this Input, if it has it. */
   blur(): this {
     this.alive();
@@ -410,6 +442,10 @@ export class Node {
       const v = this.pendingValue;
       this.pendingValue = null;
       if (v) this.ui.enc.value(this.id, v.rev, v.text);
+      // After the value, so it selects in the new text.
+      const sel = this.pendingSelection;
+      this.pendingSelection = null;
+      if (sel) this.ui.enc.select(this.id, sel[0], sel[1]);
     }
   }
 
@@ -536,6 +572,7 @@ export class Node {
     this.wheelHandlers.length = 0;
     this.layoutHandlers.length = 0;
     this.scrollHandlers.length = 0;
+    this.hoverHandlers.length = 0;
     this.inputHandlers = null;
     this.released = true;
     for (const a of this.running) this.ui.endAnimation(a);
@@ -632,7 +669,8 @@ export class Node {
     const mask =
       (this.pressHandlers.length ? EventMask.Press : 0) |
       (this.layoutHandlers.length ? EventMask.Layout : 0) |
-      (this.scrollHandlers.length ? EventMask.Scroll : 0);
+      (this.scrollHandlers.length ? EventMask.Scroll : 0) |
+      (this.hoverHandlers.length ? EventMask.Hover : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
   }
@@ -669,6 +707,35 @@ export class Node {
       this.scrollHandlers.splice(i, 1);
       if (this.scrollHandlers.length === 0 && !this.released) this.listen();
     };
+  }
+
+  /**
+   * Adds a hover handler: it hears `true` when the pointer comes over this
+   * node (or anything inside it) and `false` when it leaves, including when
+   * the node moves, hides or scrolls away from a still pointer. The core
+   * tracks the pointer; only nodes with handlers hear about it. Returns a
+   * function that removes it.
+   */
+  onHover(handler: (hovered: boolean) => void): () => void {
+    this.alive();
+    this.hoverHandlers.push(handler);
+    if (this.hoverHandlers.length === 1) this.listen();
+    return () => {
+      const i = this.hoverHandlers.indexOf(handler);
+      if (i < 0) return;
+      this.hoverHandlers.splice(i, 1);
+      if (this.hoverHandlers.length === 0 && !this.released) {
+        this.hovered = false;
+        this.listen();
+      }
+    };
+  }
+
+  /** @internal */
+  handleHover(hovered: boolean) {
+    if (hovered === this.hovered) return;
+    this.hovered = hovered;
+    for (const h of [...this.hoverHandlers]) h(hovered);
   }
 
   /** @internal */
@@ -1019,6 +1086,18 @@ export class Ui {
     this.enc.release(node.id);
     this.freeIds.push(node.id);
     this.schedule();
+  }
+
+  /** @internal */
+  selection(node: Node): [number, number] | null {
+    if (!this.sink.selection) return null;
+    this.flush();
+    return this.sink.selection(node.id);
+  }
+
+  /** The pointer came over a node with hover handlers, or left it. */
+  dispatchHover(targetId: number, hovered: boolean) {
+    this.nodes.get(targetId)?.handleHover(hovered);
   }
 
   /** @internal */

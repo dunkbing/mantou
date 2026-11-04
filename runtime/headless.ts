@@ -4,7 +4,7 @@
 // test says so, so tests are deterministic.
 import { openCore, type CoreLib } from "./ffi";
 import { EventReader, route, STAT_NAMES, statsFrom, type CoreEvent, type Stats } from "./events";
-import { KeyModifier, NamedKey } from "./gen/protocol";
+import { KeyModifier, NamedKey, StyleProp } from "./gen/protocol";
 import { Ui, type Node } from "./ui";
 
 export type { CoreEvent, Stats } from "./events";
@@ -76,6 +76,10 @@ export class HeadlessCore {
         const r = new Float32Array(4);
         return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
       },
+      selection: (id) => {
+        const r = new Uint32Array(2);
+        return this.lib.symbols.mt_input_selection(this.handle, id, r) === 0 ? [r[0], r[1]] : null;
+      },
     });
     this.ui.dispatchResize(width, height, scale);
   }
@@ -107,6 +111,24 @@ export class HeadlessCore {
     this.ui.flush();
     this.lib.symbols.mt_test_input(this.handle, kind === "down" ? 0 : kind === "up" ? 1 : 2, x, y);
     return this.step();
+  }
+
+  /** Moves the pointer to logical (x, y), or over the centre of a node, then step. */
+  hover(target: Node | [number, number]): this {
+    const [x, y] = Array.isArray(target) ? target : this.center(target);
+    return this.pointer("move", x, y);
+  }
+
+  /** The pointer leaves the window, then step. */
+  unhover(): this {
+    this.ui.flush();
+    this.lib.symbols.mt_test_input(this.handle, 3, 0, 0);
+    return this.step();
+  }
+
+  /** The cursor the pointer shows now ("default", "pointer", "text"…). */
+  cursor(): string {
+    return StyleProp.cursor.values[this.lib.symbols.mt_test_cursor(this.handle)];
   }
 
   /** Presses (down + up) at logical (x, y), or at the centre of a node. */

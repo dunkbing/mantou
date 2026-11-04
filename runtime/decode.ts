@@ -71,6 +71,7 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "FONT_FAMILY": o = { op: name, family: w[a], names: str(w, a + 1) }; break;
       case "TRANSITION": o = { op: name, id: w[a], prop: StylePropByCode[w[a + 1]], duration: bitsf32(w[a + 2]), easing: w[a + 3] }; break;
       case "ANIMATE": o = { op: name, id: w[a], animation: w[a + 1], prop: StylePropByCode[w[a + 2]], from: w[a + 3], to: w[a + 4], duration: bitsf32(w[a + 5]), easing: w[a + 6], iterations: bitsf32(w[a + 7]), flags: w[a + 8] }; break;
+      case "SELECT": o = { op: name, id: w[a], anchor: w[a + 1], focus: w[a + 2] }; break;
       case "WINDOW_SIZE": o = { op: name, width: bitsf32(w[a]), height: bitsf32(w[a + 1]) }; break;
       case "WINDOW_LIMITS": o = { op: name, minWidth: bitsf32(w[a]), minHeight: bitsf32(w[a + 1]), maxWidth: bitsf32(w[a + 2]), maxHeight: bitsf32(w[a + 3]), flags: w[a + 4] }; break;
       case "FOCUS_SCOPE": o = { op: name, id: w[a], flags: w[a + 1] }; break;

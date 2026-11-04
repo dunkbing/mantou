@@ -7,11 +7,12 @@ use std::sync::atomic::Ordering;
 
 use mantou_render::Renderer;
 use mantou_tree::Scene;
-use mantou_tree::protocol::event as ev;
+use mantou_tree::protocol::{cursor, event as ev};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 use winit::event::{ElementState, Ime, MouseButton, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
+use winit::window::CursorIcon;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{ImePurpose, Window, WindowId};
 
@@ -151,17 +152,54 @@ pub struct App {
     /// Whether the window told the OS a password field has the focus.
     ime_password: bool,
     menus: crate::platform::Menus,
+    /// The cursor shown (protocol `cursor`).
+    cursor: u32,
+}
+
+/// winit's cursor for a `cursor` style value.
+fn cursor_icon(c: u32) -> CursorIcon {
+    match c {
+        cursor::POINTER => CursorIcon::Pointer,
+        cursor::TEXT => CursorIcon::Text,
+        cursor::GRAB => CursorIcon::Grab,
+        cursor::GRABBING => CursorIcon::Grabbing,
+        cursor::NOT_ALLOWED => CursorIcon::NotAllowed,
+        cursor::MOVE => CursorIcon::Move,
+        cursor::CROSSHAIR => CursorIcon::Crosshair,
+        cursor::WAIT => CursorIcon::Wait,
+        cursor::PROGRESS => CursorIcon::Progress,
+        cursor::HELP => CursorIcon::Help,
+        cursor::EW_RESIZE => CursorIcon::EwResize,
+        cursor::NS_RESIZE => CursorIcon::NsResize,
+        cursor::NESW_RESIZE => CursorIcon::NeswResize,
+        cursor::NWSE_RESIZE => CursorIcon::NwseResize,
+        cursor::COL_RESIZE => CursorIcon::ColResize,
+        cursor::ROW_RESIZE => CursorIcon::RowResize,
+        _ => CursorIcon::Default,
+    }
 }
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default() }
+        App { config, inst: app(), window: None, gpu: None, modifiers: 0, ime: false, ime_password: false, menus: Default::default(), cursor: cursor::DEFAULT }
     }
 
     fn redraw_if(&self, changed: bool) {
         if changed && let Some(w) = &self.window {
             w.request_redraw();
         }
+    }
+
+    /// Shows the cursor the tree asks for, if it changed (the window keeps it until told otherwise).
+    fn sync_cursor(&mut self) {
+        let Some(window) = &self.window else { return };
+        let c = self.inst.cursor();
+        if c == self.cursor {
+            return;
+        }
+        self.cursor = c;
+        window.set_cursor_visible(c != cursor::NONE);
+        window.set_cursor(cursor_icon(c));
     }
 
     /// Turns the IME on while an input has the focus, and puts its candidate window at the caret.
@@ -201,6 +239,7 @@ impl App {
             let _ = window.request_inner_size(LogicalSize::new(w, h));
         }
         self.sync_ime(&window);
+        self.sync_cursor();
         // Animations advance once a frame, on the main thread, with no JS;
         // while any runs, the next frame is asked for (vsync paces them).
         let animating = self.inst.tick();
@@ -332,7 +371,10 @@ impl App {
                     let _ = win.request_inner_size(PhysicalSize::new(w, h));
                 }
             }
-            UserEvent::TestPointer(kind, x, y) => self.redraw_if(self.inst.pointer(kind, x, y)),
+            UserEvent::TestPointer(kind, x, y) => {
+                self.redraw_if(self.inst.pointer(kind, x, y));
+                self.sync_cursor();
+            }
             UserEvent::TestKey(k, down, mods) => self.redraw_if(self.inst.key(k, key_text(k).as_deref(), down, false, mods)),
             UserEvent::TestWheel(x, y, dx, dy) => self.redraw_if(self.inst.wheel(x, y, dx, dy)),
             UserEvent::TestText(t) => self.redraw_if(self.inst.insert_text(&t)),
@@ -367,6 +409,11 @@ impl App {
             WindowEvent::CursorMoved { position, .. } => {
                 let s = self.scale();
                 self.redraw_if(inst.pointer(2, position.x as f32 / s, position.y as f32 / s));
+                self.sync_cursor();
+            }
+            WindowEvent::CursorLeft { .. } => {
+                inst.pointer(3, 0.0, 0.0);
+                self.sync_cursor();
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let (x, y) = inst.pointer_position();
