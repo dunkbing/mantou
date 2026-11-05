@@ -47,7 +47,7 @@ test("the document is drawn where the node is, and its height is the document's"
   expect(c.at(30, y1 - 2)).toEqual([255, 0, 0, 255]);
   expect(c.at(30, y1 - 58)).toEqual([255, 0, 0, 255]);
   expect(c.at(30, y1 + 2)).toEqual([128, 128, 128, 255]); // below the node: its parent
-});
+}, 60_000); // the first capture on a software GPU (CI) compiles its shaders: several seconds
 
 test("images come from loadImage, once per URL; the height follows them", async () => {
   const asked: string[] = [];
@@ -114,15 +114,16 @@ test("in a scroll view it scrolls and clips like any node, drawn a band at a tim
   );
   // 3000 px of document, 200 showing: one 512 px band.
   expect(h.scene().match(/^image /gm)?.length).toBe(1);
+  // Sampled at x 200, away from each row's number.
   let c = h.capture();
-  expect(c.at(10, 10)).toEqual([0, 0, 255, 255]); // row 0
-  expect(c.at(10, 60)).toEqual([255, 0, 0, 255]); // row 1
-  expect(c.at(10, 250)).toEqual([128, 128, 128, 255]); // below the scroll view: clipped
+  expect(c.at(200, 10)).toEqual([0, 0, 255, 255]); // row 0
+  expect(c.at(200, 60)).toEqual([255, 0, 0, 255]); // row 1
+  expect(c.at(200, 250)).toEqual([128, 128, 128, 255]); // below the scroll view: clipped
   scroll.scrollTo({ y: 1000 });
   h.step();
   c = h.capture();
-  expect(c.at(10, 10)).toEqual([0, 0, 255, 255]); // row 20
-  expect(c.at(10, 60)).toEqual([255, 0, 0, 255]); // row 21
+  expect(c.at(200, 10)).toEqual([0, 0, 255, 255]); // row 20
+  expect(c.at(200, 60)).toEqual([255, 0, 0, 255]); // row 21
   expect(h.scene().match(/^image /gm)?.length).toBe(2); // 1000 to 1200 spans bands 1 and 2
 });
 
