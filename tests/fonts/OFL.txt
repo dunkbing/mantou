@@ -2,6 +2,11 @@ MantouTestMono.ttf: an ASCII subset of Liberation Mono 2.1.5, renamed as the
 SIL Open Font License requires for modified versions ("Liberation" is a
 Reserved Font Name). Used only by Mantou's tests.
 
+MantouTestEmoji.ttf: a subset of Noto Color Emoji (a few emoji, a skin tone,
+a ZWJ sequence and a flag), renamed "Mantou Test Emoji". Copyright 2022
+Google Inc., under the SIL Open Font License, Version 1.1 below. Used only by
+Mantou's tests.
+
 Digitized data copyright (c) 2010 Google Corporation.
 Copyright (c) 2012 Red Hat, Inc. with Reserved Font Name Liberation.
 

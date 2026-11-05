@@ -582,6 +582,8 @@ pub struct Tree {
     text: Option<TextEngine>,
     /// Decoded images by source (a path, or a hash of bytes), shared by the nodes that use them.
     image_cache: HashMap<String, std::sync::Weak<mantou_image::Image>>,
+    /// The colour glyph atlas as an image, by the atlas's version.
+    color_glyphs: Option<(u64, Arc<Pixels>)>,
     nodes: HashMap<u32, Node>,
     styles: HashMap<u32, Vec<(Prop, Value)>>,
     root: Option<u32>,
@@ -670,6 +672,7 @@ impl Tree {
             taffy,
             text: None,
             image_cache: HashMap::new(),
+            color_glyphs: None,
             nodes: HashMap::new(),
             styles: HashMap::new(),
             root: None,
@@ -1719,6 +1722,20 @@ impl Tree {
                 }
             }
         }
+        // Colour glyphs (emoji) sample the colour atlas as an image: one texture, made again only when it changed.
+        if quads.iter().any(|q| q.image.is_some_and(|i| i.id == COLOR_GLYPHS))
+            && let Some(text) = self.text.as_ref()
+        {
+            let a = text.color_atlas();
+            if self.color_glyphs.as_ref().is_none_or(|(v, _)| *v != a.version) {
+                self.color_glyphs = Some((a.version, Pixels::new(a.width, a.height, a.pixels.clone())));
+            }
+            let px = self.color_glyphs.as_ref().expect("just made").1.clone();
+            for q in quads.iter_mut().filter(|q| q.image.is_some_and(|i| i.id == COLOR_GLYPHS)) {
+                q.image = Some(ImageRef { id: px.id, tint: false });
+            }
+            images.insert(px.id, px);
+        }
         let atlas = if glyphs { self.text.as_ref().map(|t| t.atlas()) } else { None };
         Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas, images }
     }
@@ -1859,6 +1876,9 @@ impl Tree {
     }
 }
 
+/// Stands for the colour glyph atlas's texture in a quad until the scene is built.
+const COLOR_GLYPHS: u32 = u32::MAX;
+
 /// Glyph quads for text laid out from `origin` (window px) and drawn at scale
 /// `k` (a transform's), on a display of scale `s`, in `colors[g.span]` (the
 /// first colour for glyphs past the end); returns whether any was drawn.
@@ -1883,7 +1903,9 @@ fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGly
             continue;
         }
         let uv = [e.x as f32, e.y as f32, (e.x + e.w) as f32, (e.y + e.h) as f32];
-        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
+        // An emoji keeps its own colours (only the opacity applies); its texture is set once the scene is built.
+        let (color, image) = if e.color { ([1.0, 1.0, 1.0, color[3]], Some(ImageRef { id: COLOR_GLYPHS, tint: false })) } else { (color, None) };
+        quads.push(Quad { rect, color, uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image, extra: Extra::NONE });
         any = true;
     }
     any

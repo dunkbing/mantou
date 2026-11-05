@@ -23,7 +23,8 @@ pub struct Pixels {
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 
 impl Pixels {
-    fn new(width: u32, height: u32, rgba: Vec<u8>) -> Arc<Pixels> {
+    /// Pixels from RGBA8 (straight alpha), with a new id.
+    pub fn new(width: u32, height: u32, rgba: Vec<u8>) -> Arc<Pixels> {
         Arc::new(Pixels { id: NEXT_ID.fetch_add(1, Ordering::Relaxed), width, height, rgba })
     }
 }

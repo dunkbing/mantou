@@ -76,6 +76,22 @@ Tests: `mantou-text` (spans' glyphs, runs and decorations, the span at a point, 
 
 **Not yet:** selecting inside rich text uses the outer Text's style for the highlight's geometry, so a selection over a bigger or bolder span is slightly off; hover events on spans (the cursor works); inline images and views.
 
+## Emoji and other scripts
+
+[#16](https://github.com/dunkbing/mantou/issues/16).
+- **Colour emoji.** They keep their own colours. The core rasterizes colour glyphs into an RGBA atlas of their own, beside the coverage atlas. It draws them as image quads that sample it, so only the text's opacity applies, not its colour. The atlas's texture is made again only when a new emoji is added.
+- **Fallback.** Inter comes first, then the platform's colour emoji font (CSS's `emoji` generic: Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji), then the system's fonts. Before, a system font with plain outlines for some emoji (DejaVu on Linux) won, and emoji drew as black shapes. App font families get the same stack after their own fonts.
+- **Emoji presentation.** A character followed by U+FE0F (❤️, not ❤) is set without Inter, which has plain glyphs for some symbols, so the emoji font draws it.
+- **Sequences.** Skin tones, ZWJ sequences (👩‍💻), flags and keycaps shape to one glyph through the font's own rules (parley and HarfRust).
+- **Right to left.** Hebrew and Arabic come out right to left, Arabic letters join, and numbers inside them stay in order (the Unicode bidi algorithm, in parley). A right-to-left paragraph starts at the right. `textAlign: "start"` and `"end"` follow the paragraph's direction, as in CSS. Inputs edit such text in logical order.
+- **Other scripts.** Vietnamese, decomposed accents (`e` + U+0301), Greek and Cyrillic are in Inter. Scripts Inter lacks fall back to the system's fonts.
+
+Tests use two bundled fonts so the reference images are the same everywhere (`tests/fonts`). *Mantou Test Emoji* is a 48 KB subset of Noto Color Emoji (OFL). *Mantou Test Scripts* is Latin, Hebrew and Arabic from DejaVu Sans, renamed as its licence asks.
+- `mantou-text`: each kind of emoji is one colour glyph, drawn at the size asked.
+- `tests/scripts.test.tsx`: emoji are image quads beside glyphs in the text colour; mixed-direction lines; typing Hebrew in an input; reference images at 1× and 2×.
+
+**Not yet:** COLRv1 emoji fonts (swash draws COLRv0 and bitmap ones, which is what the platforms ship); vertical text; a bundled CJK font (it falls back to the system's).
+
 ## App fonts
 
 Apps bring their own fonts: icon fonts, brand fonts, monospace for code ([#8](https://github.com/dunkbing/mantou/issues/8), [#14](https://github.com/dunkbing/mantou/issues/14)).

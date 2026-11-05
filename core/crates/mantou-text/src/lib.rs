@@ -27,7 +27,10 @@ const INTER: [&[u8]; 4] = [
 ];
 
 /// The family stack every text uses: the bundled Inter, then the system's.
-pub(crate) const FAMILY: &str = "Inter, system-ui, sans-serif";
+/// Inter, then the platform's colour emoji font (CSS's `emoji` generic: Apple
+/// Color Emoji, Segoe UI Emoji, Noto Color Emoji), then the system's: before
+/// the system font, which may have plain outlines for some emoji (DejaVu does).
+pub(crate) const FAMILY: &str = "Inter, emoji, system-ui, sans-serif";
 
 /// Horizontal subpixel positions per pixel that glyphs are rasterized at.
 const SUBPIXEL_BINS: f32 = 4.0;
@@ -203,6 +206,8 @@ pub struct AtlasEntry {
     pub h: u32,
     pub left: i32,
     pub top: i32,
+    /// In the colour atlas (an emoji's own colours), not the coverage one.
+    pub color: bool,
 }
 
 /// Atlas versions, unique in the process: a renderer shared by several
@@ -218,6 +223,7 @@ fn next_version() -> u64 {
 pub struct AtlasImage {
     pub width: u32,
     pub height: u32,
+    /// One byte of coverage per texel; the colour atlas has four (RGBA8, straight alpha).
     pub pixels: Vec<u8>,
     pub version: u64,
 }
@@ -245,15 +251,18 @@ const PAD: u32 = 1;
 
 struct Atlas {
     image: Arc<AtlasImage>,
+    /// Bytes per texel: 1 (coverage) or 4 (colour).
+    bpp: usize,
     shelves: Vec<Shelf>,
     next_y: u32,
     entries: HashMap<GlyphKey, Option<AtlasEntry>>,
 }
 
 impl Atlas {
-    fn new() -> Atlas {
+    fn new(bpp: usize, side: u32) -> Atlas {
         Atlas {
-            image: Arc::new(AtlasImage { width: ATLAS_START, height: ATLAS_START, pixels: vec![0; (ATLAS_START * ATLAS_START) as usize], version: next_version() }),
+            image: Arc::new(AtlasImage { width: side, height: side, pixels: vec![0; side as usize * side as usize * bpp], version: next_version() }),
+            bpp,
             shelves: Vec::new(),
             next_y: 0,
             entries: HashMap::new(),
@@ -287,22 +296,37 @@ impl Atlas {
     fn grow(&mut self) {
         let old = self.image.clone();
         let (w, h) = (old.width * 2, old.height * 2);
-        let mut pixels = vec![0; (w * h) as usize];
+        let (b, ow, nw) = (self.bpp, old.width as usize * self.bpp, w as usize * self.bpp);
+        let mut pixels = vec![0; w as usize * h as usize * b];
         for y in 0..old.height as usize {
-            let src = &old.pixels[y * old.width as usize..(y + 1) * old.width as usize];
-            pixels[y * w as usize..y * w as usize + old.width as usize].copy_from_slice(src);
+            pixels[y * nw..y * nw + ow].copy_from_slice(&old.pixels[y * ow..(y + 1) * ow]);
         }
         self.image = Arc::new(AtlasImage { width: w, height: h, pixels, version: next_version() });
     }
 
     fn blit(&mut self, x: u32, y: u32, w: u32, h: u32, data: &[u8]) {
+        let b = self.bpp;
         let img = Arc::make_mut(&mut self.image);
+        let row_len = w as usize * b;
         for row in 0..h as usize {
-            let dst = (y as usize + row) * img.width as usize + x as usize;
-            img.pixels[dst..dst + w as usize].copy_from_slice(&data[row * w as usize..(row + 1) * w as usize]);
+            let dst = ((y as usize + row) * img.width as usize + x as usize) * b;
+            img.pixels[dst..dst + row_len].copy_from_slice(&data[row * row_len..(row + 1) * row_len]);
         }
         img.version = next_version();
     }
+}
+
+/// Swash draws colour glyphs premultiplied; images are uploaded with straight alpha.
+fn straight(mut rgba: Vec<u8>) -> Vec<u8> {
+    for p in rgba.chunks_exact_mut(4) {
+        let a = p[3] as u32;
+        if a > 0 && a < 255 {
+            for c in &mut p[..3] {
+                *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+    }
+    rgba
 }
 
 /// Text, style, width, and the spans' ranges and layout styles.
@@ -316,6 +340,8 @@ pub struct TextEngine {
     font_ids: HashMap<(u64, u32), u32>,
     fonts: Vec<FontData>,
     atlas: Atlas,
+    /// Colour glyphs (emoji), RGBA; its entries live in `atlas.entries` with the others.
+    color_atlas: Atlas,
     /// Layouts by text, style and width, in two generations: when the newer
     /// one fills up it becomes the older, so a working set a little larger
     /// than the limit keeps most of its hits instead of losing them all.
@@ -354,7 +380,8 @@ impl TextEngine {
             scx: ScaleContext::new(),
             font_ids: HashMap::new(),
             fonts: Vec::new(),
-            atlas: Atlas::new(),
+            atlas: Atlas::new(1, ATLAS_START),
+            color_atlas: Atlas::new(4, 256),
             cache: HashMap::new(),
             older: HashMap::new(),
             ellipses: HashMap::new(),
@@ -414,7 +441,7 @@ impl TextEngine {
         let family = self.family_source(style.family).to_owned();
         let span_families: Vec<Option<String>> = spans.iter().map(|sp| (sp.style.family != style.family).then(|| self.family_source(sp.style.family).to_owned())).collect();
         let mut b = self.lcx.ranged_builder(&mut self.fcx, text, 1.0, false);
-        b.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(family))));
+        b.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(family.clone()))));
         b.push_default(StyleProperty::FontSize(style.size));
         b.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
         b.push_default(StyleProperty::FontStyle(if style.italic { FontStyle::Italic } else { FontStyle::Normal }));
@@ -432,6 +459,19 @@ impl TextEngine {
         } else {
             LineHeight::MetricsRelative(1.0)
         }));
+        // An emoji asked for with U+FE0F (❤️ rather than ❤): fallback goes by character, and
+        // Inter has plain symbols for some, so set it without Inter and the emoji font wins.
+        let families: Vec<String> = std::iter::once(family.clone()).chain(span_families.iter().map(|f| f.clone().unwrap_or_else(|| family.clone()))).collect();
+        let mut emoji_ranges = Vec::new();
+        for (i, c) in text.char_indices() {
+            if c != '\u{fe0f}' {
+                continue;
+            }
+            let start = text[..i].char_indices().next_back().map_or(i, |(j, _)| j);
+            let span = spans.iter().position(|sp| (sp.start as usize..sp.end as usize).contains(&start)).map_or(0, |k| k + 1);
+            let without_inter: Vec<&str> = families[span].split(',').map(str::trim).filter(|f| !f.eq_ignore_ascii_case("Inter")).collect();
+            emoji_ranges.push((start..i + c.len_utf8(), without_inter.join(", ")));
+        }
         for (i, (sp, fam)) in spans.iter().zip(span_families).enumerate() {
             let range = (sp.start as usize).min(text.len())..(sp.end as usize).min(text.len());
             if range.is_empty() {
@@ -454,6 +494,9 @@ impl TextEngine {
             if t.letter_spacing != style.letter_spacing {
                 b.push(StyleProperty::LetterSpacing(t.letter_spacing), range);
             }
+        }
+        for (range, fam) in emoji_ranges {
+            b.push(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(fam))), range);
         }
         b.build(text)
     }
@@ -671,18 +714,27 @@ impl TextEngine {
         if w == 0 || h == 0 {
             return None;
         }
-        // Colour glyphs (emoji) become coverage for now: the atlas holds one channel.
+        // Colour glyphs (emoji) keep their colours, in an atlas of their own.
+        if image.content == Content::Color {
+            let (x, y) = self.color_atlas.alloc(w, h)?;
+            self.color_atlas.blit(x, y, w, h, &straight(image.data));
+            return Some(AtlasEntry { x, y, w, h, left: image.placement.left, top: image.placement.top, color: true });
+        }
         let mask: Vec<u8> = match image.content {
-            Content::Color => image.data.chunks_exact(4).map(|p| p[3]).collect(),
             Content::SubpixelMask => image.data.chunks_exact(4).map(|p| ((p[0] as u16 + p[1] as u16 + p[2] as u16) / 3) as u8).collect(),
-            Content::Mask => image.data,
+            _ => image.data,
         };
         let (x, y) = self.atlas.alloc(w, h)?;
         self.atlas.blit(x, y, w, h, &mask);
-        Some(AtlasEntry { x, y, w, h, left: image.placement.left, top: image.placement.top })
+        Some(AtlasEntry { x, y, w, h, left: image.placement.left, top: image.placement.top, color: false })
     }
 
     /// The atlas as it is now (cheap: shared until the next glyph is added).
+    /// The colour glyphs' atlas (RGBA8, straight alpha).
+    pub fn color_atlas(&self) -> Arc<AtlasImage> {
+        self.color_atlas.image.clone()
+    }
+
     pub fn atlas(&self) -> Arc<AtlasImage> {
         self.atlas.image.clone()
     }
@@ -776,6 +828,28 @@ mod tests {
     }
 
     #[test]
+    fn emoji_are_drawn_in_their_own_colours() {
+        let mut e = TextEngine::new();
+        let font = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../tests/fonts/MantouTestEmoji.ttf")).unwrap();
+        assert_eq!(e.register_font(font), ["Mantou Test Emoji"]);
+        e.set_family(1, "Mantou Test Emoji");
+        let style = TextStyle { size: 32.0, family: 1, ..TextStyle::default() };
+        // A skin tone, a ZWJ sequence, a flag and a variation selector: one glyph each.
+        for (text, what) in [("😀", "plain"), ("👍🏽", "skin tone"), ("👩\u{200d}💻", "ZWJ sequence"), ("🇯🇵", "flag"), ("❤\u{fe0f}", "variation selector")] {
+            let l = e.layout(text, &style, None);
+            assert_eq!(l.glyphs.len(), 1, "{what}: {text}");
+            let g = l.glyphs[0];
+            let entry = e.glyph(g.font, g.id, 32.0, 0.0).expect("ink");
+            assert!(entry.color, "{what} is a colour glyph");
+            assert!(entry.w > 20 && entry.h > 20, "{what}: drawn at the size asked ({}×{})", entry.w, entry.h);
+        }
+        let atlas = e.color_atlas();
+        assert_eq!(atlas.pixels.len(), (atlas.width * atlas.height * 4) as usize, "RGBA");
+        let coloured = atlas.pixels.chunks_exact(4).filter(|p| p[3] > 200 && (p[0] as i32 - p[2] as i32).abs() > 60).count();
+        assert!(coloured > 100, "it has colour, not just coverage: {coloured}");
+    }
+
+    #[test]
     fn atlases_of_different_engines_never_share_a_version() {
         // A renderer shared by headless instances uploads an atlas only when its version is new to it.
         let (mut a, mut b) = (TextEngine::new(), TextEngine::new());
@@ -819,3 +893,4 @@ mod tests {
         assert!(e.atlas().width > ATLAS_START);
     }
 }
+

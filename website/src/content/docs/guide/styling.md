@@ -79,7 +79,7 @@ Two things catch people out:
 | `textOverflow` | `"ellipsis"` (default) or `"clip"` for what `maxLines` or `nowrap` cuts off |
  Inputs also take `placeholderColor`, `caretColor`, `selectionColor`.
 
-The default font is Inter. To use your own:
+The default font is Inter, with the platform's colour emoji font and then the system's fonts after it, so emoji and scripts Inter lacks (CJK, Hebrew, Arabic…) still draw. To use your own:
 
 ```tsx
 run(App, { fonts: ["assets/Serif.ttf"] });
