@@ -475,6 +475,11 @@ pub mod pointer_events {
     pub const NONE: u32 = 1;
 }
 
+pub mod gradient_shape {
+    pub const LINEAR: u32 = 0;
+    pub const RADIAL: u32 = 1;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValueKind {
     F32,
@@ -575,11 +580,14 @@ pub enum Prop {
     FocusRingColor = 85,
     FocusRingOffset = 86,
     Rotate = 87,
+    GradientMidColor = 88,
+    GradientMidAt = 89,
+    GradientShape = 90,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 87;
+    pub const COUNT: usize = 90;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -669,6 +677,9 @@ impl Prop {
             85 => Prop::FocusRingColor,
             86 => Prop::FocusRingOffset,
             87 => Prop::Rotate,
+            88 => Prop::GradientMidColor,
+            89 => Prop::GradientMidAt,
+            90 => Prop::GradientShape,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -762,6 +773,9 @@ impl Prop {
             Prop::FocusRingColor => "focusRingColor",
             Prop::FocusRingOffset => "focusRingOffset",
             Prop::Rotate => "rotate",
+            Prop::GradientMidColor => "gradientMidColor",
+            Prop::GradientMidAt => "gradientMidAt",
+            Prop::GradientShape => "gradientShape",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -854,6 +868,9 @@ impl Prop {
             Prop::FocusRingColor => ValueKind::Color,
             Prop::FocusRingOffset => ValueKind::F32,
             Prop::Rotate => ValueKind::F32,
+            Prop::GradientMidColor => ValueKind::Color,
+            Prop::GradientMidAt => ValueKind::F32,
+            Prop::GradientShape => ValueKind::Enum(2),
             Prop::ZIndex => ValueKind::F32,
         }
     }
@@ -917,6 +934,7 @@ impl Prop {
             Prop::WordBreak => &["normal", "breakAll", "keepAll", "breakWord"],
             Prop::UserSelect => &["none", "text"],
             Prop::PointerEvents => &["auto", "none"],
+            Prop::GradientShape => &["linear", "radial"],
             _ => &[],
         }
     }

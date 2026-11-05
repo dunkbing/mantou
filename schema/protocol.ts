@@ -200,7 +200,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "aspectRatio", code: 72, type: "f32", default: "0 (none): width / height, for a box with one of them set" },
   { name: "pointerEvents", code: 73, type: { enum: ["auto", "none"] }, default: "auto (none: the node is not under the pointer: presses, hover and the cursor go to what is below it)" },
   // More box decoration. Unset corners and sides follow borderRadius and borderWidth.
-  { name: "gradientColor", code: 74, type: "color", default: "transparent (no gradient): the colour at the end of a linear gradient that starts with backgroundColor" },
+  { name: "gradientColor", code: 74, type: "color", default: "transparent (no gradient): the colour at the end of a gradient that starts with backgroundColor; any other colour counts, even a see-through one like #ffffff00 (fade out)" },
   { name: "gradientAngle", code: 75, type: "f32", default: "180 (degrees as in CSS: 180 runs top to bottom, 90 left to right)" },
   { name: "borderTopLeftRadius", code: 76, type: "f32", default: "borderRadius" },
   { name: "borderTopRightRadius", code: 77, type: "f32", default: "borderRadius" },
@@ -214,6 +214,9 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "focusRingColor", code: 85, type: "color", default: "#3b82f6" },
   { name: "focusRingOffset", code: 86, type: "f32", default: "2" },
   { name: "rotate", code: 87, type: "f32", default: "0: degrees clockwise about the centre, with what's inside it (a view's clip and pointer follow; text fields inside it don't place the caret right)" },
+  { name: "gradientMidColor", code: 88, type: "color", default: "transparent (none): a colour between backgroundColor and gradientColor, for three stops" },
+  { name: "gradientMidAt", code: 89, type: "f32", default: "50 (percent of the way along the gradient where gradientMidColor is)" },
+  { name: "gradientShape", code: 90, type: { enum: ["linear", "radial"] }, default: "linear (radial: from the centre out to the corners; gradientAngle is ignored)" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 

@@ -69,3 +69,37 @@ test("zIndex lifts a view over later siblings, in painting and under the pointer
   ));
   expect(h.hit(50, 50)).toBe(high); // later in the tree, but lower
 });
+
+function px(h: HeadlessCore, x: number, y: number) {
+  const cap = h.capture();
+  return Array.from(cap.pixels.slice((y * cap.width + x) * 4, (y * cap.width + x) * 4 + 3));
+}
+const near = (a: number[], b: number[], d = 6) => a.every((v, i) => Math.abs(v - b[i]) <= d);
+
+test("a middle stop: red, then green at 50%, then blue (left to right)", () => {
+  const h = app(() => <View style={{ width: 200, height: 20, backgroundColor: "#ff0000", gradientMidColor: "#00ff00", gradientColor: "#0000ff", gradientAngle: 90 }} />);
+  expect(quad(h)).toContain("mid #00ff00ff 50");
+  expect(near(px(h, 0, 10), [255, 0, 0], 50)).toBe(true);
+  expect(near(px(h, 100, 10), [0, 255, 0], 30)).toBe(true);
+  expect(near(px(h, 199, 10), [0, 0, 255], 50)).toBe(true);
+});
+
+test("the middle stop can sit elsewhere", () => {
+  const h = app(() => <View style={{ width: 200, height: 20, backgroundColor: "#ff0000", gradientMidColor: "#00ff00", gradientMidAt: 25, gradientColor: "#0000ff", gradientAngle: 90 }} />);
+  expect(near(px(h, 50, 10), [0, 255, 0], 30)).toBe(true);
+});
+
+test("a radial gradient runs from the centre out", () => {
+  const h = app(() => <View style={{ width: 100, height: 100, backgroundColor: "#ffffff", gradientColor: "#000000", gradientShape: "radial" }} />);
+  expect(quad(h)).toContain("radial");
+  expect(px(h, 50, 50)[0]).toBeGreaterThan(235); // white in the middle
+  expect(px(h, 0, 0)[0]).toBeLessThan(70); // near black at the corner
+});
+
+test("a fade to see-through: the end colour may have no alpha", () => {
+  const h = app(() => <View style={{ width: 200, height: 20, backgroundColor: "#ff0000", gradientColor: "#ff000000", gradientAngle: 90 }} />);
+  expect(quad(h)).toContain("gradient #ff000000 90");
+  const bg = px(h, 100, 100);
+  expect(px(h, 1, 10)[0]).toBeGreaterThan(240); // red at the start
+  expect(Math.abs(px(h, 198, 10)[0] - bg[0])).toBeLessThan(25); // the window's colour at the end
+});

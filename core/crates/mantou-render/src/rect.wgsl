@@ -15,6 +15,8 @@ struct Instance {
     @location(8) widths: vec4<f32>,       // top, right, bottom, left border width (pixels)
     @location(9) color2: vec4<f32>,       // the gradient's end colour: linear RGB, straight alpha
     @location(10) grad: vec4<f32>,        // gradient angle (radians, CSS: 0 up, clockwise), 1 = a gradient
+    @location(11) color3: vec4<f32>,      // the gradient's middle colour: linear RGB, straight alpha
+    @location(12) grad2: vec4<f32>,       // middle stop position + 1 (0 = none), 1 = radial
 };
 
 struct VsOut {
@@ -31,6 +33,8 @@ struct VsOut {
     @location(9) @interpolate(flat) color2: vec4<f32>,
     @location(10) @interpolate(flat) grad: vec4<f32>,
     @location(11) @interpolate(flat) uvr: vec4<f32>,
+    @location(12) @interpolate(flat) color3: vec4<f32>,
+    @location(13) @interpolate(flat) grad2: vec4<f32>,
 };
 
 @group(0) @binding(0) var atlas: texture_2d<f32>;
@@ -58,6 +62,8 @@ fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
     out.color2 = inst.color2;
     out.grad = inst.grad;
     out.uvr = inst.uv;
+    out.color3 = inst.color3;
+    out.grad2 = inst.grad2;
     return out;
 }
 
@@ -200,11 +206,26 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     // The fill colour: flat, or a linear gradient along the angle across the box.
     var color = in.color;
     if (in.grad.y > 0.5) {
-        let dir = vec2<f32>(sin(in.grad.x), -cos(in.grad.x));
         let half = (in.rect_px.zw - in.rect_px.xy) * 0.5;
-        let reach = max(abs(half.x * dir.x) + abs(half.y * dir.y), 0.0001);
-        let t = clamp(dot(p - (in.rect_px.xy + half), dir) / reach * 0.5 + 0.5, 0.0, 1.0);
-        color = mix(in.color, in.color2, t);
+        var t: f32;
+        if (in.grad2.y > 0.5) {
+            // Radial: 0 at the centre, 1 at the corners (the ellipse through them).
+            t = clamp(length((p - (in.rect_px.xy + half)) / max(half, vec2<f32>(0.0001))) * 0.70710678, 0.0, 1.0);
+        } else {
+            let dir = vec2<f32>(sin(in.grad.x), -cos(in.grad.x));
+            let reach = max(abs(half.x * dir.x) + abs(half.y * dir.y), 0.0001);
+            t = clamp(dot(p - (in.rect_px.xy + half), dir) / reach * 0.5 + 0.5, 0.0, 1.0);
+        }
+        if (in.grad2.x > 0.0) {
+            let at = in.grad2.x - 1.0;
+            if (t < at) {
+                color = mix(in.color, in.color3, t / max(at, 0.0001));
+            } else {
+                color = mix(in.color3, in.color2, (t - at) / max(1.0 - at, 0.0001));
+            }
+        } else {
+            color = mix(in.color, in.color2, t);
+        }
     }
     let own = in.radii.x != in.radii.y || in.radii.y != in.radii.z || in.radii.z != in.radii.w
         || in.widths.x != in.widths.y || in.widths.y != in.widths.z || in.widths.z != in.widths.w;

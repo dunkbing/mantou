@@ -53,7 +53,7 @@ Two things catch people out:
 |---|---|
 | Colour | `backgroundColor`, `opacity` |
 | Borders | `borderRadius`, `borderWidth`, `borderColor`; one corner: `borderTopLeftRadius`…; one side: `borderTopWidth`… (one colour for all) |
-| Gradient | `backgroundColor` to `gradientColor`, at `gradientAngle` degrees (180, the default, runs top to bottom; 90 left to right) |
+| Gradient | `backgroundColor` to `gradientColor`, at `gradientAngle` degrees (180, the default, runs top to bottom; 90 left to right); `gradientMidColor` (at `gradientMidAt` percent, default 50) adds a third stop; `gradientShape: "radial"` runs from the centre to the corners. A see-through end colour (`"#ffffff00"`) fades out |
 | Stacking | `zIndex`: higher is painted and hit on top of its siblings |
 | Shadow | `shadowX`, `shadowY`, `shadowBlur`, `shadowSpread`, `shadowColor` |
 | Clipping | `overflow: "visible" \| "hidden" \| "scroll"` |

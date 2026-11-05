@@ -66,6 +66,17 @@ pub enum TreeEvent {
 /// Selections of inputs whose style doesn't set one: #3b82f666.
 const SELECTION: u32 = 0x66f6823b;
 
+/// A gradient across a box: from the box's fill colour to `end`, through `mid` (colour and position 0 to 1) if given.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Gradient {
+    pub end: [f32; 4],
+    /// Radians, CSS: 0 points up, clockwise. Unused when radial.
+    pub angle: f32,
+    pub mid: Option<([f32; 4], f32)>,
+    /// From the centre out to the corners.
+    pub radial: bool,
+}
+
 /// What a box adds to a quad: corners and sides of their own, and a gradient.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Extra {
@@ -73,8 +84,7 @@ pub struct Extra {
     pub radii: [f32; 4],
     /// Top, right, bottom, left border widths (device px).
     pub widths: [f32; 4],
-    /// The gradient's end colour and its angle in radians (CSS: 0 points up, clockwise), if it has one.
-    pub gradient: Option<([f32; 4], f32)>,
+    pub gradient: Option<Gradient>,
     /// Turned by this angle (radians, clockwise) about the quad's centre; only for plain filled shapes.
     pub rotation: f32,
     /// A strip between a slanted top edge and a horizontal one: the edge's y at the quad's left and right sides, and the other's y.
@@ -332,8 +342,14 @@ impl Scene {
             if q.extra.rotation != 0.0 {
                 out.push_str(&format!(" rotate {}", q.extra.rotation.to_degrees().round()));
             }
-            if let Some((end, angle)) = q.extra.gradient {
-                out.push_str(&format!(" gradient {} {}", hex(end), angle.to_degrees().round()));
+            if let Some(g) = q.extra.gradient {
+                out.push_str(&format!(" gradient {} {}", hex(g.end), g.angle.to_degrees().round()));
+                if let Some((c, at)) = g.mid {
+                    out.push_str(&format!(" mid {} {}", hex(c), (at * 100.0).round()));
+                }
+                if g.radial {
+                    out.push_str(" radial");
+                }
             }
             out.push('\n');
         }
@@ -372,6 +388,10 @@ struct Visual {
     /// The gradient's end colour (RGBA8) and angle in degrees; a transparent end colour means no gradient.
     gradient: u32,
     gradient_angle: f32,
+    /// The middle stop's colour (0 = none) and its position, stored minus 0.5.
+    gradient_mid: u32,
+    gradient_mid_at: f32,
+    gradient_radial: bool,
     z: i32,
     /// 0 relative, 1 absolute, 2 fixed, 3 sticky.
     position: u8,
@@ -1441,8 +1461,13 @@ impl Tree {
             let widths = v.widths_p1.map(|w| if w > 0.0 { (w - 1.0) * k * s } else { -1.0 });
             let widths = if border_color[3] > 0.0 { widths } else { [0.0; 4].map(|_| -1.0) };
             let own_sides = widths.iter().any(|w| *w >= 0.0);
-            let gradient_end = rgba(v.gradient, alpha);
-            let gradient = (gradient_end[3] > 0.0).then(|| (gradient_end, (v.gradient_angle + 180.0).to_radians()));
+            // Any end colour but plain `transparent` (all zero) makes a gradient, so a fade to a see-through colour works.
+            let gradient = (v.gradient != 0).then(|| Gradient {
+                end: rgba(v.gradient, alpha),
+                angle: (v.gradient_angle + 180.0).to_radians(),
+                mid: (v.gradient_mid != 0).then(|| (rgba(v.gradient_mid, alpha), (v.gradient_mid_at + 0.5).clamp(0.0, 1.0))),
+                radial: v.gradient_radial,
+            });
             let extra = Extra { radii, widths, gradient, rotation: 0.0, trap: None, span: None };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
@@ -2054,6 +2079,13 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
             }
         }
         Prop::GradientAngle => v.gradient_angle = finite(num(), 180.0) - 180.0, // 0 stored = the default, 180
+        Prop::GradientMidColor => {
+            if let Value::Color(c) = value {
+                v.gradient_mid = c
+            }
+        }
+        Prop::GradientMidAt => v.gradient_mid_at = finite(num(), 50.0) / 100.0 - 0.5,
+        Prop::GradientShape => v.gradient_radial = e == 1,
         Prop::ZIndex => v.z = finite(num(), 0.0).clamp(-1e6, 1e6) as i32,
         Prop::BorderWidth => {
             let w = num().max(0.0);
