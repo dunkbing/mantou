@@ -65,6 +65,8 @@ export class HeadlessCore {
     if (!this.handle) throw new Error("mantou: could not create a headless instance");
     this.ui = new Ui({
       commit: (bytes) => {
+        // free() disposes the app, whose releases are flushed after the instance is gone: nothing to tell.
+        if (this.freed) return;
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
