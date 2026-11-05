@@ -176,6 +176,7 @@ pub mod canvas_cmd {
     pub const CIRCLE: u32 = 4;
     pub const STROKE_CIRCLE: u32 = 5;
     pub const ROUND_RECT: u32 = 6;
+    pub const AREA: u32 = 7;
 }
 
 pub mod window_state_flag {

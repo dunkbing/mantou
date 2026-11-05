@@ -5,7 +5,7 @@ import { f32bits, parseColor } from "./style";
 
 /**
  * Draws in logical px from the canvas's top left. Shapes come out in the order drawn, over the view's background,
- * cut to its box. Colours are CSS strings (`"#2563eb"`, `"rgba(0,0,0,0.5)"`) or `[r, g, b, a]`.
+ * cut to its box. Colours are hex strings (`"#2563eb"`, `"#2563eb80"` for half see-through) or `[r, g, b, a]` with `a` from 0 to 1.
  */
 export class CanvasContext {
   /** @internal The commands, as the wire wants them. */
@@ -45,6 +45,17 @@ export class CanvasContext {
   /** A straight line with flat ends. */
   line(x0: number, y0: number, x1: number, y1: number, color: Color, width = 1) {
     return this.put(CanvasCmd.Line, [x0, y0, x1, y1, width], color);
+  }
+
+  /**
+   * The region between a polyline and the horizontal line at `baseline` (an area chart's fill). Points go left to
+   * right (x rising); where the line crosses the baseline the fill switches sides.
+   */
+  area(points: readonly (readonly [number, number])[], baseline: number, color: Color) {
+    if (!Number.isFinite(baseline) || points.length < 2 || points.some((p) => !Number.isFinite(p[0]) || !Number.isFinite(p[1]))) return this;
+    this.words.push(CanvasCmd.Area, f32bits(baseline), parseColor(color), points.length);
+    for (const [x, y] of points) this.words.push(f32bits(x), f32bits(y));
+    return this;
   }
 
   /** Lines through the points, one after the other (square joins: round them with small circles if the width is large). */

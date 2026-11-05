@@ -77,10 +77,12 @@ pub struct Extra {
     pub gradient: Option<([f32; 4], f32)>,
     /// Turned by this angle (radians, clockwise) about the quad's centre; only for plain filled shapes.
     pub rotation: f32,
+    /// A strip between a slanted top edge and a horizontal one: the edge's y at the quad's left and right sides, and the other's y.
+    pub trap: Option<[f32; 3]>,
 }
 
 impl Extra {
-    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0 };
+    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None };
 }
 
 /// The quads of a CANVAS command list. Coordinates are logical px from `origin` (the content box's top left, in
@@ -94,14 +96,55 @@ fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn
         let (x0, y0) = dev(x, y);
         [x0, y0, x0 + len(w), y0 + len(h)]
     };
-    let mut push = |rect: [f32; 4], color: [f32; 4], radius: f32, border: f32, border_color: [f32; 4], rotation: f32| {
+    let mut push = |rect: [f32; 4], color: [f32; 4], radius: f32, border: f32, border_color: [f32; 4], rotation: f32, trap: Option<[f32; 3]>| {
         if color[3] > 0.0 || (border > 0.0 && border_color[3] > 0.0) {
-            out.push(Quad { rect, color, uv: [0.0; 4], clip, radius, border, border_color, shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation } });
+            out.push(Quad { rect, color, uv: [0.0; 4], clip, radius, border, border_color, shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation, trap } });
         }
     };
     let clear = [0.0; 4];
     let mut i = 0;
     while i < words.len() {
+        if words[i] == cmd::AREA {
+            // Area baseline colour n, then n points: the region between the polyline and the baseline, as strips
+            // one device pixel column apart at their sides (so neighbours meet exactly) with the polyline's edge on top.
+            if i + 4 > words.len() {
+                return;
+            }
+            let n = words[i + 3] as usize;
+            if n > (words.len() - i - 4) / 2 {
+                return;
+            }
+            let color = rgba(words[i + 2]);
+            let yb = dev(0.0, f32::from_bits(words[i + 1])).1;
+            let pts: Vec<(f32, f32)> = (0..n).map(|j| dev(f32::from_bits(words[i + 4 + 2 * j]), f32::from_bits(words[i + 5 + 2 * j]))).collect();
+            for w in pts.windows(2) {
+                let ((x0, y0), (x1, y1)) = (w[0], w[1]);
+                if !(x0.is_finite() && x1.is_finite() && y0.is_finite() && y1.is_finite()) || x1 <= x0 {
+                    continue;
+                }
+                // Cut where the line crosses the baseline, so each piece lies on one side of it.
+                let mut cuts = vec![(x0, y0)];
+                if (y0 - yb) * (y1 - yb) < 0.0 {
+                    let t = (yb - y0) / (y1 - y0);
+                    cuts.push((x0 + (x1 - x0) * t, yb));
+                }
+                cuts.push((x1, y1));
+                for c in cuts.windows(2) {
+                    let ((ax, ay), (bx, by)) = (c[0], c[1]);
+                    let (sx0, sx1) = (ax.round(), bx.round());
+                    if sx1 <= sx0 || color[3] <= 0.0 {
+                        continue;
+                    }
+                    // The edge's height at the snapped sides.
+                    let at = |x: f32| ay + (by - ay) * ((x - ax) / (bx - ax));
+                    let (yl, yr) = (at(sx0), at(sx1));
+                    let rect = [sx0, yl.min(yr).min(yb), sx1, yl.max(yr).max(yb)];
+                    push(rect, color, 0.0, 0.0, [0.0; 4], 0.0, Some([yl, yr, yb]));
+                }
+            }
+            i += 4 + 2 * n;
+            continue;
+        }
         let need = match words[i] {
             cmd::FILL_RECT | cmd::CIRCLE => 6,
             cmd::STROKE_RECT | cmd::LINE | cmd::ROUND_RECT => 7,
@@ -116,16 +159,16 @@ fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn
         let a = |n: usize| f32::from_bits(words[i + n]);
         let col = |n: usize| rgba(words[i + n]);
         match words[i] {
-            cmd::FILL_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(5), 0.0, 0.0, clear, 0.0),
-            cmd::STROKE_RECT => push(rect_of(a(1), a(2), a(3), a(4)), clear, 0.0, len(a(5)), col(6), 0.0),
-            cmd::ROUND_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(6), len(a(5)), 0.0, clear, 0.0),
+            cmd::FILL_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(5), 0.0, 0.0, clear, 0.0, None),
+            cmd::STROKE_RECT => push(rect_of(a(1), a(2), a(3), a(4)), clear, 0.0, len(a(5)), col(6), 0.0, None),
+            cmd::ROUND_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(6), len(a(5)), 0.0, clear, 0.0, None),
             cmd::CIRCLE => {
                 let r = a(3).max(0.0);
-                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), col(4), len(r), 0.0, clear, 0.0)
+                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), col(4), len(r), 0.0, clear, 0.0, None)
             }
             cmd::STROKE_CIRCLE => {
                 let r = a(3).max(0.0);
-                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), clear, len(r), len(a(4)), col(5), 0.0)
+                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), clear, len(r), len(a(4)), col(5), 0.0, None)
             }
             _ => {
                 // A line: a thin rectangle along it, turned to its direction, about its middle.
@@ -135,7 +178,7 @@ fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn
                 if l > 0.0 {
                     let w = len(a(5));
                     let (mx, my) = ((x0 + x1) * 0.5, (y0 + y1) * 0.5);
-                    push([mx - l / 2.0, my - w / 2.0, mx + l / 2.0, my + w / 2.0], col(6), 0.0, 0.0, clear, dy.atan2(dx));
+                    push([mx - l / 2.0, my - w / 2.0, mx + l / 2.0, my + w / 2.0], col(6), 0.0, 0.0, clear, dy.atan2(dx), None);
                 }
             }
         }
@@ -230,6 +273,9 @@ impl Scene {
             }
             if q.extra.widths.iter().any(|w| *w >= 0.0) {
                 out.push_str(&format!(" widths {:?}", q.extra.widths));
+            }
+            if let Some([yl, yr, yb]) = q.extra.trap {
+                out.push_str(&format!(" strip {yl} {yr} {yb}"));
             }
             if q.extra.rotation != 0.0 {
                 out.push_str(&format!(" rotate {}", q.extra.rotation.to_degrees().round()));
@@ -1285,7 +1331,7 @@ impl Tree {
             let own_sides = widths.iter().any(|w| *w >= 0.0);
             let gradient_end = rgba(v.gradient, alpha);
             let gradient = (gradient_end[3] > 0.0).then(|| (gradient_end, (v.gradient_angle + 180.0).to_radians()));
-            let extra = Extra { radii, widths, gradient, rotation: 0.0 };
+            let extra = Extra { radii, widths, gradient, rotation: 0.0, trap: None };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
             }

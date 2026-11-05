@@ -65,3 +65,43 @@ test("shapes are cut to the canvas's box", () => {
   expect(pixel(h, 40, 40)[0]).toBeGreaterThan(200); // inside
   expect(pixel(h, 120, 120)).not.toEqual(pixel(h, 40, 40)); // outside the box
 });
+
+test("an area fills between a line and the baseline, with no seams between its strips", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => (
+    <Canvas width={100} height={100} draw={(g) => g.area([[0, 60], [40, 20], [100, 50]], 100, "#ff0000")} />
+  ));
+  h.step();
+  expect(quads(h).every((l) => l.includes("strip"))).toBe(true);
+  const under = pixel(h, 40, 80); // below the line
+  const above = pixel(h, 40, 10); // above it
+  const edge = pixel(h, 40, 21); // just under the peak
+  expect(under).toEqual([255, 0, 0, 255]);
+  expect(above).not.toEqual(under);
+  expect(edge[0]).toBeGreaterThan(200);
+  // The seam between the two segments (x = 40) is as red as its neighbours.
+  expect(pixel(h, 39, 80)).toEqual(under);
+  expect(pixel(h, 41, 80)).toEqual(under);
+});
+
+test("where the line crosses the baseline the fill is on both sides of it", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => (
+    <Canvas width={100} height={100} draw={(g) => g.area([[0, 70], [100, 30]], 50, "#0000ff")} />
+  ));
+  h.step();
+  expect(pixel(h, 10, 55)[2]).toBe(255); // between the line (at ~66) and the baseline (50), below it
+  expect(pixel(h, 90, 45)[2]).toBe(255); // between the baseline and the line (at ~34), above it
+  expect(pixel(h, 10, 20)).not.toEqual([0, 0, 255, 255]);
+});
+
+test("translucent strips don't double up where they meet", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => <Canvas width={100} height={100} draw={(g) => g.area([[0, 30], [40, 20], [100, 40]], 100, "#ff000080")} />);
+  h.step();
+  expect(pixel(h, 39, 80)).toEqual(pixel(h, 41, 80));
+  expect(pixel(h, 40, 80)).toEqual(pixel(h, 41, 80));
+});

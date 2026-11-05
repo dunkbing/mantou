@@ -78,12 +78,13 @@ For what views can't draw: charts, sparklines, a waveform, a drawing pad. `draw`
 <Canvas width={400} height={180} style={{ backgroundColor: "#f8fafc", borderRadius: 8 }} draw={(g) => {
   g.line(20, 160, 380, 160, "#e2e8f0");                         // x0, y0, x1, y1, colour, width = 1
   data().forEach((v, i) => g.roundRect(20 + i * 30, 160 - v, 16, v, 3, "#bfdbfe"));
+  g.area(points(), 160, "#2563eb33");
   g.polyline(points(), "#2563eb", 3);
   g.circle(x, y, 5, "#ffffff").strokeCircle(x, y, 5, "#2563eb", 2);
 }} />
 ```
 
-Coordinates are logical px from the canvas's top left; shapes are cut to its box and come out in the order drawn. Available: `fillRect`, `strokeRect`, `roundRect`, `circle`, `strokeCircle`, `line`, `polyline`. Filled paths, gradients, images, text (put a `<Text>` over the canvas) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
+Coordinates are logical px from the canvas's top left; shapes are cut to its box and come out in the order drawn. Available: `fillRect`, `strokeRect`, `roundRect`, `circle`, `strokeCircle`, `line`, `polyline`, and `area(points, baseline, colour)`, the fill between a polyline and a horizontal line (an area chart; points go left to right). Colours are hex (`"#2563eb40"` is see-through) or `[r, g, b, a]`. Curves, general filled shapes, gradients, images, text (put a `<Text>` over the canvas) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
 
 ## Scroll and List
 

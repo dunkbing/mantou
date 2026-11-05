@@ -110,6 +110,23 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     }
     let radius = in.params.x;
     let border = in.params.y;
+    if (in.params.w > 2.5) {
+        // A strip between a slanted top edge (heights radii.x at the left side, radii.y at the right) and the
+        // horizontal line radii.z. Its sides are on whole pixels, so neighbours meet without a seam; only the
+        // slanted edge and the horizontal one are smoothed.
+        if (p.x < in.rect_px.x || p.x >= in.rect_px.z) {
+            discard; // exactly its own columns: translucent neighbours must not overlap
+        }
+        let w = max(in.rect_px.z - in.rect_px.x, 0.0001);
+        let t = clamp((p.x - in.rect_px.x) / w, 0.0, 1.0);
+        let ty = mix(in.radii.x, in.radii.y, t);
+        let slope = (in.radii.y - in.radii.x) / w;
+        let dir = select(-1.0, 1.0, in.radii.z >= (in.radii.x + in.radii.y) * 0.5);
+        let across = clamp(0.5 + dir * (p.y - ty) / sqrt(1.0 + slope * slope), 0.0, 1.0);
+        let along = clamp(0.5 + dir * (in.radii.z - p.y), 0.0, 1.0);
+        let a = in.color.a * min(across, along);
+        return vec4<f32>(in.color.rgb * a, a);
+    }
     if (in.params.w > 1.5) {
         // An image: its texels (uv, in pixels of the image) sampled with
         // filtering, cut to the quad's rounded corners; tinted, it's drawn as
