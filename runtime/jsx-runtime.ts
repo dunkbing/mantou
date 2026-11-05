@@ -32,6 +32,11 @@ export interface PointerProps {
   onContextMenu?: (e: PointerEvent) => void;
   /** The primary button went down for the second time in a row at one spot. */
   onDoubleClick?: (e: PointerEvent) => void;
+  /**
+   * The user can select the text (drag, double click for a word, triple click for a line, shift-click to extend)
+   * and copy it. On a view, all the Text inside is selectable as one selection, across Texts. Same as `style={{ userSelect: "text" }}`.
+   */
+  selectable?: boolean;
   /** Pressing the primary button on this view moves the window (a custom title bar, with `frameless`). */
   dragRegion?: boolean;
   /** Makes the view draggable inside the app, carrying this value: views under it get `onDragOver` and `onDrop` events with `data` set to it. */
@@ -135,8 +140,6 @@ export interface ScrollProps extends AccessProps, PointerProps {
 
 /** Text: its children are strings and numbers (no views inside). */
 export interface TextProps extends AccessProps, PointerProps {
-  /** The user can select the text (drag, double click for a word, triple click for a line) and copy it. Same as `style={{ userSelect: "text" }}`. */
-  selectable?: boolean;
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;

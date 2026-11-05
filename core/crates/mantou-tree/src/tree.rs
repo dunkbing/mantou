@@ -310,7 +310,7 @@ pub struct Tree {
     /// The input a press started in, while the button is down.
     drag: Option<u32>,
     /// The Text node whose text is selected (`userSelect`), and its read-only editor: only one at a time.
-    tsel: Option<(u32, mantou_text::Editor)>,
+    tsel: Option<input::TextSel>,
     events: Vec<TreeEvent>,
     /// Outline every box in the scene (MANTOU_DEBUG=layout).
     debug_layout: bool,
@@ -538,7 +538,7 @@ impl Tree {
                 if self.drag == Some(id) {
                     self.drag = None;
                 }
-                if self.tsel.as_ref().is_some_and(|(s, _)| *s == id) {
+                if self.tsel.as_ref().is_some_and(|t| t.root == id || t.anchor == id || t.editors.contains_key(&id)) {
                     self.tsel = None;
                 }
                 self.hovered.retain(|&h| h != id); // gone: no event, there's no one to tell
@@ -1212,9 +1212,7 @@ impl Tree {
                         l
                     }
                 };
-                if let Some((sid, ed)) = self.tsel.as_mut()
-                    && *sid == b.id
-                {
+                if let Some(ed) = self.tsel.as_mut().and_then(|t| t.editors.get_mut(&b.id)) {
                     input::sync_selection(ed, text, node, c, k);
                     let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
                     for r in ed.selection(text) {

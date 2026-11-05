@@ -5,6 +5,7 @@
 //! clipboard here, and the key bindings' platform (`set_mac_keys`).
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use mantou_text::{Editor, TextEngine, TextStyle};
 
@@ -84,35 +85,112 @@ pub(super) fn sync_selection(ed: &mut Editor, engine: &mut TextEngine, node: &su
     }
 }
 
+/// A selection in static text: one editor per Text node it touches, from the node the press began in
+/// (at `anchor_u16`, UTF-16 units) to the node the pointer is in.
+pub(super) struct TextSel {
+    /// The topmost `userSelect: "text"` ancestor (or the text itself): the selection stays inside it.
+    pub root: u32,
+    pub editors: HashMap<u32, Editor>,
+    pub anchor: u32,
+    pub anchor_u16: usize,
+}
+
 impl Tree {
     /// Whether some static text is selected (it takes Copy and Select All).
     pub fn has_text_selection(&self) -> bool {
         self.tsel.is_some()
     }
 
+    /// The topmost node at or above `id` that has `userSelect: "text"`, if any: a View with it makes all the
+    /// Text inside selectable, as one selection.
+    fn selection_root(&self, id: u32) -> Option<u32> {
+        let mut root = None;
+        let mut a = Some(id);
+        while let Some(n) = a {
+            if self.nodes[&n].v.user_select {
+                root = Some(n);
+            }
+            a = self.nodes[&n].parent;
+        }
+        root
+    }
+
+    /// The Text nodes inside `root`, laid out, in tree order.
+    fn selectable_texts(&self, root: u32) -> Vec<u32> {
+        self.boxes.iter().map(|b| b.id).filter(|&id| self.nodes[&id].kind == crate::protocol::node_kind::TEXT && self.is_inside(id, root)).collect()
+    }
+
+    fn text_box(&self, id: u32) -> Option<([f32; 4], f32)> {
+        self.boxes.iter().find(|b| b.id == id).map(|b| (b.content, b.k))
+    }
+
     /// The primary button went down off the inputs: on selectable text, place the caret (a word on
     /// 2 clicks, a line on 3; shift extends); elsewhere, drop the text selection. Returns whether the scene changed.
     fn text_select_down(&mut self, x: f32, y: f32, clicks: u32, extend: bool) -> bool {
-        let hit = self.hit(x, y).filter(|id| self.nodes[id].kind == crate::protocol::node_kind::TEXT && self.nodes[id].v.user_select);
-        let Some(id) = hit else {
+        let hit = self.hit(x, y).filter(|id| self.nodes[id].kind == crate::protocol::node_kind::TEXT);
+        let Some((id, root)) = hit.and_then(|id| self.selection_root(id).map(|r| (id, r))) else {
             return self.tsel.take().is_some();
         };
-        let Some(b) = self.boxes.iter().find(|b| b.id == id) else { return false };
-        let (content, k) = (b.content, b.k);
-        let Some(engine) = self.text.as_mut() else { return false };
-        if self.tsel.as_ref().is_none_or(|(s, _)| *s != id) {
-            self.tsel = Some((id, Editor::new(&self.nodes[&id].v.text)));
+        let Some((content, k)) = self.text_box(id) else { return false };
+        if extend && self.tsel.as_ref().is_some_and(|t| t.root == root) {
+            self.drag = Some(self.tsel.as_ref().expect("checked").anchor);
+            self.extend_text_selection(x, y);
+            return true;
         }
-        let (_, ed) = self.tsel.as_mut().expect("just set");
-        sync_selection(ed, engine, &self.nodes[&id], content, k);
+        let Some(engine) = self.text.as_mut() else { return false };
+        let mut ed = Editor::new(&self.nodes[&id].v.text);
+        sync_selection(&mut ed, engine, &self.nodes[&id], content, k);
         let (px, py) = ((x - content[0]) / k, (y - content[1]) / k);
         match clicks {
-            0 | 1 if extend => ed.extend_to_point(engine, px, py),
             0 | 1 => ed.move_to_point(engine, px, py),
             2 => ed.select_word_at(engine, px, py),
             _ => ed.select_line_at(engine, px, py),
         }
+        let anchor_u16 = ed.selection_utf16().0;
+        self.tsel = Some(TextSel { root, editors: HashMap::from([(id, ed)]), anchor: id, anchor_u16 });
         self.drag = Some(id);
+        self.scene_dirty = true;
+        true
+    }
+
+    /// The pointer is at (x, y) with a text selection in progress: moves its end there. The Text under the
+    /// pointer (or the nearest one, above or below) takes the end; the Texts between it and the start are selected whole.
+    fn extend_text_selection(&mut self, x: f32, y: f32) -> bool {
+        let Some(ts) = self.tsel.as_ref() else { return false };
+        let (root, anchor, anchor_u16) = (ts.root, ts.anchor, ts.anchor_u16);
+        let texts = self.selectable_texts(root);
+        let Some(ai) = texts.iter().position(|&t| t == anchor) else { return false };
+        // The Text the pointer is in, else the one nearest to it.
+        let dist = |id: u32| {
+            let r = self.boxes.iter().find(|b| b.id == id).map_or([0.0; 4], |b| b.content);
+            let (dx, dy) = ((r[0] - x).max(x - r[2]).max(0.0), (r[1] - y).max(y - r[3]).max(0.0));
+            dy * 1000.0 + dx // a line above or below wins over one that is only closer sideways
+        };
+        let Some(ti) = (0..texts.len()).min_by(|&a, &b| dist(texts[a]).total_cmp(&dist(texts[b]))) else { return false };
+        let (lo, hi) = (ai.min(ti), ai.max(ti));
+        let Some(engine) = self.text.as_mut() else { return false };
+        let ts = self.tsel.as_mut().expect("checked");
+        ts.editors.retain(|id, _| texts[lo..=hi].contains(id));
+        for (n, &id) in texts.iter().enumerate().take(hi + 1).skip(lo) {
+            let Some(b) = self.boxes.iter().find(|b| b.id == id) else { continue };
+            let (content, k) = (b.content, b.k);
+            let node = &self.nodes[&id];
+            let ed = ts.editors.entry(id).or_insert_with(|| Editor::new(&node.v.text));
+            sync_selection(ed, engine, node, content, k);
+            let len = ed.text().encode_utf16().count();
+            if ai == ti {
+                ed.select_utf16(engine, anchor_u16, anchor_u16);
+                ed.extend_to_point(engine, (x - content[0]) / k, (y - content[1]) / k);
+            } else if n == ai {
+                ed.select_utf16(engine, anchor_u16, if ti > ai { len } else { 0 });
+            } else if n == ti {
+                ed.move_to_point(engine, (x - content[0]) / k, (y - content[1]) / k);
+                let caret = ed.selection_utf16().1;
+                ed.select_utf16(engine, if ti > ai { 0 } else { len }, caret);
+            } else {
+                ed.select_utf16(engine, 0, len);
+            }
+        }
         self.scene_dirty = true;
         true
     }
@@ -123,16 +201,36 @@ impl Tree {
         if !primary || mods & m::ALT != 0 {
             return false;
         }
-        let (Some((_, ed)), Some(engine)) = (self.tsel.as_mut(), self.text.as_mut()) else { return false };
+        let Some(root) = self.tsel.as_ref().map(|t| t.root) else { return false };
+        let texts = self.selectable_texts(root);
         match char::from_u32(key).map(|c| c.to_ascii_lowercase()) {
             Some('c') => {
-                if let Some(s) = ed.selected_text() {
-                    clipboard.set(&s);
+                // The selected parts, one per Text, a line apart.
+                let ts = self.tsel.as_ref().expect("checked");
+                let parts: Vec<String> = texts.iter().filter_map(|id| ts.editors.get(id)?.selected_text()).collect();
+                if !parts.is_empty() {
+                    clipboard.set(&parts.join("\n"));
                 }
                 true
             }
             Some('a') => {
-                ed.navigate(engine, |d| d.select_all());
+                let Some(engine) = self.text.as_mut() else { return false };
+                let ts = self.tsel.as_mut().expect("checked");
+                ts.editors.clear();
+                for &id in &texts {
+                    let Some(b) = self.boxes.iter().find(|b| b.id == id) else { continue };
+                    let (content, k) = (b.content, b.k);
+                    let node = &self.nodes[&id];
+                    let mut ed = Editor::new(&node.v.text);
+                    sync_selection(&mut ed, engine, node, content, k);
+                    let len = ed.text().encode_utf16().count();
+                    ed.select_utf16(engine, 0, len);
+                    ts.editors.insert(id, ed);
+                }
+                if let Some(&first) = texts.first() {
+                    ts.anchor = first;
+                    ts.anchor_u16 = 0;
+                }
                 self.scene_dirty = true;
                 true
             }
@@ -249,13 +347,8 @@ impl Tree {
         if self.thumb_drag.is_some() {
             return self.thumb_move(x, y);
         }
-        if let Some(sid) = self.drag.filter(|&d| self.tsel.as_ref().is_some_and(|(s, _)| *s == d)) {
-            let Some(b) = self.boxes.iter().find(|b| b.id == sid) else { return false };
-            let (content, k) = (b.content, b.k);
-            let (Some((_, ed)), Some(engine)) = (self.tsel.as_mut(), self.text.as_mut()) else { return false };
-            ed.extend_to_point(engine, (x - content[0]) / k, (y - content[1]) / k);
-            self.scene_dirty = true;
-            return true;
+        if self.drag.is_some_and(|d| self.tsel.as_ref().is_some_and(|t| t.anchor == d)) {
+            return self.extend_text_selection(x, y);
         }
         let Some(id) = self.drag.filter(|&d| Some(d) == self.focus) else { return false };
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };

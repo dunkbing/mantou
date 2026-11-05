@@ -23,7 +23,7 @@ Text is only drawn inside `<Text>`, whose children are strings and numbers.
 <Text style={{ fontSize: 14, color: "#374151", maxLines: 2 }}>Hello, {name()}</Text>
 ```
 
-Add `selectable` to let the user select it (drag, double click for a word, triple click for a line) and copy it with Cmd/Ctrl+C. One text at a time; clicking elsewhere clears it.
+Add `selectable` to let the user select it (drag, double click for a word, triple click for a line) and copy it with Cmd/Ctrl+C. Put `selectable` on a `<View>` to make all the text inside selectable as one selection, across texts (drag from one paragraph into another; copy joins them by lines, Cmd/Ctrl+A selects all of it). The selection stays inside that view; clicking elsewhere clears it.
 
 ```tsx
 <Text selectable>{message.body}</Text>
