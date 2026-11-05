@@ -54,7 +54,8 @@ try {
   let [m, at] = await line(/started in (\d+) ms .*; (\d+) glyphs/, 0, "the first frame");
   const glyphs = Number(m[2]);
   check("starts", true, `${m[1]} ms to the first frame, ${glyphs} glyphs`);
-  [, at] = await line(/warmed the next reload/, at, "the next Worker warmed");
+  // The spare can be ready before the first frame or after it: look from the start.
+  await line(/warmed the next reload/, 0, "the next Worker warmed");
 
   // A label: "Reset" (5 glyphs) becomes "Start over" (9): the new frame draws 4 more.
   writeFileSync(counter, source.replace(">Reset<", ">Start over<"));
@@ -63,9 +64,10 @@ try {
 
   // A syntax error shows in the window; fixing it reloads.
   writeFileSync(counter, source.replace("export function Counter() {", "export function Counter( {"));
+  const errorAt = at;
   [, at] = await line(/the app failed to load/, at, "the error");
   check("an error shows", true, "the load error was reported");
-  [, at] = await line(/warmed the next reload/, at, "the next Worker warmed");
+  await line(/warmed the next reload/, errorAt, "the next Worker warmed");
   writeFileSync(counter, source);
   [m, at] = await line(/reloaded in (\d+) ms .*; (\d+) glyphs/, at, "the reload after the fix");
   check("the fix reloads", Number(m[2]) === glyphs && Number(m[1]) < BOUND_MS, `${m[1]} ms, ${m[2]} glyphs`);
