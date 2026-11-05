@@ -345,7 +345,12 @@ impl App {
         App { config, wins: HashMap::new(), by_handle: HashMap::new(), gpu: None, modifiers: 0, menus: Default::default(), secure_keys: false }
     }
 
+    /// A window by its instance; 0 is whichever has the keyboard (the app menu's Edit items), else the first.
     fn win(&mut self, handle: u32) -> Option<&mut Win> {
+        if handle == 0 {
+            let key = self.wins.iter().find(|(_, w)| w.focused).map(|(id, _)| *id).or_else(|| self.by_handle.get(&crate::APP).copied())?;
+            return self.wins.get_mut(&key);
+        }
         let id = self.by_handle.get(&handle)?;
         self.wins.get_mut(id)
     }

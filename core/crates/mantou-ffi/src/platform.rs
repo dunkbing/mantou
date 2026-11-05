@@ -430,8 +430,9 @@ mod mac {
             MenuEvent::set_event_handler(Some(|e: MenuEvent| {
                 let inst = crate::app();
                 if let Some((key, mods)) = e.id.0.strip_prefix(EDIT).and_then(edit_keys) {
-                    crate::send(crate::UserEvent::TestKey(key, true, mods));
-                    crate::send(crate::UserEvent::TestKey(key, false, mods));
+                    // Instance 0: whichever window has the keyboard.
+                    crate::send(crate::UserEvent::TestKey(0, key, true, mods));
+                    crate::send(crate::UserEvent::TestKey(0, key, false, mods));
                 } else if e.id.0 == QUIT {
                     inst.push_event([mantou_tree::protocol::event::CLOSE_REQUESTED, 0, 0, 0]);
                 } else {
