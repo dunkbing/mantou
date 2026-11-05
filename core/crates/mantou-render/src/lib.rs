@@ -30,6 +30,10 @@ pub struct Renderer {
     images: HashMap<u32, wgpu::TextureView>,
     /// A bind group per image texture, with the current atlas; rebuilt when the atlas changes.
     binds: HashMap<u32, wgpu::BindGroup>,
+    /// Filters and side colours for the quads that have them: blocks of four vec4s (see `rare_buffer`).
+    rare: wgpu::Buffer,
+    rare_capacity: u64,
+    rare_scratch: Vec<f32>,
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -93,6 +97,9 @@ impl Renderer {
             sampler,
             images: HashMap::new(),
             binds: HashMap::new(),
+            rare: Self::rare_buffer(device, 64),
+            rare_capacity: 64,
+            rare_scratch: Vec::new(),
         };
         let blank = r.image_texture(device, None, 1, 1);
         r.images.insert(0, blank);
@@ -145,11 +152,22 @@ impl Renderer {
                     wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&self.atlas_view) },
                     wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(view) },
                     wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry { binding: 3, resource: self.rare.as_entire_binding() },
                 ],
             });
             self.binds.insert(image, group);
         }
         &self.binds[&image]
+    }
+
+    /// The data few quads need (filters, side colours): `capacity` blocks of four vec4s, read by the fragment shader.
+    fn rare_buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("mantou rare quad data"),
+            size: capacity * 64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
     }
 
     fn buffer(device: &wgpu::Device, capacity: u64) -> wgpu::Buffer {
@@ -206,6 +224,7 @@ impl Renderer {
         self.sync_images(device, queue, scene);
         let (w, h) = (size_px.0.max(1) as f32, size_px.1.max(1) as f32);
         self.scratch.clear();
+        self.rare_scratch.clear();
         for q in &scene.quads {
             // A shadow is drawn as far as its blur reaches (three sigmas), past its shape.
             let grow = if q.extra.trap.is_some() || q.extra.span.is_some() { 1.0 } else { q.shadow.map_or(0.0, |sigma| (3.0 * sigma).ceil() + 1.0) };
@@ -245,19 +264,41 @@ impl Renderer {
             self.scratch.extend_from_slice(&widths);
             let (end, angle, on) = q.extra.gradient.map_or(([0.0; 4], 0.0, 0.0), |g| (self.color(g.end), g.angle, 1.0));
             self.scratch.extend_from_slice(&end);
-            self.scratch.extend_from_slice(&[angle, on, q.extra.rotation, q.extra.filter[0]]);
+            self.scratch.extend_from_slice(&[angle, on, q.extra.rotation, 0.0]);
             // The middle stop's colour; then (its position + 1, or 0 for none; 1 = radial).
             let (mid, at, radial) = match q.extra.gradient {
                 Some(g) => (g.mid.map_or([0.0; 4], |m| self.color(m.0)), g.mid.map_or(0.0, |m| m.1 + 1.0), if g.radial { 1.0 } else { 0.0 }),
                 None => ([0.0; 4], 0.0, 0.0),
             };
             self.scratch.extend_from_slice(&mid);
-            self.scratch.extend_from_slice(&[at, radial, q.extra.clip_radius, q.extra.filter[1]]);
+            // Filters and side colours: a block in the rare buffer, found by its number + 1 (0 = none).
+            let slot = if q.extra.filter != [1.0, 1.0, 1.0, 0.0] || q.extra.side_colors.is_some() {
+                let n = (self.rare_scratch.len() / 16) as f32 + 1.0;
+                let sides = q.extra.side_colors.map(|c| [self.color(c[0]), self.color(c[1]), self.color(c[2])]).unwrap_or([bc; 3]);
+                self.rare_scratch.extend_from_slice(&q.extra.filter);
+                for c in sides {
+                    self.rare_scratch.extend_from_slice(&c);
+                }
+                n
+            } else {
+                0.0
+            };
+            self.scratch.extend_from_slice(&[at, radial, q.extra.clip_radius, slot]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {
             self.capacity = count.next_power_of_two();
             self.instances = Self::buffer(device, self.capacity);
+        }
+        let blocks = (self.rare_scratch.len() / 16) as u64;
+        if blocks > self.rare_capacity {
+            self.rare_capacity = blocks.next_power_of_two();
+            self.rare = Self::rare_buffer(device, self.rare_capacity);
+            self.binds.clear(); // they hold the old buffer
+        }
+        if blocks > 0 {
+            let bytes: Vec<u8> = self.rare_scratch.iter().flat_map(|f| f.to_le_bytes()).collect();
+            queue.write_buffer(&self.rare, 0, &bytes);
         }
         if count > 0 {
             let bytes: Vec<u8> = self.scratch.iter().flat_map(|f| f.to_le_bytes()).collect();

@@ -40,6 +40,8 @@ struct VsOut {
 @group(0) @binding(0) var atlas: texture_2d<f32>;
 @group(0) @binding(1) var image: texture_2d<f32>;
 @group(0) @binding(2) var image_sampler: sampler;
+// Data few quads have, four vec4s each: filter (brightness, saturate, contrast, invert), then the right, bottom and left border colours.
+@group(0) @binding(3) var<storage, read> rare: array<vec4<f32>>;
 
 @vertex
 fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
@@ -242,10 +244,31 @@ fn shade(in: VsOut) -> vec4<f32> {
         let shrink = vec4<f32>(max(in.widths.x, in.widths.w), max(in.widths.x, in.widths.y), max(in.widths.z, in.widths.y), max(in.widths.z, in.widths.w));
         inner = clamp(0.5 - rounded_box4(p, lo, hi, max(in.radii - shrink, vec4<f32>(0.0))), 0.0, 1.0) * select(0.0, 1.0, hi.x > lo.x && hi.y > lo.y);
     }
+    // The ring's colour: the top's is the quad's own; if the sides differ, the nearest side wins (the corners split along the diagonals).
+    var bc = in.border_color;
+    if (in.grad2.w > 0.0) {
+        let slot = u32(in.grad2.w - 1.0) * 4u;
+        let wt = max(in.widths.x, 0.001);
+        let wr = max(in.widths.y, 0.001);
+        let wb = max(in.widths.z, 0.001);
+        let wl = max(in.widths.w, 0.001);
+        let st = select(1e9, (p.y - in.rect_px.y) / wt, in.widths.x > 0.0);
+        let sr = select(1e9, (in.rect_px.z - p.x) / wr, in.widths.y > 0.0);
+        let sb = select(1e9, (in.rect_px.w - p.y) / wb, in.widths.z > 0.0);
+        let sl = select(1e9, (p.x - in.rect_px.x) / wl, in.widths.w > 0.0);
+        let least = min(min(st, sr), min(sb, sl));
+        if (least == sr) {
+            bc = rare[slot + 1u];
+        } else if (least == sb) {
+            bc = rare[slot + 2u];
+        } else if (least == sl) {
+            bc = rare[slot + 3u];
+        }
+    }
     let fill = color.a * inner;
-    let ring = in.border_color.a * (outer - inner);
+    let ring = bc.a * (outer - inner);
     let a = fill + ring;
-    return vec4<f32>(color.rgb * fill + in.border_color.rgb * ring, a);
+    return vec4<f32>(color.rgb * fill + bc.rgb * ring, a);
 }
 
 @fragment
@@ -256,12 +279,16 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
         let d = rounded_box(in.position.xy, in.clip.xy, in.clip.zw, in.grad2.z);
         out = out * clamp(0.5 - d, 0.0, 1.0);
     }
-    // Brightness (grad.w) and saturation (grad2.w), applied to the colour as it looks (sRGB), not as blended (linear).
-    if (in.grad.w != 1.0 || in.grad2.w != 1.0) {
-        if (out.a > 0.0) {
-            var c = pow(max(out.rgb / out.a, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)) * in.grad.w;
+    // Filters, applied to the colour as it looks (sRGB), not as blended (linear): brightness, contrast, saturation, inversion.
+    if (in.grad2.w > 0.0 && out.a > 0.0) {
+        let f = rare[u32(in.grad2.w - 1.0) * 4u];
+        if (f.x != 1.0 || f.y != 1.0 || f.z != 1.0 || f.w != 0.0) {
+            var c = pow(max(out.rgb / out.a, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)) * f.x;
+            c = (c - vec3<f32>(0.5)) * f.z + vec3<f32>(0.5);
             let gray = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
-            c = clamp(mix(vec3<f32>(gray), c, in.grad2.w), vec3<f32>(0.0), vec3<f32>(1.0));
+            c = mix(vec3<f32>(gray), c, f.y);
+            c = mix(c, vec3<f32>(1.0) - c, f.w);
+            c = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
             out = vec4<f32>(pow(c, vec3<f32>(2.2)) * out.a, out.a);
         }
     }

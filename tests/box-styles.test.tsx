@@ -144,3 +144,34 @@ test("brightness and saturate change what's drawn inside, nested ones multiply",
   expect(px(h, 10, 10)[0]).toBeLessThan(once); // a quarter, darker than a half
   expect(near(px(red({}), 10, 10), [255, 0, 0], 2)).toBe(true);
 });
+
+test("each side can have its own border colour; the others use borderColor", () => {
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View style={{ width: 100, height: 100, backgroundColor: "#ffffff", borderWidth: 6, borderColor: "#00ff00", borderTopColor: "#ff0000", borderBottomColor: "#0000ff" }} />
+    </View>
+  ));
+  expect(near(px(h, 60, 12), [255, 0, 0], 6)).toBe(true); // top
+  expect(near(px(h, 60, 107), [0, 0, 255], 6)).toBe(true); // bottom
+  expect(near(px(h, 12, 60), [0, 255, 0], 6)).toBe(true); // left: borderColor
+  expect(near(px(h, 107, 60), [0, 255, 0], 6)).toBe(true); // right: borderColor
+  expect(near(px(h, 60, 60), [255, 255, 255], 3)).toBe(true); // the inside
+});
+
+test("side colours alone make a border (no borderColor)", () => {
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View style={{ width: 100, height: 100, backgroundColor: "#ffffff", borderBottomWidth: 6, borderBottomColor: "#0000ff" }} />
+    </View>
+  ));
+  expect(near(px(h, 60, 107), [0, 0, 255], 6)).toBe(true);
+  expect(near(px(h, 60, 12), [255, 255, 255], 3)).toBe(true);
+});
+
+test("contrast and invert", () => {
+  const on = (style: any, color = "#ff0000") => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: color }} /></View>);
+  expect(near(px(on({ invert: 1 }), 10, 10), [0, 255, 255], 4)).toBe(true);
+  expect(near(px(on({ invert: 1 }, "#ffffff"), 10, 10), [0, 0, 0], 4)).toBe(true);
+  const flat = px(on({ contrast: 0 }, "#ff0000"), 10, 10);
+  expect(Math.abs(flat[0] - flat[1]) < 4 && flat[0] > 100 && flat[0] < 160).toBe(true); // mid gray
+});

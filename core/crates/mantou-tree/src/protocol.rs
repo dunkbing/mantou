@@ -586,11 +586,17 @@ pub enum Prop {
     GradientShape = 90,
     Brightness = 91,
     Saturate = 92,
+    Contrast = 93,
+    Invert = 94,
+    BorderTopColor = 95,
+    BorderRightColor = 96,
+    BorderBottomColor = 97,
+    BorderLeftColor = 98,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 92;
+    pub const COUNT: usize = 98;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -685,6 +691,12 @@ impl Prop {
             90 => Prop::GradientShape,
             91 => Prop::Brightness,
             92 => Prop::Saturate,
+            93 => Prop::Contrast,
+            94 => Prop::Invert,
+            95 => Prop::BorderTopColor,
+            96 => Prop::BorderRightColor,
+            97 => Prop::BorderBottomColor,
+            98 => Prop::BorderLeftColor,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -783,6 +795,12 @@ impl Prop {
             Prop::GradientShape => "gradientShape",
             Prop::Brightness => "brightness",
             Prop::Saturate => "saturate",
+            Prop::Contrast => "contrast",
+            Prop::Invert => "invert",
+            Prop::BorderTopColor => "borderTopColor",
+            Prop::BorderRightColor => "borderRightColor",
+            Prop::BorderBottomColor => "borderBottomColor",
+            Prop::BorderLeftColor => "borderLeftColor",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -880,6 +898,12 @@ impl Prop {
             Prop::GradientShape => ValueKind::Enum(2),
             Prop::Brightness => ValueKind::F32,
             Prop::Saturate => ValueKind::F32,
+            Prop::Contrast => ValueKind::F32,
+            Prop::Invert => ValueKind::F32,
+            Prop::BorderTopColor => ValueKind::Color,
+            Prop::BorderRightColor => ValueKind::Color,
+            Prop::BorderBottomColor => ValueKind::Color,
+            Prop::BorderLeftColor => ValueKind::Color,
             Prop::ZIndex => ValueKind::F32,
         }
     }

@@ -219,6 +219,12 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "gradientShape", code: 90, type: { enum: ["linear", "radial"] }, default: "linear (radial: from the centre out to the corners; gradientAngle is ignored)" },
   { name: "brightness", code: 91, type: "f32", default: "1: what's drawn in the view and inside it is made this many times brighter (0 black, 2 twice as bright)" },
   { name: "saturate", code: 92, type: "f32", default: "1: colour strength of what's drawn in the view and inside it (0 is grayscale)" },
+  { name: "contrast", code: 93, type: "f32", default: "1: how far what's drawn in the view and inside it is from mid gray (0 is flat gray, 2 twice as far)" },
+  { name: "invert", code: 94, type: "f32", default: "0: 1 swaps every colour in the view and inside it for its opposite; in between mixes" },
+  { name: "borderTopColor", code: 95, type: "color", default: "borderColor: the top side's border colour (transparent = borderColor); the sides meet along the diagonals at the corners" },
+  { name: "borderRightColor", code: 96, type: "color", default: "borderColor" },
+  { name: "borderBottomColor", code: 97, type: "color", default: "borderColor" },
+  { name: "borderLeftColor", code: 98, type: "color", default: "borderColor" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 

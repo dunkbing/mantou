@@ -52,12 +52,12 @@ Two things catch people out:
 | | |
 |---|---|
 | Colour | `backgroundColor`, `opacity` |
-| Borders | `borderRadius`, `borderWidth`, `borderColor`; one corner: `borderTopLeftRadius`…; one side: `borderTopWidth`… (one colour for all) |
+| Borders | `borderRadius`, `borderWidth`, `borderColor`; one corner: `borderTopLeftRadius`…; one side: `borderTopWidth`…; one side's colour: `borderTopColor`… (the others use `borderColor`; the sides meet along the diagonals at the corners) |
 | Gradient | `backgroundColor` to `gradientColor`, at `gradientAngle` degrees (180, the default, runs top to bottom; 90 left to right); `gradientMidColor` (at `gradientMidAt` percent, default 50) adds a third stop; `gradientShape: "radial"` runs from the centre to the corners. A see-through end colour (`"#ffffff00"`) fades out |
 | Stacking | `zIndex`: higher is painted and hit on top of its siblings |
 | Shadow | `shadowX`, `shadowY`, `shadowBlur`, `shadowSpread`, `shadowColor` |
 | Clipping | `overflow: "visible" \| "hidden" \| "scroll"`; a clipping view with `borderRadius` clips to the rounded corners |
-| Filters | `brightness` and `saturate` (1 = unchanged, 0 = black or grayscale) on a view and what's inside it; nested ones multiply |
+| Filters | `brightness`, `saturate`, `contrast` (1 = unchanged) and `invert` (0 = unchanged, 1 = opposite colours) on a view and what's inside it; nested ones combine. No blur yet |
 | Transform | `translateX`, `translateY`, `scale`, `rotate` in degrees clockwise (they move what is drawn, not the layout) |
 | Pointer | `cursor` (`"pointer"`, `"text"`, `"grab"`…) |
 | Images | `objectFit` |

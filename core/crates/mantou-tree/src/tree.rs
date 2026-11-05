@@ -77,6 +77,13 @@ pub struct Gradient {
     pub radial: bool,
 }
 
+pub const NO_FILTER: [f32; 4] = [1.0, 1.0, 1.0, 0.0];
+
+/// Two filters one after the other.
+fn both(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] + b[3] - 2.0 * a[3] * b[3]]
+}
+
 /// What a box adds to a quad: corners and sides of their own, and a gradient.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Extra {
@@ -93,12 +100,14 @@ pub struct Extra {
     pub span: Option<[f32; 4]>,
     /// The corner radius of the clip, in device px (0 = a plain rectangle).
     pub clip_radius: f32,
-    /// Brightness and saturation the quad's colours are put through.
-    pub filter: [f32; 2],
+    /// Brightness, saturation, contrast and inversion the quad's colours are put through.
+    pub filter: [f32; 4],
+    /// The right, bottom and left border colours when they differ from `border_color` (the top's), like it.
+    pub side_colors: Option<[[f32; 4]; 3]>,
 }
 
 impl Extra {
-    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: None, clip_radius: 0.0, filter: [1.0, 1.0] };
+    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: None, clip_radius: 0.0, filter: NO_FILTER, side_colors: None };
 }
 
 /// The quads of a CANVAS command list. Coordinates are logical px from `origin` (the content box's top left, in
@@ -460,9 +469,13 @@ struct Visual {
     scale: f32,
     /// Degrees clockwise, about the box's centre.
     rotate: f32,
-    /// `brightness` and `saturate` (1 = unchanged).
+    /// `brightness`, `saturate` and `contrast` (1 = unchanged), `invert` (0 = unchanged).
     brightness: f32,
     saturate: f32,
+    contrast: f32,
+    invert: f32,
+    /// The top, right, bottom and left border colours (0 = `border_color`).
+    side_colors: [u32; 4],
     /// The `cursor` style (protocol::cursor; AUTO = whatever's below).
     cursor: u32,
 }
@@ -524,7 +537,7 @@ struct LaidOut {
     /// The corner radius of the clip its ancestors put on it (logical px, scaled like `rect`).
     clip_r: f32,
     /// `brightness` and `saturate` on this box and the boxes up to `end` inside it.
-    filter: Option<([f32; 2], usize)>,
+    filter: Option<([f32; 4], usize)>,
 }
 
 /// A rotation of a subtree: clockwise `angle` (radians) about `pivot` (logical px, in the frame its ancestors'
@@ -1089,7 +1102,7 @@ impl Tree {
         // absolutely positioned children (Taffy defaults to `static`, whose
         // boxes aren't; dunkbing/mantou#1).
         let mut style = Style { flex_direction: FlexDirection::Column, position: Position::Relative, ..Style::default() };
-        let mut v = Visual { opacity: 1.0, scale: 1.0, brightness: 1.0, saturate: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
+        let mut v = Visual { opacity: 1.0, scale: 1.0, brightness: 1.0, saturate: 1.0, contrast: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
         let shared = self.styles.get(&node.shared).map(|v| v.as_slice()).unwrap_or(&[]);
         for (prop, value) in shared.iter().copied().chain(node.own.iter().map(|(k, v)| (*k, *v))) {
             set_prop(&mut style, &mut v, prop, value);
@@ -1346,8 +1359,8 @@ impl Tree {
             xf
         };
         let mut laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k, spin: None, clip_r, filter: None };
-        if v.brightness != 1.0 || v.saturate != 1.0 {
-            laid.filter = Some(([v.brightness, v.saturate], 0));
+        if [v.brightness, v.saturate, v.contrast, v.invert] != NO_FILTER {
+            laid.filter = Some(([v.brightness, v.saturate, v.contrast, v.invert], 0));
         }
         if v.rotate % 360.0 != 0.0 {
             laid.spin = Some(Spin { angle: v.rotate.to_radians(), pivot: [(laid.rect[0] + laid.rect[2]) / 2.0, (laid.rect[1] + laid.rect[3]) / 2.0], end: 0 });
@@ -1458,7 +1471,7 @@ impl Tree {
         let mut thumbs = self.thumbs.iter().peekable();
         // `rotate`: the quads a box makes are turned by every spin around it, innermost first.
         let mut spins: Vec<Spin> = Vec::new();
-        let mut filters: Vec<([f32; 2], usize)> = Vec::new();
+        let mut filters: Vec<([f32; 4], usize)> = Vec::new();
         let mut from = 0;
         let mut clip_r = 0.0;
         for (i, b) in self.boxes.iter().enumerate() {
@@ -1468,7 +1481,7 @@ impl Tree {
                     spin_quad(q, sp, s);
                 }
                 for f in &filters {
-                    q.extra.filter = [q.extra.filter[0] * f.0[0], q.extra.filter[1] * f.0[1]];
+                    q.extra.filter = both(q.extra.filter, f.0);
                 }
             }
             while spins.last().is_some_and(|sp| sp.end <= i) {
@@ -1502,8 +1515,14 @@ impl Tree {
             }
             let r = b.rect;
             let bg = rgba(v.background, alpha);
-            let border_color = rgba(v.border_color, alpha);
-            let border = if border_color[3] > 0.0 { (v.border * k * s).max(0.0) } else { 0.0 };
+            let sides_set = v.side_colors.iter().any(|c| *c != 0);
+            let common = rgba(v.border_color, alpha);
+            // The top side's colour is the quad's; the others go beside it when they differ.
+            let side = |i: usize| if v.side_colors[i] != 0 { rgba(v.side_colors[i], alpha) } else { common };
+            let border_color = side(0);
+            let side_colors = sides_set.then(|| [side(1), side(2), side(3)]);
+            let any_border = border_color[3] > 0.0 || side_colors.is_some_and(|c| c.iter().any(|c| c[3] > 0.0));
+            let border = if any_border { (v.border * k * s).max(0.0) } else { 0.0 };
             let rect = [snap(r[0]), snap(r[1]), snap(r[2]), snap(r[3])];
             let sc = rgba(v.shadow_color, alpha);
             if sc[3] > 0.0 && r[2] > r[0] && r[3] > r[1] {
@@ -1520,7 +1539,7 @@ impl Tree {
             // Corners and sides of their own; a gradient to its end colour.
             let radii = v.radii_p1.map(|r| if r > 0.0 { (r - 1.0) * k * s } else { -1.0 });
             let widths = v.widths_p1.map(|w| if w > 0.0 { (w - 1.0) * k * s } else { -1.0 });
-            let widths = if border_color[3] > 0.0 { widths } else { [0.0; 4].map(|_| -1.0) };
+            let widths = if any_border { widths } else { [0.0; 4].map(|_| -1.0) };
             let own_sides = widths.iter().any(|w| *w >= 0.0);
             // Any end colour but plain `transparent` (all zero) makes a gradient, so a fade to a see-through colour works.
             let gradient = (v.gradient != 0).then(|| Gradient {
@@ -1529,7 +1548,7 @@ impl Tree {
                 mid: (v.gradient_mid != 0).then(|| (rgba(v.gradient_mid, alpha), (v.gradient_mid_at + 0.5).clamp(0.0, 1.0))),
                 radial: v.gradient_radial,
             });
-            let extra = Extra { radii, widths, gradient, ..Extra::NONE };
+            let extra = Extra { radii, widths, gradient, side_colors, ..Extra::NONE };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
             }
@@ -1684,7 +1703,7 @@ impl Tree {
                 spin_quad(q, sp, s);
             }
             for f in &filters {
-                q.extra.filter = [q.extra.filter[0] * f.0[0], q.extra.filter[1] * f.0[1]];
+                q.extra.filter = both(q.extra.filter, f.0);
             }
         }
         for t in thumbs {
@@ -2046,6 +2065,19 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::Rotate => v.rotate = finite(num(), 0.0),
         Prop::Brightness => v.brightness = finite(num(), 1.0).clamp(0.0, 10.0),
         Prop::Saturate => v.saturate = finite(num(), 1.0).clamp(0.0, 10.0),
+        Prop::Contrast => v.contrast = finite(num(), 1.0).clamp(0.0, 10.0),
+        Prop::Invert => v.invert = finite(num(), 0.0).clamp(0.0, 1.0),
+        Prop::BorderTopColor | Prop::BorderRightColor | Prop::BorderBottomColor | Prop::BorderLeftColor => {
+            if let Value::Color(c) = value {
+                let side = match prop {
+                    Prop::BorderTopColor => 0,
+                    Prop::BorderRightColor => 1,
+                    Prop::BorderBottomColor => 2,
+                    _ => 3,
+                };
+                v.side_colors[side] = c;
+            }
+        }
         Prop::FontSize => v.text.size = num().clamp(1.0, 1000.0),
         Prop::FontWeight => v.text.weight = num().clamp(1.0, 1000.0),
         Prop::LineHeight => v.text.line_height = num().clamp(0.0, 10.0),
