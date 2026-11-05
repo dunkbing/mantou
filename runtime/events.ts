@@ -23,6 +23,7 @@ export type CoreEvent =
   | { type: "serviceResult"; req: number; cancelled: boolean; json: string }
   | { type: "menu"; id: string }
   | { type: "coreError"; message: string; report: string }
+  | { type: "htmlRequest"; target: number; url: string }
   | { type: "windowState"; flags: number; x: number; y: number }
   | { type: "fileDrop"; kind: 0 | 1 | 2; target: number; json: string }
   | { type: "webview"; id: number; kind: number; text: string }
@@ -110,6 +111,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.FILE_DROP: return { type: "fileDrop", kind: w[i + 1] as 0 | 1 | 2, target: w[i + 2], json: text(w, i, w[i + 3]) };
     case Event.WEBVIEW: return { type: "webview", id: w[i + 1], kind: w[i + 2], text: text(w, i, w[i + 3]) };
     case Event.MENU: return { type: "menu", id: text(w, i, w[i + 3]) };
+    case Event.HTML_REQUEST: return { type: "htmlRequest", target: w[i + 1], url: text(w, i, w[i + 3]) };
     case Event.CORE_ERROR: {
       let j: { message?: unknown; report?: unknown } = {};
       try { j = JSON.parse(text(w, i, w[i + 3])); } catch {}
@@ -164,6 +166,7 @@ export function route(
     dispatchHover(t: number, hovered: boolean): void;
     dispatchService(req: number, cancelled: boolean, json: string): void;
     dispatchMenu(id: string): void;
+    dispatchHtmlRequest(target: number, url: string): void;
     dispatchWindowState(flags: number, x: number, y: number): void;
     dispatchDrop(kind: 0 | 1 | 2, target: number, json: string): void;
     dispatchWebview(id: number, kind: number, text: string): void;
@@ -180,6 +183,7 @@ export function route(
   else if (e.type === "pointerEnter" || e.type === "pointerLeave") ui.dispatchHover(e.target, e.type === "pointerEnter");
   else if (e.type === "serviceResult") ui.dispatchService(e.req, e.cancelled, e.json);
   else if (e.type === "menu") ui.dispatchMenu(e.id);
+  else if (e.type === "htmlRequest") ui.dispatchHtmlRequest(e.target, e.url);
   else if (e.type === "coreError") dispatchError({ kind: "core", message: e.message, report: e.report || undefined });
   else if (e.type === "windowState") ui.dispatchWindowState(e.flags, e.x, e.y);
   else if (e.type === "webview") ui.dispatchWebview(e.id, e.kind, e.text);

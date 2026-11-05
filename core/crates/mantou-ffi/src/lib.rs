@@ -63,7 +63,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 13: mt_reset (mantou dev's reloads).
 /// 14: more windows: mt_window_open, mt_window_close, mt_window_focus.
 /// 15: crash reports: mt_set_crash_dir, the CORE_ERROR event, mt_test_panic.
-pub const ABI_VERSION: u32 = 15;
+/// 16: Html nodes: mt_html_link_at and the HTML_REQUEST event.
+pub const ABI_VERSION: u32 = 16;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -729,6 +730,18 @@ pub unsafe extern "C" fn mt_test_value(inst: u32, id: u32, dst: *mut u8, cap: u3
         Some(v) => write_str(out, &v),
         None => u32::MAX,
     })
+}
+
+/// The `href` of the link at (x, y) (logical px, the window's) in Html node `id`, copied into `dst` as
+/// UTF-8 as far as it fits; returns its full length, or 0 when there is no link there.
+///
+/// # Safety
+/// `dst` must be valid for `cap` bytes, or null with `cap` 0.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_html_link_at(inst: u32, id: u32, x: f32, y: f32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, 0, |i| lock(&i.tree).html_link_at(id, x, y).map_or(0, |url| write_str(out, &url)))
 }
 
 /// Test hook: the focused input, or 0.

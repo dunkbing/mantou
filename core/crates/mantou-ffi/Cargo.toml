@@ -14,7 +14,7 @@ wgpu = "30"
 pollster = "1"
 # The system clipboard for the window (headless instances keep their own).
 arboard = { version = "3", default-features = false }
-mantou-tree = { path = "../mantou-tree" }
+mantou-tree = { path = "../mantou-tree", features = ["html"] }
 mantou-render = { path = "../mantou-render" }
 
 # Platform services (design §10): file dialogs and message boxes everywhere, the app and context menus natively.

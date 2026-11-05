@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { AccessRoleName, DropEvent, EnterSpec, ExitSpec, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, DropEvent, EnterSpec, ExitSpec, HtmlLoader, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 import type { CanvasContext } from "./canvas";
 
@@ -155,6 +155,24 @@ export interface ImageProps {
   ref?: Node | ((node: Node) => void);
 }
 
+/** A static HTML/CSS document drawn by the core (see `Html`). */
+export interface HtmlProps {
+  /** The document: HTML with its CSS (inline, or in `<style>`). No scripts run, and nothing is fetched but through `loadImage`. */
+  html: string;
+  /** What the document's `prefers-color-scheme` answers (default "light"). */
+  colorScheme?: "light" | "dark";
+  /** The bytes of an image (or stylesheet) the document asks for, or null to leave it out: `cid:` parts, remote ones once allowed. Asked once per URL; `data:` URLs need none. */
+  loadImage?: HtmlLoader;
+  /** A link was pressed: its href. The view never navigates. */
+  onLink?: (url: string) => void;
+  /** Its width comes from the layout (`width: "100%"` or a flex parent's); its height follows the document. */
+  style?: StyleProp;
+  onLayout?: (rect: Rect) => void;
+  onHover?: (hovered: boolean) => void;
+  onPress?: (e: PressEvent) => void;
+  ref?: Node | ((node: Node) => void);
+}
+
 /** A scroll view (see `Scroll`). */
 export interface ScrollProps extends AccessProps, PointerProps, FocusProps {
   /** The scroll view's own style; `overflow: "scroll"` is set for you. */
@@ -245,6 +263,7 @@ export namespace JSX {
     text: TextProps;
     input: InputProps;
     image: ImageProps;
+    html: HtmlProps;
   }
   export interface IntrinsicAttributes {}
 }

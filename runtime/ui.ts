@@ -3,7 +3,7 @@
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
 import { KeyModifier, WindowStateFlag } from "./gen/protocol";
-import { FocusableFlag, AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
+import { FocusableFlag, HtmlFlag, AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { createComputed, createRoot, untrack } from "./solid/solid";
@@ -23,7 +23,12 @@ export interface Sink {
   service?(req: number, json: string): void;
   /** The id of the topmost node at logical (x, y), or 0, if the sink lays out. */
   hit?(x: number, y: number): number;
+  /** The href of the link at logical (x, y) (the window's) in an Html node's document, if the sink lays out. */
+  linkAt?(id: number, x: number, y: number): string | null;
 }
+
+/** Answers what an Html node's document asks for (an image or a stylesheet): its bytes, or null to leave it out. */
+export type HtmlLoader = (url: string) => Uint8Array | null | undefined | Promise<Uint8Array | null | undefined>;
 
 /** Properties the core can animate (design §9.4). */
 export type AnimatableProp = "opacity" | "translateX" | "translateY" | "scale" | "rotate" | "layout" | "backgroundColor" | "borderColor" | "color";
@@ -368,6 +373,52 @@ export class Node {
     return this.kind === NodeKind.Image;
   }
 
+  get isHtml(): boolean {
+    return this.kind === NodeKind.Html;
+  }
+
+  private htmlDoc = { html: "", dark: false, sent: false };
+  /** @internal What answers the Html node's document's requests (`loadResource`). */
+  htmlLoader: HtmlLoader | undefined;
+
+  /**
+   * An Html node's document: static HTML and CSS, laid out and drawn by the core (no scripts run, nothing is
+   * fetched; see `loadResource`). Its height follows the document's at the width it gets. `dark` answers the
+   * document's `prefers-color-scheme`.
+   */
+  setHtml(html: string, options: { dark?: boolean } = {}): this {
+    this.alive();
+    if (!this.isHtml) throw new Error(`mantou: setHtml is for <Html>, not <${this.kindName}>`);
+    const dark = options.dark ?? this.htmlDoc.dark;
+    if (this.htmlDoc.sent && html === this.htmlDoc.html && dark === this.htmlDoc.dark) return this;
+    this.htmlDoc = { html, dark, sent: true };
+    this.ui.enc.html(this.id, dark ? HtmlFlag.Dark : 0, html);
+    this.ui.schedule();
+    return this;
+  }
+
+  /** Answers the document's `prefers-color-scheme` (sends the document again when it changes). */
+  setHtmlDark(dark: boolean): this {
+    return this.htmlDoc.sent ? this.setHtml(this.htmlDoc.html, { dark }) : ((this.htmlDoc.dark = dark), this);
+  }
+
+  /**
+   * What the document's images and stylesheets come from: `loader(url)` returns the bytes (or a promise of them),
+   * or null to leave it out. Without one, nothing is loaded (`data:` URLs always are). Asked once per URL.
+   */
+  loadResource(loader: HtmlLoader | undefined): this {
+    this.htmlLoader = loader;
+    return this;
+  }
+
+  /** A press on a link in an Html node's document: its href (the view never navigates). Returns a function that removes the handler. */
+  onLink(handler: (url: string) => void): () => void {
+    return this.onPress((e) => {
+      const url = this.ui.linkAt(this.id, e.x, e.y);
+      if (url) handler(url);
+    });
+  }
+
   /**
    * An Image's source: a PNG, JPEG, WebP or SVG file (a path the core reads,
    * relative to the working directory) or its bytes. onImageLoad or
@@ -403,7 +454,7 @@ export class Node {
 
   /** A name for messages: "View", "Text" or "Input". */
   get kindName(): string {
-    return this.isText ? "Text" : this.isInput ? "Input" : this.isImage ? "Image" : "View";
+    return this.isText ? "Text" : this.isInput ? "Input" : this.isImage ? "Image" : this.isHtml ? "Html" : "View";
   }
 
   private assertInput(what: string) {
@@ -1510,6 +1561,42 @@ export class Ui {
   }
 
   /** Creates an Image (set its source with `src`). */
+  /** Creates an Html node: a static HTML/CSS document (`setHtml`). */
+  html(...styles: (Style | SharedStyle)[]): Node {
+    const id = this.freeIds.pop() ?? this.nextId++;
+    const node = new Node(this, id, NodeKind.Html);
+    this.nodes.set(id, node);
+    this.enc.create(id, NodeKind.Html);
+    for (const s of styles) s instanceof SharedStyle ? node.use(s) : node.style(s);
+    this.schedule();
+    return node;
+  }
+
+  /** The href of the link at logical (x, y) in Html node `id`'s document, or null. */
+  linkAt(id: number, x: number, y: number): string | null {
+    return this.sink.linkAt?.(id, x, y) ?? null;
+  }
+
+  /** An Html node's document asks for a URL: its loader answers (null when there's none, or it fails). */
+  dispatchHtmlRequest(targetId: number, url: string) {
+    const node = this.nodes.get(targetId);
+    if (!node) return;
+    const answer = (data: Uint8Array | null | undefined) => {
+      if (node.released || this.nodes.get(targetId) !== node) return;
+      this.enc.htmlResource(node.id, url, data ?? null);
+      this.schedule();
+    };
+    const loader = node.htmlLoader;
+    if (!loader) return answer(null);
+    try {
+      const r = loader(url);
+      if (r instanceof Promise) r.then(answer, () => answer(null));
+      else answer(r);
+    } catch {
+      answer(null);
+    }
+  }
+
   image(...styles: (Style | SharedStyle)[]): Node {
     const id = this.freeIds.pop() ?? this.nextId++;
     const node = new Node(this, id, NodeKind.Image);

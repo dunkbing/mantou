@@ -77,6 +77,10 @@ pub mod op {
     pub const ACCESS: u32 = 30;
     /// The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none.
     pub const FOLLOW_POINTER: u32 = 36;
+    /// An Html node's document: static HTML and CSS, parsed and laid out by the core (no scripts run, nothing is fetched); HtmlFlag bits. The node's height follows the document's at its width. What it asks for (images, stylesheets) comes back as HTML_REQUEST events.
+    pub const HTML: u32 = 37;
+    /// The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing).
+    pub const HTML_RESOURCE: u32 = 38;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -117,6 +121,8 @@ pub fn op_name(code: u32) -> &'static str {
         33 => "TEXT_RUNS",
         30 => "ACCESS",
         36 => "FOLLOW_POINTER",
+        37 => "HTML",
+        38 => "HTML_RESOURCE",
         _ => "UNKNOWN",
     }
 }
@@ -126,6 +132,7 @@ pub mod node_kind {
     pub const TEXT: u32 = 2;
     pub const INPUT: u32 = 3;
     pub const IMAGE: u32 = 4;
+    pub const HTML: u32 = 5;
 }
 
 pub mod event_mask {
@@ -190,6 +197,10 @@ pub mod window_state_flag {
     pub const MAXIMIZED: u32 = 4;
     pub const FULLSCREEN: u32 = 8;
     pub const DARK: u32 = 16;
+}
+
+pub mod html_flag {
+    pub const DARK: u32 = 1;
 }
 
 pub mod access_role {
@@ -327,6 +338,8 @@ pub mod event {
     pub const SELECTION: u32 = 28;
     /// A native web view (the `webview` service) loaded a page or sent a message with `window.ipc.postMessage`. a = web view id, b = kind (0 the page loaded, 1 a message from the page), c = byte length; then the UTF-8 JSON ({url, title} or the page's message text), padded to words.
     pub const WEBVIEW: u32 = 30;
+    /// An Html node's document asks for an image or a stylesheet (once per URL); the app answers with HTML_RESOURCE. a = Html node, c = byte length; then the UTF-8 URL, padded to words.
+    pub const HTML_REQUEST: u32 = 31;
     /// Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words.
     pub const FILE_DROP: u32 = 26;
 }

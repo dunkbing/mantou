@@ -53,6 +53,9 @@ pub enum Op {
     Canvas { id: u32, commands: Vec<u32> },
     Keyframes { id: u32, animation: u32, values: Vec<u32> },
     Focusable { id: u32, flags: u32, order: u32 },
+    Html { id: u32, flags: u32, html: String },
+    /// `data`: None when the app had nothing for the URL.
+    HtmlResource { id: u32, url: String, data: Option<Vec<u8>> },
     /// The node drawn at the pointer minus (x, y); id 0 = none.
     FollowPointer { id: u32, x: f32, y: f32 },
     /// A Text's runs: (UTF-8 byte length, span ids outermost first).
@@ -261,6 +264,25 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUSABLE => {
                 fixed(3)?;
                 Op::Focusable { id: a[0], flags: a[1], order: a[2] }
+            }
+            op::HTML => {
+                if n < 3 {
+                    return err(i, "HTML needs an id, flags and a length");
+                }
+                Op::Html { id: a[0], flags: a[1], html: string(bytes, a, i + 1, 2, "HTML")? }
+            }
+            op::HTML_RESOURCE => {
+                if n < 4 {
+                    return err(i, "HTML_RESOURCE needs an id, a URL length, found and a length");
+                }
+                let (url_len, len) = (a[1] as usize, a[3] as usize);
+                if len.div_ceil(4) != n - 4 || url_len > len {
+                    return err(i, "HTML_RESOURCE lengths do not match its words");
+                }
+                let from = (i + 5) * 4;
+                let Ok(url) = std::str::from_utf8(&bytes[from..from + url_len]) else { return err(i, "HTML_RESOURCE: the URL is not UTF-8") };
+                let data = (a[2] != 0).then(|| bytes[from + url_len..from + len].to_vec());
+                Op::HtmlResource { id: a[0], url: url.to_owned(), data }
             }
             op::FOLLOW_POINTER => {
                 fixed(3)?;

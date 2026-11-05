@@ -15,6 +15,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `runtime/` | The rest: `main.ts` (bootstrap, main thread), `errors.ts` (`onError`, crash reports), `worker.ts` (Worker entry: registers the plugin, imports the app), `dev.ts` (`mantou dev`'s supervisor Worker), `windows.ts` (`openWindow`), `winstate.ts` (`restoreState`), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
 | `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`; inputs' focus, keys, pointer and IME (`src/tree/input.rs`). No platform deps |
 | `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL); the inputs' editor (`editor.rs`: caret, selection, undo, limits, scrolling) |
+| `core/crates/mantou-html` | Html nodes' documents: Blitz (Stylo, Taffy, Parley) parsing, layout, link hit-testing and CPU painting in bands; the tree uses it behind its `html` feature (on in `mantou-ffi`). No platform deps |
 | `core/crates/mantou-image` | Images: PNG/JPEG/WebP decoding and SVG rasterization (`resvg`), as RGBA pixels. No platform deps |
 | `core/crates/mantou-render` | wgpu renderer: one instanced pipeline for rectangles (SDF rounded corners, borders) and glyphs, with clip rects; to a window surface or offscreen |
 | `core/crates/mantou-ffi` | The C ABI (`mt_*`): instances (`instance.rs`: events, the clipboard), the winit window (`window.rs`: keys, IME), headless test hooks |
@@ -22,6 +23,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/counter` | `Counter.tsx`, a Solid component; `main.tsx` runs it; `Counter.test.tsx` tests it on the mock core |
 | `examples/todos` | A to-do list with `<Input>`s; `Todos.test.tsx` tests it headless |
 | `examples/showcase` | A screen showing what Mantou draws (list, inputs, shadows, an app font); the README's screenshot |
+| `examples/mail` | An HTML mail in `<Html>`: remote images blocked until "Load images"; `bun run mail` |
 | `examples/gallery` | The base components (`runtime/widgets.tsx`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `devtest.ts` (`mantou dev` reloads in a window), `app.ts` (threading demo) |
@@ -45,6 +47,7 @@ bun run counter             # the counter in a window (bun runtime/main.ts <entr
 bun run todos               # the to-do list (text input) in a window
 bun run showcase            # the showcase screen in a window
 bun run gallery             # the base components in a window
+bun run mail                # an HTML mail (<Html>) in a window
 bun run screenshots         # re-render the README's images (docs/images/) after a visible change
 cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)

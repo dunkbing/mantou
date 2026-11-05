@@ -92,6 +92,15 @@ export class OpEncoder {
     this.op(Op.WINDOW_LIMITS, [f32bits(minW), f32bits(minH), f32bits(maxW), f32bits(maxH), flags]);
   }
   focusable(id: number, flags: number, order: number) { this.op(Op.FOCUSABLE, [id, flags, order]); }
+  html(id: number, flags: number, s: string) { this.op(Op.HTML, [id, flags, ...stringWords(s)]); }
+  htmlResource(id: number, url: string, data: Uint8Array | null) {
+    const u = new TextEncoder().encode(url);
+    const all = new Uint8Array(Math.ceil((u.length + (data?.length ?? 0)) / 4) * 4);
+    all.set(u);
+    if (data) all.set(data, u.length);
+    const words = new Uint32Array(all.buffer);
+    this.op(Op.HTML_RESOURCE, [id, u.length, data ? 1 : 0, u.length + (data?.length ?? 0), ...words]);
+  }
   followPointer(id: number, x: number, y: number) { this.op(Op.FOLLOW_POINTER, [id, f32bits(x), f32bits(y)]); }
   focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
   scrollTo(id: number, x: number, y: number, flags: number) { this.op(Op.SCROLL_TO, [id, f32bits(x), f32bits(y), flags]); }

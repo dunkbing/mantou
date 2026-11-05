@@ -37,8 +37,8 @@ jobs:
         run: cargo test --release --manifest-path core/Cargo.toml -p mantou-tree -p mantou-text -p mantou-image
       - name: Build the native core
         run: cargo build --release --manifest-path core/Cargo.toml
-      - name: The core's own unit tests (whether dialogs can be shown)
-        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi --lib
+      - name: The core's own unit tests (dialogs, HTML documents)
+        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib
       - name: Headless tests on the real core
         run: bun run test:headless
       - name: Reference images that didn't match (actual and diff)

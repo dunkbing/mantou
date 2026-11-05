@@ -3,7 +3,7 @@
 //! quads (rectangles and glyphs), and hit-tested.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use mantou_text::{Align, AtlasImage, PlacedGlyph, TextEngine, TextLayout, TextStyle};
@@ -17,6 +17,7 @@ use crate::protocol::{self as p, Prop, event_mask};
 pub mod access;
 mod anim;
 mod hover;
+mod html;
 mod image;
 mod focus;
 mod input;
@@ -26,6 +27,7 @@ mod scroll;
 use anim::Anims;
 use input::Input;
 use image::ImageNode;
+use html::HtmlNode;
 use scroll::{Drag, Request, ScrollState, Thumb};
 
 pub use mantou_image::Pixels;
@@ -61,6 +63,8 @@ pub enum TreeEvent {
     Select { id: u32, anchor: u32, focus: u32 },
     /// A focused view was pressed from the keyboard (Enter or Space), at its centre (logical px).
     Press { id: u32, x: f32, y: f32 },
+    /// An Html node's document asks for this URL (an image or a stylesheet).
+    HtmlRequest { id: u32, url: String },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -503,6 +507,7 @@ struct Node {
     scroll: Option<ScrollState>,
     /// An Image node's source.
     image: Option<Box<ImageNode>>,
+    html: Option<Box<HtmlNode>>,
     /// A Text node's layout at the width it was drawn at (its bits), reused
     /// while its text, style and width stay the same.
     drawn: RefCell<Option<(u32, Arc<TextLayout>)>>,
@@ -639,6 +644,8 @@ pub struct Tree {
     pointer: Option<(f32, f32)>,
     /// FOLLOW_POINTER: the node drawn at the pointer, and the grab point inside it.
     follow: Option<(u32, f32, f32)>,
+    /// Html nodes (their documents' requests are collected after layouts).
+    html_nodes: HashSet<u32>,
     hovered: Vec<u32>,
 }
 
@@ -709,6 +716,7 @@ impl Tree {
             animating: 0,
             pointer: None,
             follow: None,
+            html_nodes: HashSet::new(),
             hovered: Vec::new(),
         }
     }
@@ -784,7 +792,7 @@ impl Tree {
                         self.text.get_or_insert_with(TextEngine::new);
                         self.taffy.new_leaf_with_context(Style::default(), id)
                     }
-                    p::node_kind::IMAGE => self.taffy.new_leaf_with_context(Style::default(), id),
+                    p::node_kind::IMAGE | p::node_kind::HTML => self.taffy.new_leaf_with_context(Style::default(), id),
                     p::node_kind::INPUT => {
                         input = Some(Box::new(Input::new(self.text.get_or_insert_with(TextEngine::new))));
                         self.taffy.new_leaf_with_context(Style::default(), id)
@@ -809,6 +817,7 @@ impl Tree {
                     canvas: Vec::new(),
                     scroll: None,
                     image: (kind == p::node_kind::IMAGE).then(Box::default),
+                    html: (kind == p::node_kind::HTML).then(Box::default),
                     drawn: RefCell::new(None),
                     anim: None,
                     last_loc: None,
@@ -848,6 +857,7 @@ impl Tree {
                 if self.follow.is_some_and(|f| f.0 == id) {
                     self.follow = None;
                 }
+                self.html_nodes.remove(&id);
                 if self.tsel.as_ref().is_some_and(|t| t.root == id || t.anchor == id || t.editors.contains_key(&id)) {
                     self.tsel = None;
                 }
@@ -1036,6 +1046,8 @@ impl Tree {
                 // As browsers do for focus(): a ring if the user was last using the keyboard.
                 self.focus_visible = self.keyboard_mode;
             }
+            Op::Html { id, flags, html } => self.set_html(id, flags, &html).map_err(|e| format!("HTML: {e}"))?,
+            Op::HtmlResource { id, url, data } => self.html_resource(id, &url, data).map_err(|e| format!("HTML_RESOURCE: {e}"))?,
             Op::FollowPointer { id, x, y } => {
                 if id != 0 {
                     self.node(id)?;
@@ -1066,7 +1078,7 @@ impl Tree {
             return Err("INSERT: a node cannot contain itself".into());
         }
         self.node(child)?;
-        if matches!(self.node(parent)?.kind, p::node_kind::TEXT | p::node_kind::INPUT | p::node_kind::IMAGE) {
+        if matches!(self.node(parent)?.kind, p::node_kind::TEXT | p::node_kind::INPUT | p::node_kind::IMAGE | p::node_kind::HTML) {
             return Err(format!("INSERT: {parent} is a text, input or image node, which have no children"));
         }
         // No cycles: the child must not be an ancestor of the parent.
@@ -1196,10 +1208,20 @@ impl Tree {
         let (vw, vh) = self.viewport_logical();
         let rt = self.nodes[&root].taffy;
         let space = Size { width: AvailableSpace::Definite(vw), height: AvailableSpace::Definite(vh) };
-        let (nodes, mut text) = (&self.nodes, self.text.as_mut());
+        let (nodes, mut text, scale) = (&self.nodes, self.text.as_mut(), self.scale);
         let measured = self.taffy.compute_layout_with_measure(rt, space, |inputs, _, ctx, style| {
             taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, avail| {
                 let Some(node) = ctx.and_then(|id| nodes.get(id)) else { return Size::ZERO };
+                if let Some(h) = &node.html {
+                    // As wide as it's given (600 px when it may pick), as tall as its document is then.
+                    let width = known.width.or(match avail.width {
+                        AvailableSpace::Definite(w) => Some(w),
+                        AvailableSpace::MinContent => Some(320.0),
+                        AvailableSpace::MaxContent => None,
+                    });
+                    let (w, h) = h.measure(width, scale);
+                    return Size { width: known.width.unwrap_or(w), height: known.height.unwrap_or(h.ceil()) };
+                }
                 if let Some(img) = &node.image {
                     let (w, h) = image::measure(img.source.as_ref().map(|s| s.natural_size()), (known.width, known.height));
                     return Size { width: w, height: h };
@@ -1230,6 +1252,7 @@ impl Tree {
             self.animate_layout();
         }
         self.place();
+        self.html_requests();
         true
     }
 
@@ -1600,6 +1623,17 @@ impl Tree {
                     canvas_quads(&node.canvas, (c[0], c[1]), k, s, |col| rgba(col, alpha), area, &mut quads, self.text.as_mut(), &v.text, &mut glyphs);
                 }
             }
+            #[cfg(feature = "html")]
+            if let Some(h) = node.html.as_ref() {
+                let (vw, vh) = self.viewport_logical();
+                let visible = intersect(intersect(b.clip, [0.0, 0.0, vw, vh]), b.content);
+                for (band, px) in h.bands(b.content, visible, k, s) {
+                    let rect = [snap(band[0]), snap(band[1]), snap(band[2]), snap(band[3])];
+                    let uv = [0.0, 0.0, px.width as f32, px.height as f32];
+                    quads.push(Quad { rect, color: [1.0, 1.0, 1.0, alpha], uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint: false }), extra: Extra::NONE });
+                    images.insert(px.id, px);
+                }
+            }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
                 let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());
                 let rect = [snap(rect_l[0]), snap(rect_l[1]), snap(rect_l[2]), snap(rect_l[3])];
@@ -1764,6 +1798,7 @@ impl Tree {
             images.insert(px.id, px);
         }
         let atlas = if glyphs { self.text.as_ref().map(|t| t.atlas()) } else { None };
+        self.html_requests();
         Scene { clear: self.clear, quads, size_px: self.viewport_px, atlas, images }
     }
 

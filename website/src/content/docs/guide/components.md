@@ -93,6 +93,27 @@ g.fill(new Path().arc(75, 75, 65, a, b).arc(75, 75, 38, b, a).close(), "#2563eb"
 
 `g.text(string, x, y, colour, size = 14, weight = 400)` draws one line from its top left (it doesn't wrap: put longer text in a `<Text>` over the canvas). Gradients and images in the canvas (use views for those) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
 
+## Html
+
+A static HTML/CSS document, such as an HTML mail, laid out and drawn by the core like any other node: no browser engine, no scripts, and nothing fetched behind your back. It clips, scrolls inside a `<Scroll>` and can be overlapped like a `<View>`. Its width comes from the layout, and its height follows the document's at that width.
+
+```tsx
+<Scroll style={{ flexGrow: 1, minHeight: 0 }}>
+  <Html
+    html={message.html}
+    colorScheme={useColorScheme()()}             // what prefers-color-scheme answers
+    loadImage={(url) => parts.get(url) ?? null}  // cid: parts now; remote ones once the reader allows them
+    onLink={(url) => openExternal(url)}          // the view never navigates
+    style={{ width: "100%" }}
+  />
+</Scroll>
+```
+
+- **Images and stylesheets** the document asks for go to `loadImage(url)`, once per URL. It returns the bytes, a promise of them, or `null` to leave one out (blocked, or not found). Without `loadImage` nothing loads, and `data:` URLs always do. To load what was blocked, make a new `<Html>` (the example does it with `<Show>`).
+- **What it handles:** tables (with `bgcolor`, `width` and `cellpadding`), inline and `<style>` CSS with media queries, `<center>` and `<font>`, rounded corners, PNG, JPEG, GIF, WebP and SVG images. It's [Blitz](https://github.com/DioxusLabs/blitz): Stylo for CSS, with the same Taffy and Parley as the rest of the core.
+- **Not yet:** text selection, and one-sided cell borders in `border-collapse: collapse` tables.
+- `bun run mail` shows an HTML mail with "Load images".
+
 ## WebView
 
 Shows a web page in the window, through Bun's `Bun.WebView`: the page is rendered off screen and its frames are drawn as an image, so Mantou content can sit over it. Clicks, the wheel and typing are forwarded to the page.

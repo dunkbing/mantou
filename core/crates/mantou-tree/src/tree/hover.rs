@@ -82,6 +82,10 @@ impl Tree {
             if n.v.cursor != cursor::AUTO {
                 return n.v.cursor;
             }
+            // A link in an Html node's document.
+            if n.html.is_some() && self.pointer.is_some_and(|(x, y)| self.html_link_at(id, x, y).is_some()) {
+                return cursor::POINTER;
+            }
             if n.input.is_some() {
                 return cursor::TEXT;
             }

@@ -183,6 +183,20 @@ impl Ops {
     pub fn focusable(&mut self, id: u32, flags: u32, order: u32) -> &mut Self {
         self.op(op::FOCUSABLE, &[id, flags, order])
     }
+    pub fn html(&mut self, id: u32, flags: u32, html: &str) -> &mut Self {
+        let mut w = vec![id, flags];
+        w.extend(string_words(html));
+        self.op(op::HTML, &w)
+    }
+    pub fn html_resource(&mut self, id: u32, url: &str, data: Option<&[u8]>) -> &mut Self {
+        let mut all = url.as_bytes().to_vec();
+        all.extend_from_slice(data.unwrap_or_default());
+        let len = all.len();
+        all.resize(len.div_ceil(4) * 4, 0);
+        let mut w = vec![id, url.len() as u32, data.is_some() as u32, len as u32];
+        w.extend(all.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+        self.op(op::HTML_RESOURCE, &w)
+    }
     pub fn follow_pointer(&mut self, id: u32, x: f32, y: f32) -> &mut Self {
         self.op(op::FOLLOW_POINTER, &[id, x.to_bits(), y.to_bits()])
     }

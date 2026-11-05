@@ -75,11 +75,15 @@ export const Op = {
   ACCESS: 30,
   /** The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none. */
   FOLLOW_POINTER: 36,
+  /** An Html node's document: static HTML and CSS, parsed and laid out by the core (no scripts run, nothing is fetched); HtmlFlag bits. The node's height follows the document's at its width. What it asks for (images, stylesheets) comes back as HTML_REQUEST events. */
+  HTML: 37,
+  /** The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing). */
+  HTML_RESOURCE: 38,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS", 36: "FOLLOW_POINTER" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS", 36: "FOLLOW_POINTER", 37: "HTML", 38: "HTML_RESOURCE" };
 
-export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
+export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4,"Html":5} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16,"Drop":32,"Select":64} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
@@ -88,6 +92,7 @@ export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,
 export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16} as const;
 export const WindowFlag = {"NotResizable":1,"Frameless":2,"AlwaysOnTop":4,"Fullscreen":8,"Maximized":16,"HasPosition":32,"TitleOverlay":64} as const;
 export const WindowStateFlag = {"Focused":1,"Minimized":2,"Maximized":4,"Fullscreen":8,"Dark":16} as const;
+export const HtmlFlag = {"Dark":1} as const;
 export const CanvasCmd = {"FillRect":1,"StrokeRect":2,"Line":3,"Circle":4,"StrokeCircle":5,"RoundRect":6,"Area":7,"FillPoly":8,"Text":9} as const;
 export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4,"Spring":16} as const;
 export const AnimateFlag = {"Alternate":1} as const;
@@ -156,6 +161,8 @@ export const Event = {
   SELECTION: 28,
   /** A native web view (the `webview` service) loaded a page or sent a message with `window.ipc.postMessage`. a = web view id, b = kind (0 the page loaded, 1 a message from the page), c = byte length; then the UTF-8 JSON ({url, title} or the page's message text), padded to words. */
   WEBVIEW: 30,
+  /** An Html node's document asks for an image or a stylesheet (once per URL); the app answers with HTML_RESOURCE. a = Html node, c = byte length; then the UTF-8 URL, padded to words. */
+  HTML_REQUEST: 31,
   /** Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words. */
   FILE_DROP: 26,
 } as const;

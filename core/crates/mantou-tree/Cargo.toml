@@ -8,9 +8,14 @@ license.workspace = true
 [dependencies]
 mantou-text = { path = "../mantou-text" }
 mantou-image = { path = "../mantou-image" }
+# Html nodes' documents (Blitz: Stylo, so a long build); without it they lay out empty.
+mantou-html = { path = "../mantou-html", optional = true }
 # Without `calc`: Mantou never builds calc() lengths, the only ones that hold a pointer (see `unsafe impl Send for Tree`).
 accesskit = "0.25"
 taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
+
+[features]
+html = ["dep:mantou-html"]
 
 [dev-dependencies]
 serde_json = "1"

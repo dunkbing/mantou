@@ -1,0 +1,18 @@
+[package]
+name = "mantou-html"
+description = "Mantou's static HTML/CSS documents (HTML mail): Blitz (Stylo, Taffy, Parley) laid out and painted on the CPU, with no scripts and no network of its own. No platform dependencies."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mantou-text = { path = "../mantou-text" }
+blitz-dom = { version = "=0.3.0-beta.4", default-features = false, features = ["svg", "system-fonts"] }
+blitz-html = "=0.3.0-beta.4"
+blitz-paint = { version = "=0.3.0-beta.4", default-features = false, features = ["svg"] }
+blitz-traits = "=0.3.0-beta.4"
+anyrender = "0.14"
+anyrender_vello_cpu = "0.18"
+data-url = "0.3"
+# Blitz decodes images with the image crate but turns on no formats: mail uses these.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }

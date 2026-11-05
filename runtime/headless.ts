@@ -69,6 +69,14 @@ export class HeadlessCore {
         if (r !== 0) throw new Error(`mantou: the core rejected a batch (${r})`);
       },
       hit: (x, y) => this.lib.symbols.mt_test_hit(this.handle, x, y),
+      linkAt: (id, x, y) => {
+        for (let cap = 1024; ; cap *= 4) {
+          const b = new Uint8Array(cap);
+          const n = this.lib.symbols.mt_html_link_at(this.handle, id, x, y, b, cap);
+          if (n === 0) return null;
+          if (n <= cap) return new TextDecoder().decode(b.subarray(0, n));
+        }
+      },
       service: (req, json) => {
         const b = utf8.encode(json);
         this.lib.symbols.mt_service(this.handle, req, b, b.byteLength);

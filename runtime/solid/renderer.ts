@@ -5,7 +5,7 @@
 import { createRenderer } from "solid-js/universal";
 import { createContext, createRoot, getOwner, onCleanup, useContext } from "./solid";
 import type { JSX } from "../jsx-runtime";
-import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type EnterSpec, type ExitSpec, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
+import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type EnterSpec, type ExitSpec, type HtmlLoader, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
 export const UiContext = createContext<Ui>();
@@ -225,6 +225,12 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     if (name === "onLoad") return setHandler(node, name, value, (f: (s: { width: number; height: number }) => void) => node.onImageLoad(f));
     if (name === "onError") return setHandler(node, name, value, (f: (m: string) => void) => node.onImageError(f));
   }
+  if (node.isHtml) {
+    if (name === "html") return void node.setHtml(String(value ?? ""));
+    if (name === "colorScheme") return void node.setHtmlDark(value === "dark");
+    if (name === "loadImage") return void node.loadResource(value as HtmlLoader | undefined);
+    if (name === "onLink") return setHandler(node, name, value, (f: (url: string) => void) => node.onLink(f));
+  }
   throw new Error(`mantou: <${node.kindName}> has no property "${name}"`);
 }
 
@@ -244,7 +250,7 @@ export const {
 } = createRenderer<Child>({
   createElement(tag) {
     const ui = currentUi();
-    const node = tag === "view" ? ui.view() : tag === "text" ? ui.textNode() : tag === "input" ? ui.input() : tag === "image" ? ui.image() : null;
+    const node = tag === "view" ? ui.view() : tag === "text" ? ui.textNode() : tag === "input" ? ui.input() : tag === "image" ? ui.image() : tag === "html" ? ui.html() : null;
     if (!node) throw new Error(`mantou: unknown element <${tag}>; use <View>, <Text>, <Input> or <Image>`);
     if (getOwner()) onCleanup(() => node.release());
     return node;

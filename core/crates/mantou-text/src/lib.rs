@@ -362,6 +362,12 @@ impl Default for TextEngine {
 
 const CACHE_LIMIT: usize = 4096;
 
+/// The fonts every engine starts with (the bundled Inter and the system's), for other text engines
+/// (mantou-html's documents) to use the same ones.
+pub fn font_context() -> FontContext {
+    FONTS.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
 /// Fonts are found and registered once per process; each engine gets a clone.
 static FONTS: LazyLock<Mutex<FontContext>> = LazyLock::new(|| {
     let mut fcx = FontContext::new();

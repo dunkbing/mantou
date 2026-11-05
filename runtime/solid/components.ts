@@ -1,6 +1,6 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { CanvasProps, ImageProps, InputProps, JSX, ListHandle, ListProps, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
+import type { CanvasProps, HtmlProps, ImageProps, InputProps, JSX, ListHandle, ListProps, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
 import { CanvasContext } from "../canvas";
 import { createElement, currentUi, insert, spread } from "./renderer";
@@ -44,6 +44,19 @@ export function Text(props: TextProps): JSX.Element {
  */
 export function Image(props: ImageProps): JSX.Element {
   const node = createElement("image") as Node;
+  spread(node, props, false);
+  return node;
+}
+
+/**
+ * A static HTML/CSS document (an HTML mail), laid out and drawn by the core like any other node: it clips,
+ * scrolls and is overlapped like one, and its height follows the document's at its width. No scripts run and
+ * nothing is fetched: images come from `loadImage`; a pressed link goes to `onLink`.
+ */
+export function Html(props: HtmlProps): JSX.Element {
+  const node = createElement("html") as Node;
+  // The colour scheme first, so the first document is sent with it.
+  if (props.colorScheme) node.setHtmlDark(props.colorScheme === "dark");
   spread(node, props, false);
   return node;
 }

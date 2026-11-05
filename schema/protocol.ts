@@ -56,9 +56,14 @@ export const ops: OpDef[] = [
   { name: "TEXT_RUNS", code: 33, operands: [["id", "id"], ["runs", "u32"]], doc: "Splits a Text's text into runs set in spans (nested Texts): for each run, in order, its UTF-8 byte length, how many spans it's in, and their ids, outermost first. The lengths add up to the text's. No runs: all of it in the Text's own style. A span is a Text node that is never inserted; its own style's text properties apply to its runs, and presses and the cursor over them go to it." },
   { name: "ACCESS", code: 30, operands: [["id", "id"], ["role", "u32"], ["flags", "u32"], ["label", "string"]], doc: "What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it)." },
   { name: "FOLLOW_POINTER", code: 36, operands: [["id", "id"], ["x", "f32"], ["y", "f32"]], doc: "The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none." },
+  { name: "HTML", code: 37, operands: [["id", "id"], ["flags", "u32"], ["html", "string"]], doc: "An Html node's document: static HTML and CSS, parsed and laid out by the core (no scripts run, nothing is fetched); HtmlFlag bits. The node's height follows the document's at its width. What it asks for (images, stylesheets) comes back as HTML_REQUEST events." },
+  { name: "HTML_RESOURCE", code: 38, operands: [["id", "id"], ["urlLength", "u32"], ["found", "u32"], ["data", "bytes"]], doc: "The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing)." },
 ];
 
-export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4 } as const;
+export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4, Html: 5 } as const;
+
+/** HTML flags. */
+export const htmlFlags = { Dark: 1 } as const;
 
 /** Timing curves for TRANSITION and ANIMATE (the CSS ones). Spring and above: a spring that settles over the duration, damping ratio = (code - 16) / 100 (1.00 is critical; lower overshoots). */
 export const easings = { Linear: 0, Ease: 1, EaseIn: 2, EaseOut: 3, EaseInOut: 4, Spring: 16 } as const;
@@ -265,6 +270,7 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "CORE_ERROR", code: 29, fields: "c = byte length; then UTF-8 JSON { message, report } (report: the file the core wrote, or \"\"), padded to words", doc: "The core recovered from a panic (an operation was dropped; the app runs on). Sent to the instance the call was for, else the first window's." },
   { name: "SELECTION", code: 28, fields: "a = input, b = anchor, c = focus (UTF-16 units, equal = a caret); only for Inputs with a Select listener, when their selection changes", doc: "An Input's caret or selection moved." },
   { name: "WEBVIEW", code: 30, fields: "a = web view id, b = kind (0 the page loaded, 1 a message from the page), c = byte length; then the UTF-8 JSON ({url, title} or the page's message text), padded to words", doc: "A native web view (the `webview` service) loaded a page or sent a message with `window.ipc.postMessage`." },
+  { name: "HTML_REQUEST", code: 31, fields: "a = Html node, c = byte length; then the UTF-8 URL, padded to words", doc: "An Html node's document asks for an image or a stylesheet (once per URL); the app answers with HTML_RESOURCE." },
   { name: "FILE_DROP", code: 26, fields: "a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words", doc: "Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path." },
 ];
 
