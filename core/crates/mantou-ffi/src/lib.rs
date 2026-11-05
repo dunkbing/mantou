@@ -30,6 +30,7 @@ macro_rules! log {
     }};
 }
 
+mod crash;
 mod instance;
 mod platform;
 mod window;
@@ -59,7 +60,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
 /// 13: mt_reset (mantou dev's reloads).
 /// 14: more windows: mt_window_open, mt_window_close, mt_window_focus.
-pub const ABI_VERSION: u32 = 14;
+/// 15: crash reports: mt_set_crash_dir, the CORE_ERROR event, mt_test_panic.
+pub const ABI_VERSION: u32 = 15;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -179,16 +181,28 @@ fn send(ev: UserEvent) -> bool {
     lock(&G.proxy).as_ref().is_some_and(|p| p.send_event(ev).is_ok())
 }
 
+/// Runs `f`, catching a panic: it's logged (and reported, see crash.rs), the first window's app hears
+/// CORE_ERROR, and `fallback` is returned.
 fn guard<R>(fallback: R, f: impl FnOnce() -> R) -> R {
+    guard_for(None, fallback, f)
+}
+
+/// `guard`, telling `inst`'s app about a panic (else the first window's).
+fn guard_for<R>(inst: Option<&Instance>, fallback: R, f: impl FnOnce() -> R) -> R {
+    crash::install();
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(r) => r,
         Err(p) => {
-            let msg = p
-                .downcast_ref::<&str>()
-                .map(|s| s.to_string())
-                .or_else(|| p.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "unknown panic".into());
-            log!("panic: {msg}");
+            // The hook logged it and wrote the report; it has unwound now, so no lock is held.
+            let (message, report) = crash::take().unwrap_or_else(|| {
+                let m = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "unknown panic".into());
+                (m, String::new())
+            });
+            let json = serde_json::json!({ "message": message, "report": report }).to_string();
+            match inst {
+                Some(i) => i.push_core_error(&json),
+                None => app().push_core_error(&json),
+            }
             fallback
         }
     }
@@ -196,13 +210,29 @@ fn guard<R>(fallback: R, f: impl FnOnce() -> R) -> R {
 
 /// Runs `f` with the instance, or returns `fallback` for an unknown handle.
 fn with<R: Copy>(handle: u32, fallback: R, f: impl FnOnce(&Arc<Instance>) -> R) -> R {
-    guard(fallback, || match get(handle) {
-        Some(inst) => f(&inst),
-        None => {
-            log!("no instance {handle}");
-            fallback
-        }
-    })
+    let Some(inst) = get(handle) else {
+        log!("no instance {handle}");
+        return fallback;
+    };
+    guard_for(Some(&inst), fallback, || f(&inst))
+}
+
+/// Where the core writes crash reports (the app's data folder's `crashes`; created with the first
+/// report). A panic on any thread writes one; see `CORE_ERROR` for those the core recovers from.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_set_crash_dir(ptr: *const u8, len: u32) {
+    // SAFETY: guaranteed by the caller.
+    let dir = String::from_utf8_lossy(unsafe { bytes(ptr, len) }).into_owned();
+    guard((), || crash::set_dir((!dir.is_empty()).then(|| dir.into())))
+}
+
+/// Test hook: panics inside a call for the instance (the core recovers; a report and CORE_ERROR follow).
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_panic(inst: u32) {
+    with(inst, (), |_| panic!("test panic"))
 }
 
 /// # Safety

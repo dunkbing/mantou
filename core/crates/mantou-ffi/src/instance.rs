@@ -251,6 +251,12 @@ impl Instance {
         }
     }
 
+    /// Queues CORE_ERROR: the core recovered from a panic (`json`: { message, report }).
+    pub fn push_core_error(&self, json: &str) {
+        let words = mantou_tree::encode::string_words(json);
+        self.push_record(&[ev::CORE_ERROR, 0, 0, words[0]], &words[1..]);
+    }
+
     /// Queues the answer to a service request (`None`: the user cancelled).
     pub fn push_service_result(&self, req: u32, answer: Option<&str>) {
         let words = mantou_tree::encode::string_words(answer.unwrap_or(""));

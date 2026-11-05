@@ -10,6 +10,10 @@ import { mount } from "../runtime/solid/mount";
 import { openWindow } from "../runtime/windows";
 import { View } from "../runtime/solid/components";
 import { STAT_NAMES, statsFrom } from "../runtime/events";
+import { onError, type AppError } from "../runtime/errors";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const core = new MantouCore();
 type Check = { name: string; pass: boolean; detail: Record<string, unknown> };
@@ -294,6 +298,40 @@ async function main() {
     core.clearColor(0.2, 0.5, 0.8, 1);
     await until("the first window still draws", () => core.stats().frames > a1.frames, 10_000);
     check("a second window", both.first === 1 && both.second === 1 && second.closed, { commitsInOneTurn: both, closed: second.closed });
+  }
+
+  // 13. Errors: a throw in a timer, a rejection, a throw in an event handler (the wake-up's drain) and a
+  // panic the core recovers from all reach onError; handled, the app runs on and the window draws.
+  {
+    const dir = mkdtempSync(join(tmpdir(), "mantou-selftest-"));
+    const b = new TextEncoder().encode(dir);
+    core.lib.symbols.mt_set_crash_dir(b, b.byteLength);
+    const seen: AppError[] = [];
+    const off = onError((e) => {
+      seen.push(e);
+      return true;
+    });
+    const onEvent = core.onEvent;
+    core.onEvent = (e) => {
+      onEvent(e);
+      if (e.type === "coreError") throw new Error("from an event handler");
+    };
+    setTimeout(() => { throw new Error("from a timer"); });
+    void Promise.reject(new Error("rejected"));
+    core.lib.symbols.mt_test_panic(core.handle);
+    await until("four errors", () => seen.length >= 4, 10_000);
+    const a = core.stats();
+    core.clearColor(0.2, 0.5, 0.8, 1);
+    await until("the window draws after the errors", () => core.stats().frames > a.frames, 10_000);
+    const kinds = seen.map((e) => `${e.kind}: ${e.message}`).sort();
+    const reports = readdirSync(dir);
+    check("errors reach onError, the app runs on",
+      JSON.stringify(kinds) === JSON.stringify(["core: test panic", "error: Error: from a timer", "error: Error: from an event handler", "rejection: Error: rejected"]) &&
+        reports.length === 1 && seen.some((e) => e.kind === "core" && e.report === join(dir, reports[0])),
+      { kinds, reports: reports.length });
+    core.onEvent = onEvent;
+    off();
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 

@@ -26,10 +26,15 @@ function base(kind: "data" | "config" | "cache"): string {
   return xdg[kind];
 }
 
+/** The app's folder of that kind, without creating it. */
+export function where(kind: "data" | "config" | "cache" | "temp"): string {
+  const app = process.env.MANTOU_APP || appName();
+  return kind === "temp" ? join(tmpdir(), app) : join(base(kind), app);
+}
+
 // The folder is created on first read (`mkdir -p`), so `${paths.config}/settings.json` can be written at once.
 function dir(kind: "data" | "config" | "cache" | "temp"): string {
-  const app = process.env.MANTOU_APP || appName();
-  const p = kind === "temp" ? join(tmpdir(), app) : join(base(kind), app);
+  const p = where(kind);
   mkdirSync(p, { recursive: true });
   return p;
 }

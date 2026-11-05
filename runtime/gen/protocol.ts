@@ -148,6 +148,8 @@ export const Event = {
   NODE_POINTER: 25,
   /** The window's state changed: it gained or lost the focus, moved, was minimized, maximized or made full screen. a = WindowStateFlag bits (focused, minimized, maximized, fullscreen, dark system theme), b = x, c = y (i32 as u32: the window's outer position, logical px). */
   WINDOW_STATE: 27,
+  /** The core recovered from a panic (an operation was dropped; the app runs on). Sent to the instance the call was for, else the first window's. c = byte length; then UTF-8 JSON { message, report } (report: the file the core wrote, or ""), padded to words. */
+  CORE_ERROR: 29,
   /** An Input's caret or selection moved. a = input, b = anchor, c = focus (UTF-16 units, equal = a caret); only for Inputs with a Select listener, when their selection changes. */
   SELECTION: 28,
   /** Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words. */

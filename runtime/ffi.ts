@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 14;
+export const ABI_VERSION = 15;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -15,6 +15,8 @@ export const symbols = {
   mt_quit: { args: ["i32"], returns: "void" },
   // Per instance (the window's is mt_app()).
   mt_reset: { args: ["u32"], returns: "void" },
+  mt_set_crash_dir: { args: ["ptr", "u32"], returns: "void" },
+  mt_test_panic: { args: ["u32"], returns: "void" },
   mt_window_open: { args: ["ptr", "u32"], returns: "u32" },
   mt_window_close: { args: ["u32"], returns: "void" },
   mt_window_focus: { args: ["u32"], returns: "void" },

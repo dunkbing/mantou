@@ -126,6 +126,24 @@ composer.close();
 - **Closing:** the close button (or Cmd/Ctrl+W) closes the window, unless an `onClose` handler returns `false`. Closing the app's first window quits the app, as before, and closes the others with it.
 - **`mantou dev`:** a reload closes the other windows too; the app opens them again.
 
+## Errors and crash reports
+
+An error the app doesn't catch (thrown in a handler, an effect or a timer, or a promise rejected with nobody waiting on it) goes to `onError`:
+
+```tsx
+import { onError } from "mantou-ui";
+
+onError((e) => {
+  // e.kind: "error" | "rejection" | "core"; e.message; e.stack; e.report (a file, when one was written)
+  showToast(`Something went wrong: ${e.message}`);
+  return true; // handled: the app runs on
+});
+```
+
+When no handler returns `true`, the app writes a report and quits (exit code 70), as it does with no handler at all. The report goes in `crashes` in the app's data folder (`paths.data`; or `MANTOU_CRASH_DIR`), named `app-<time>-<pid>.txt`: the message, the stack, Bun's version, the OS.
+
+A panic in the native core writes `core-<time>-<pid>.txt` there too, with a backtrace. When the core recovers from it (the call that panicked is dropped and the app runs on), `onError` hears it as `kind: "core"`, with `e.report`; returning `true` changes nothing then. Under `mantou dev`, errors show in the window instead, until the next save. The folder follows the app's name, so call `paths.setApp` before `run` if you use it.
+
 ## Accessibility
 
 Screen readers (VoiceOver, Narrator, Orca) see a tree built from your views. Text is a label, an `Input` a text field, and a view with `onPress` a button. Add the rest with props:

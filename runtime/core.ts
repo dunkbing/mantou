@@ -3,6 +3,7 @@
 // (design §8).
 import { JSCallback } from "bun:ffi";
 import { openCore, type CoreLib } from "./ffi";
+import { appError, crashDir, dispatchError, writeReport } from "./errors";
 import { EventReader, route, statsFrom, STAT_NAMES, type CoreEvent, type Stats } from "./events";
 import { StyleProp } from "./gen/protocol";
 import { Ui } from "./ui";
@@ -50,19 +51,29 @@ export class MantouCore {
     this.wake = new JSCallback(() => this.drain(), { args: [], returns: "void", threadsafe: true });
     this.lib.symbols.mt_set_wake(this.handle, this.wake.ptr);
     if (handle !== undefined) return; // the first window's client reports errors for all of them
+    // Panics the core recovers from come as CORE_ERROR events; reports of those and of
+    // crashes go in the data folder's `crashes`.
+    const dir = new TextEncoder().encode(crashDir());
+    this.lib.symbols.mt_set_crash_dir(dir, dir.byteLength);
     // The main thread runs no JS, so nothing there would notice a crash here
     // (design §5.2 invariant 6).
-    const fatal = (what: string, err: unknown) => {
+    const fatal = (kind: "error" | "rejection", thrown: unknown) => {
+      const what = kind === "error" ? "uncaught error" : "unhandled rejection";
       // Under `mantou dev`, the supervisor shows it in the window until the next save.
       if ((globalThis as { __mantouDev?: boolean }).__mantouDev) {
-        postMessage({ type: "mantou:error", message: `${what}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}` });
+        postMessage({ type: "mantou:error", message: `${what}: ${thrown instanceof Error ? (thrown.stack ?? thrown.message) : String(thrown)}` });
         return;
       }
-      console.error(`mantou: ${what} in the app Worker:`, err);
+      const e = appError(kind, thrown);
+      if (dispatchError(e)) return;
+      const report = writeReport(e);
+      console.error(`mantou: ${what} in the app Worker${report ? ` (report: ${report})` : ""}:`, thrown);
       this.quit(70);
     };
-    globalThis.addEventListener("error", (e) => fatal("uncaught error", (e as ErrorEvent).error ?? e));
-    globalThis.addEventListener("unhandledrejection", (e) => fatal("unhandled rejection", (e as Event & { reason?: unknown }).reason));
+    // `process.on` rather than the Worker's "error" event: Bun ends the Worker after that event,
+    // even when it's prevented, and an app that handles the error runs on.
+    process.on("uncaughtException", (err) => fatal("error", err));
+    process.on("unhandledRejection", (reason) => fatal("rejection", reason));
   }
 
   /** Tells the bootstrap the Worker is ready; it then starts the native loop. */
