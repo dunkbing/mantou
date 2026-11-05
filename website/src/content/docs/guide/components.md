@@ -182,6 +182,23 @@ import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select,
 
 Not yet: Select and Combobox (they need native menus, #21), Popover.
 
+## Widget themes
+
+The base components read colour tokens from `theme` and are light by default. `setTheme` changes them all at once (they repaint reactively):
+
+```tsx
+import { setTheme, theme, lightTheme, darkTheme } from "mantou-ui";
+
+setTheme("dark");                        // or "light", or "system" (follow the OS)
+setTheme({ ...darkTheme, accent: "#10b981" });   // your own tokens (missing ones come from light)
+
+<View style={{ backgroundColor: theme.background }}>
+  <Text style={{ color: theme.text }}>Your own views can use the tokens too</Text>
+</View>
+```
+
+Tokens: `background`, `surface`, `surfaceAlt`, `control`, `controlHover`, `controlPressed`, `selected`, `border`, `borderHover`, `divider`, `track`, `text`, `dimText`, `placeholder`, `accent`, `accentHover`, `accentPressed`, `accentText`, `accentSoft`, `knob`, `inverse` (tooltips, toasts), `inverseText`. A component's `style` prop still wins over the theme. The theme is global to the app; `setColorScheme`/`defineTheme` (see Styling) are separate and unchanged.
+
 ## Control flow
 
 `For`, `Index`, `Show`, `Switch` and `Match` work as in Solid; use them instead of `.map` and `?:` so only what changed updates.

@@ -24,7 +24,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/todos` | A to-do list with `<Input>`s; `Todos.test.tsx` tests it headless |
 | `examples/showcase` | A screen showing what Mantou draws (list, inputs, shadows, an app font); the README's screenshot |
 | `examples/mail` | An HTML mail in `<Html>`: remote images blocked until "Load images"; `bun run mail` |
-| `examples/gallery` | The base components (`runtime/widgets.tsx`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
+| `examples/gallery` | The base components (`runtime/widgets.tsx`, coloured by `runtime/widget-theme.ts`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `devtest.ts` (`mantou dev` reloads in a window), `app.ts` (threading demo) |
 | `scripts/` | `npm.ts` (stages the npm packages of a release), `smoke.ts` (installs them into a fresh app and tests it), `screenshots.tsx` (renders `docs/images/` at 2×: `bun run screenshots`) |

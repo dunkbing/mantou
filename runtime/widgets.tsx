@@ -8,6 +8,7 @@ import { Image, Input, List, Show, Text, View, onKey, useWindowSize } from "./so
 import { For } from "./solid/components";
 import { createSignal, onCleanup, onMount } from "./solid/solid";
 import type { JSX, StyleProp } from "./jsx-runtime";
+import { theme } from "./widget-theme";
 import type { KeyEvent, PointerEvent } from "./ui";
 
 /** What a component's look can depend on. */
@@ -21,9 +22,6 @@ export interface WidgetState {
 /** A style, or a function of the component's state that returns one. */
 export type WidgetStyle<S = WidgetState> = StyleProp | ((state: S) => StyleProp);
 
-const ACCENT = "#2563eb";
-const BORDER = "#9ca3af";
-const MUTED = "#e5e7eb";
 
 /** Hover, press and focus state for a view, and the handlers that track them. */
 function useInteraction(disabled: () => boolean | undefined) {
@@ -49,8 +47,8 @@ function resolve<S>(style: WidgetStyle<S> | undefined, state: S): StyleProp {
 }
 
 /** Strings and numbers as Text; anything else as it is. */
-function label(children: JSX.Element, style: StyleProp): JSX.Element {
-  return typeof children === "string" || typeof children === "number" ? <Text style={style}>{children}</Text> : children;
+function label(children: JSX.Element, style: () => StyleProp): JSX.Element {
+  return typeof children === "string" || typeof children === "number" ? <Text style={style()}>{children}</Text> : children;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,10 +70,10 @@ export function Button(props: ButtonProps): JSX.Element {
   const primary = () => (props.variant ?? "primary") === "primary";
   const look = (s: WidgetState): StyleProp => {
     const v = props.variant ?? "primary";
-    const bg = v === "primary" ? (s.pressed ? "#1e40af" : s.hovered ? "#1d4ed8" : ACCENT) : s.pressed ? "#d1d5db" : s.hovered ? "#f3f4f6" : "transparent";
+    const bg = v === "primary" ? (s.pressed ? theme.accentPressed : s.hovered ? theme.accentHover : theme.accent) : s.pressed ? theme.controlPressed : s.hovered ? theme.controlHover : "transparent";
     return {
       height: 32, paddingLeft: 14, paddingRight: 14, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, flexShrink: 0,
-      backgroundColor: bg, borderWidth: v === "secondary" ? 1 : 0, borderColor: BORDER,
+      backgroundColor: bg, borderWidth: v === "secondary" ? 1 : 0, borderColor: theme.border,
       opacity: s.disabled ? 0.5 : 1, cursor: s.disabled ? "notAllowed" : "pointer",
     };
   };
@@ -90,7 +88,7 @@ export function Button(props: ButtonProps): JSX.Element {
       transition={{ backgroundColor: 100 }}
       style={[look(state()), resolve(props.style, state())]}
     >
-      {label(props.children, { color: primary() ? "#ffffff" : "#111827", fontWeight: 500 })}
+      {label(props.children, () => ({ color: primary() ? theme.accentText : theme.text, fontWeight: 500 }))}
     </View>
   );
 }
@@ -124,13 +122,13 @@ export function Checkbox(props: CheckboxProps): JSX.Element {
     >
       <View
         transition={{ backgroundColor: 100, borderColor: 100 }}
-        style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, flexShrink: 0, justifyContent: "center", alignItems: "center", borderColor: props.checked ? ACCENT : state().hovered ? "#6b7280" : BORDER, backgroundColor: props.checked ? ACCENT : "#ffffff" }}
+        style={{ width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, flexShrink: 0, justifyContent: "center", alignItems: "center", borderColor: props.checked ? theme.accent : state().hovered ? theme.borderHover : theme.border, backgroundColor: props.checked ? theme.accent : theme.control }}
       >
         <Show when={props.checked}>
-          <Image src={CHECK} style={{ width: 14, height: 14, color: "#ffffff" }} />
+          <Image src={CHECK} style={{ width: 14, height: 14, color: theme.accentText }} />
         </Show>
       </View>
-      {label(props.children, { color: "#111827" })}
+      {label(props.children, () => ({ color: theme.text }))}
     </View>
   );
 }
@@ -159,10 +157,10 @@ export function Toggle(props: ToggleProps): JSX.Element {
       onPress={() => !props.disabled && props.onChange?.(!props.checked)}
       style={[{ flexDirection: "row", alignItems: "center", gap: 8, cursor: props.disabled ? "notAllowed" : "pointer", opacity: props.disabled ? 0.5 : 1, borderRadius: 10 }, resolve(props.style, s())]}
     >
-      <View transition={{ backgroundColor: 150 }} style={{ width: 36, height: 20, borderRadius: 10, flexShrink: 0, padding: 2, backgroundColor: props.checked ? ACCENT : "#d1d5db" }}>
-        <View transition={{ translateX: { duration: 150, easing: "ease-out" } }} style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#ffffff", translateX: props.checked ? 16 : 0, boxShadow: { y: 1, blur: 2, color: "#0003" } }} />
+      <View transition={{ backgroundColor: 150 }} style={{ width: 36, height: 20, borderRadius: 10, flexShrink: 0, padding: 2, backgroundColor: props.checked ? theme.accent : theme.track }}>
+        <View transition={{ translateX: { duration: 150, easing: "ease-out" } }} style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: theme.knob, translateX: props.checked ? 16 : 0, boxShadow: { y: 1, blur: 2, color: "#0003" } }} />
       </View>
-      {label(props.children, { color: "#111827" })}
+      {label(props.children, () => ({ color: theme.text }))}
     </View>
   );
 }
@@ -235,10 +233,10 @@ function Radio<T>(props: { option: RadioOption<T>; chosen: boolean; tabbable: bo
       onPress={() => !props.option.disabled && props.onChoose()}
       style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 9, cursor: props.option.disabled ? "notAllowed" : "pointer", opacity: props.option.disabled ? 0.5 : 1 }}
     >
-      <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, flexShrink: 0, justifyContent: "center", alignItems: "center", borderColor: props.chosen ? ACCENT : state().hovered ? "#6b7280" : BORDER, backgroundColor: "#ffffff" }}>
-        <View transition={{ scale: 120 }} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ACCENT, scale: props.chosen ? 1 : 0 }} />
+      <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, flexShrink: 0, justifyContent: "center", alignItems: "center", borderColor: props.chosen ? theme.accent : state().hovered ? theme.borderHover : theme.border, backgroundColor: "#ffffff" }}>
+        <View transition={{ scale: 120 }} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent, scale: props.chosen ? 1 : 0 }} />
       </View>
-      {label(props.option.label, { color: "#111827" })}
+      {label(props.option.label, () => ({ color: theme.text }))}
     </View>
   );
 }
@@ -309,12 +307,12 @@ export function Slider(props: SliderProps): JSX.Element {
       onPointerMove={(e) => e.buttons & 1 && !props.disabled && at(e.x)}
       style={[{ height: 20, justifyContent: "center", flexShrink: 0, cursor: props.disabled ? "notAllowed" : "pointer", opacity: props.disabled ? 0.5 : 1, borderRadius: 10 }, resolve(props.style, { ...state(), value: props.value })]}
     >
-      <View style={{ height: 4, borderRadius: 2, marginLeft: THUMB / 2, marginRight: THUMB / 2, backgroundColor: MUTED }}>
-        <View style={{ height: 4, borderRadius: 2, width: `${frac() * 100}%`, backgroundColor: ACCENT }} />
+      <View style={{ height: 4, borderRadius: 2, marginLeft: THUMB / 2, marginRight: THUMB / 2, backgroundColor: theme.divider }}>
+        <View style={{ height: 4, borderRadius: 2, width: `${frac() * 100}%`, backgroundColor: theme.accent }} />
       </View>
       <View
         style={{
-          position: "absolute", top: 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: "#ffffff", borderWidth: 1.5, borderColor: ACCENT,
+          position: "absolute", top: 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: theme.knob, borderWidth: 1.5, borderColor: theme.accent,
           left: `${frac() * 100}%`, translateX: -frac() * THUMB, scale: state().pressed ? 1.15 : 1, boxShadow: { y: 1, blur: 3, color: "#0003" },
         }}
       />
@@ -346,7 +344,7 @@ export function Tabs<T extends string>(props: TabsProps<T>): JSX.Element {
   };
   return (
     <View style={[{ gap: 12 }, props.style]}>
-      <View role="tabList" onKey={keys} style={{ flexDirection: "row", gap: 4, borderBottomWidth: 1, borderColor: MUTED }}>
+      <View role="tabList" onKey={keys} style={{ flexDirection: "row", gap: 4, borderBottomWidth: 1, borderColor: theme.divider }}>
         <For each={props.tabs}>
           {(t, i) => <Tab chosen={t.id === props.value} ref={(n) => (nodes[i()] = n)} onPress={() => props.onChange?.(t.id)}>{t.label}</Tab>}
         </For>
@@ -366,10 +364,10 @@ function Tab(props: { chosen: boolean; ref: (n: Node) => void; onPress: () => vo
       selected={props.chosen}
       tabIndex={props.chosen ? 0 : -1}
       onPress={props.onPress}
-      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 8, paddingBottom: 8, cursor: "pointer", borderRadius: 6, backgroundColor: state().hovered && !props.chosen ? "#f3f4f6" : "transparent" }}
+      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 8, paddingBottom: 8, cursor: "pointer", borderRadius: 6, backgroundColor: state().hovered && !props.chosen ? theme.controlHover : "transparent" }}
     >
-      {label(props.children, { color: props.chosen ? ACCENT : "#4b5563", fontWeight: props.chosen ? 600 : 400 })}
-      <View style={{ position: "absolute", left: 8, right: 8, bottom: -1, height: 2, borderRadius: 1, backgroundColor: props.chosen ? ACCENT : "transparent" }} />
+      {label(props.children, () => ({ color: props.chosen ? theme.accent : theme.dimText, fontWeight: props.chosen ? 600 : 400 }))}
+      <View style={{ position: "absolute", left: 8, right: 8, bottom: -1, height: 2, borderRadius: 1, backgroundColor: props.chosen ? theme.accent : "transparent" }} />
     </View>
   );
 }
@@ -411,10 +409,10 @@ function DialogBody(props: DialogProps): JSX.Element {
         role="dialog"
         label={props.title}
         onPress={(e) => e.stopPropagation()}
-        style={[{ minWidth: 280, maxWidth: "90%", padding: 20, gap: 12, borderRadius: 12, backgroundColor: "#ffffff", boxShadow: { y: 10, blur: 30, color: "#0004" } }, props.style]}
+        style={[{ minWidth: 280, maxWidth: "90%", padding: 20, gap: 12, borderRadius: 12, backgroundColor: theme.surface, boxShadow: { y: 10, blur: 30, color: "#0004" } }, props.style]}
       >
         <Show when={props.title}>
-          <Text style={{ fontSize: 16, fontWeight: 600, color: "#111827" }}>{props.title}</Text>
+          <Text style={{ fontSize: 16, fontWeight: 600, color: theme.text }}>{props.title}</Text>
         </Show>
         {props.children}
       </View>
@@ -456,9 +454,9 @@ export function Tooltip(props: TooltipProps): JSX.Element {
       <Show when={shown()}>
         <View
           role="status"
-          style={{ pointerEvents: "none", position: "absolute", left: 0, ...(props.side === "above" ? { bottom: "100%", marginBottom: 6 } : { top: "100%", marginTop: 6 }), zIndex: 900, paddingLeft: 8, paddingRight: 8, paddingTop: 4, paddingBottom: 4, borderRadius: 6, backgroundColor: "#111827" }}
+          style={{ pointerEvents: "none", position: "absolute", left: 0, ...(props.side === "above" ? { bottom: "100%", marginBottom: 6 } : { top: "100%", marginTop: 6 }), zIndex: 900, paddingLeft: 8, paddingRight: 8, paddingTop: 4, paddingBottom: 4, borderRadius: 6, backgroundColor: theme.inverse }}
         >
-          <Text style={{ color: "#ffffff", fontSize: 12, whiteSpace: "nowrap" }}>{props.text}</Text>
+          <Text style={{ color: theme.inverseText, fontSize: 12, whiteSpace: "nowrap" }}>{props.text}</Text>
         </View>
       </Show>
     </View>
@@ -509,7 +507,7 @@ export function Splitter(props: SplitterProps): JSX.Element {
           props.onResize?.(limit(from.size + (row() ? e.x : e.y) - from.at));
         }}
         onPointerUp={() => (from = null)}
-        style={{ [row() ? "width" : "height"]: 6, flexShrink: 0, cursor: row() ? "colResize" : "rowResize", backgroundColor: state().pressed || state().hovered ? "#bfdbfe" : MUTED, focusRingOffset: 0 }}
+        style={{ [row() ? "width" : "height"]: 6, flexShrink: 0, cursor: row() ? "colResize" : "rowResize", backgroundColor: state().pressed || state().hovered ? theme.accentSoft : theme.divider, focusRingOffset: 0 }}
       />
       <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>{props.children[1]}</View>
     </View>
@@ -585,18 +583,18 @@ export function Select<T>(props: SelectProps<T>): JSX.Element {
         onKey={keys}
         onPress={press}
         style={[
-          { minWidth: 160, height: 32, paddingLeft: 10, paddingRight: 10, flexDirection: "row", alignItems: "center", justifyContent: "spaceBetween", gap: 8, borderRadius: 8, borderWidth: 1, borderColor: open() ? ACCENT : BORDER, backgroundColor: "#ffffff", opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer" },
+          { minWidth: 160, height: 32, paddingLeft: 10, paddingRight: 10, flexDirection: "row", alignItems: "center", justifyContent: "spaceBetween", gap: 8, borderRadius: 8, borderWidth: 1, borderColor: open() ? theme.accent : theme.border, backgroundColor: theme.control, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer" },
           resolve(props.style, state()),
         ]}
       >
-        <Text style={{ color: chosen() >= 0 ? "#111827" : "#9ca3af", whiteSpace: "nowrap" }}>{chosen() >= 0 ? props.options[chosen()].label : props.placeholder ?? ""}</Text>
-        <Text style={{ color: "#6b7280", fontSize: 10 }}>▾</Text>
+        <Text style={{ color: chosen() >= 0 ? theme.text : theme.placeholder, whiteSpace: "nowrap" }}>{chosen() >= 0 ? props.options[chosen()].label : props.placeholder ?? ""}</Text>
+        <Text style={{ color: theme.dimText, fontSize: 10 }}>▾</Text>
       </View>
       <Show when={open()}>
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} /> {/* fixed is placed by the window but sized by its parent */}
         <View
           role="menu"
-          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: MUTED, backgroundColor: "#ffffff", boxShadow: { y: 6, blur: 20, color: "#0003" } }}
+          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
         >
           <For each={props.options}>
             {(o, i) => (
@@ -606,9 +604,9 @@ export function Select<T>(props: SelectProps<T>): JSX.Element {
                 disabled={o.disabled}
                 onHover={(h) => h && !o.disabled && setActive(i())}
                 onPress={() => choose(i())}
-                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? "#e0e7ff" : "transparent", opacity: o.disabled ? 0.4 : 1, cursor: o.disabled ? "notAllowed" : "pointer" }}
+                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: o.disabled ? 0.4 : 1, cursor: o.disabled ? "notAllowed" : "pointer" }}
               >
-                <Text style={{ color: "#111827", fontWeight: i() === chosen() ? 600 : 400, whiteSpace: "nowrap" }}>{o.label}</Text>
+                <Text style={{ color: theme.text, fontWeight: i() === chosen() ? 600 : 400, whiteSpace: "nowrap" }}>{o.label}</Text>
               </View>
             )}
           </For>
@@ -650,9 +648,9 @@ function ToastBody(props: ToastProps): JSX.Element {
       <View
         role="status"
         onPress={() => props.onClose?.()}
-        style={[{ pointerEvents: "auto", maxWidth: "90%", paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: 8, backgroundColor: "#111827", boxShadow: { y: 4, blur: 16, color: "#0004" } }, props.style]}
+        style={[{ pointerEvents: "auto", maxWidth: "90%", paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: 8, backgroundColor: theme.inverse, boxShadow: { y: 4, blur: 16, color: "#0004" } }, props.style]}
       >
-        {label(props.children, { color: "#ffffff" })}
+        {label(props.children, () => ({ color: theme.inverseText }))}
       </View>
     </View>
   );
@@ -671,8 +669,8 @@ export interface ProgressProps {
 export function Progress(props: ProgressProps): JSX.Element {
   const frac = () => Math.max(0, Math.min(1, Number.isFinite(props.value) ? props.value : 0));
   return (
-    <View role="status" label={props.label ?? `${Math.round(frac() * 100)}%`} style={[{ height: 8, minWidth: 120, borderRadius: 4, backgroundColor: MUTED, overflow: "hidden" }, props.style]}>
-      <View style={{ height: "100%", width: `${frac() * 100}%`, backgroundColor: ACCENT }} />
+    <View role="status" label={props.label ?? `${Math.round(frac() * 100)}%`} style={[{ height: 8, minWidth: 120, borderRadius: 4, backgroundColor: theme.divider, overflow: "hidden" }, props.style]}>
+      <View style={{ height: "100%", width: `${frac() * 100}%`, backgroundColor: theme.accent }} />
     </View>
   );
 }
@@ -704,7 +702,7 @@ export function Spinner(props: SpinnerProps): JSX.Element {
         const a = (i / 8) * 2 * Math.PI;
         return (
           <View
-            style={{ position: "absolute", width: dot, height: dot, borderRadius: dot / 2, backgroundColor: props.color ?? ACCENT, opacity: 1 - (i / 8) * 0.85,
+            style={{ position: "absolute", width: dot, height: dot, borderRadius: dot / 2, backgroundColor: props.color ?? theme.accent, opacity: 1 - (i / 8) * 0.85,
               left: size / 2 - dot / 2 + radius * Math.sin(a), top: size / 2 - dot / 2 - radius * Math.cos(a) }}
           />
         );
@@ -779,29 +777,29 @@ export function Menu(props: MenuProps): JSX.Element {
         focusable={!props.disabled}
         onKey={keys}
         onPress={() => (open() ? choose(active()) : show())}
-        style={{ borderRadius: 8, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer", backgroundColor: open() || state().hovered ? "#f3f4f6" : "transparent" }}
+        style={{ borderRadius: 8, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer", backgroundColor: open() || state().hovered ? theme.controlHover : "transparent" }}
       >
-        {label(props.children, { color: "#111827" })}
+        {label(props.children, () => ({ color: theme.text }))}
       </View>
       <Show when={open()}>
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} />
         <View
           role="menu"
-          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: 160, zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: MUTED, backgroundColor: "#ffffff", boxShadow: { y: 6, blur: 20, color: "#0003" } }}
+          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: 160, zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
         >
           <For each={props.items}>
             {(it, i) =>
               it.separator ? (
-                <View role="none" style={{ height: 1, marginTop: 4, marginBottom: 4, backgroundColor: MUTED }} />
+                <View role="none" style={{ height: 1, marginTop: 4, marginBottom: 4, backgroundColor: theme.divider }} />
               ) : (
                 <View
                   role="menuItem"
                   disabled={it.disabled}
                   onHover={(h) => h && usable(i()) && setActive(i())}
                   onPress={() => choose(i())}
-                  style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? "#e0e7ff" : "transparent", opacity: it.disabled ? 0.4 : 1, cursor: it.disabled ? "notAllowed" : "pointer" }}
+                  style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: it.disabled ? 0.4 : 1, cursor: it.disabled ? "notAllowed" : "pointer" }}
                 >
-                  <Text style={{ color: "#111827", whiteSpace: "nowrap" }}>{it.label}</Text>
+                  <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{it.label}</Text>
                 </View>
               )
             }
@@ -846,14 +844,14 @@ export function Table<T>(props: TableProps<T>): JSX.Element {
     paddingLeft: 10, paddingRight: 10, justifyContent: "center", alignItems: c.align ?? "start",
   });
   return (
-    <View role="list" style={[{ minHeight: 0, borderWidth: 1, borderColor: MUTED, borderRadius: 8, overflow: "hidden" }, props.style]}>
-      <View style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: "#f9fafb", borderBottomWidth: 1, borderColor: MUTED, flexShrink: 0 }}>
+    <View role="list" style={[{ minHeight: 0, borderWidth: 1, borderColor: theme.divider, borderRadius: 8, overflow: "hidden" }, props.style]}>
+      <View style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: theme.surfaceAlt, borderBottomWidth: 1, borderColor: theme.divider, flexShrink: 0 }}>
         <For each={props.columns}>
           {(c) => (
             <View role="button" label={`Sort by ${c.header}`} onPress={() => props.onSort?.(c.key)} style={[cell(c), { flexDirection: "row", gap: 4, cursor: props.onSort ? "pointer" : "default" }]}>
-              <Text style={{ fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>{c.header}</Text>
+              <Text style={{ fontWeight: 600, color: theme.text, whiteSpace: "nowrap" }}>{c.header}</Text>
               <Show when={props.sort?.key === c.key}>
-                <Text style={{ color: "#6b7280", fontSize: 10 }}>{props.sort?.descending ? "▼" : "▲"}</Text>
+                <Text style={{ color: theme.dimText, fontSize: 10 }}>{props.sort?.descending ? "▼" : "▲"}</Text>
               </Show>
             </View>
           )}
@@ -865,10 +863,10 @@ export function Table<T>(props: TableProps<T>): JSX.Element {
             role="listItem"
             selected={props.selected === i}
             onPress={() => props.onRowPress?.(row(), i)}
-            style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: props.selected === i ? "#e0e7ff" : i % 2 ? "#fafafa" : "#ffffff", cursor: props.onRowPress ? "pointer" : "default" }}
+            style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: props.selected === i ? theme.selected : i % 2 ? theme.surfaceAlt : theme.surface, cursor: props.onRowPress ? "pointer" : "default" }}
           >
             <For each={props.columns}>
-              {(c) => <View style={cell(c)}>{c.render ? c.render(row(), i) : <Text style={{ color: "#111827", whiteSpace: "nowrap" }}>{String((row() as Record<string, unknown>)[c.key] ?? "")}</Text>}</View>}
+              {(c) => <View style={cell(c)}>{c.render ? c.render(row(), i) : <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{String((row() as Record<string, unknown>)[c.key] ?? "")}</Text>}</View>}
             </For>
           </View>
         )}
@@ -941,20 +939,20 @@ export function Combobox(props: ComboboxProps): JSX.Element {
           }
         }}
         label={props.label}
-        style={[{ minWidth: 200, height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: BORDER, backgroundColor: "#ffffff" }, props.style]}
+        style={[{ minWidth: 200, height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.control, color: theme.text }, props.style]}
       />
       <Show when={list()}>
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} />
-        <View role="menu" style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: MUTED, backgroundColor: "#ffffff", boxShadow: { y: 6, blur: 20, color: "#0003" } }}>
+        <View role="menu" style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}>
           <For each={matches()}>
             {(o, i) => (
               <View
                 role="menuItem"
                 onHover={(h) => h && setActive(i())}
                 onPress={() => take(o)}
-                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? "#e0e7ff" : "transparent", cursor: "pointer" }}
+                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", cursor: "pointer" }}
               >
-                <Text style={{ color: "#111827", whiteSpace: "nowrap" }}>{o}</Text>
+                <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{o}</Text>
               </View>
             )}
           </For>
