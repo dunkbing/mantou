@@ -38,7 +38,7 @@ enum Edit {
 }
 
 pub struct Editor {
-    ed: PlainEditor<()>,
+    ed: PlainEditor<u32>,
     style: TextStyle,
     pub multiline: bool,
     pub read_only: bool,
@@ -407,7 +407,7 @@ impl Editor {
         self.delete_with(engine, |d| if word { d.delete_word() } else { d.delete() })
     }
 
-    fn delete_with(&mut self, engine: &mut TextEngine, f: impl FnOnce(&mut parley::PlainEditorDriver<'_, ()>)) -> bool {
+    fn delete_with(&mut self, engine: &mut TextEngine, f: impl FnOnce(&mut parley::PlainEditorDriver<'_, u32>)) -> bool {
         if self.read_only {
             return false;
         }
@@ -470,7 +470,7 @@ impl Editor {
     }
 
     /// Runs a caret movement or selection change (not an edit).
-    pub fn navigate(&mut self, engine: &mut TextEngine, f: impl FnOnce(&mut parley::PlainEditorDriver<'_, ()>)) {
+    pub fn navigate(&mut self, engine: &mut TextEngine, f: impl FnOnce(&mut parley::PlainEditorDriver<'_, u32>)) {
         f(&mut self.ed.driver(&mut engine.fcx, &mut engine.lcx));
         self.moved();
     }
@@ -526,7 +526,7 @@ impl Editor {
         self.ed.refresh_layout(&mut engine.fcx, &mut engine.lcx);
     }
 
-    fn layout(&mut self, engine: &mut TextEngine) -> &Layout<()> {
+    fn layout(&mut self, engine: &mut TextEngine) -> &Layout<u32> {
         self.ed.layout(&mut engine.fcx, &mut engine.lcx)
     }
 

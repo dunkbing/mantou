@@ -19,6 +19,7 @@ mod anim;
 mod hover;
 mod image;
 mod input;
+mod rich;
 mod scroll;
 
 use anim::Anims;
@@ -270,6 +271,10 @@ struct Node {
     anim: Option<Box<Anims>>,
     /// It has been placed at least once (a transition needs a look to start from).
     placed: bool,
+    /// A Text's runs in spans (TEXT_RUNS).
+    rich: Option<Box<rich::Rich>>,
+    /// A span: the Text whose runs it's in.
+    span_of: Option<u32>,
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -509,6 +514,8 @@ impl Tree {
                     drawn: RefCell::new(None),
                     anim: None,
                     placed: false,
+                    rich: None,
+                    span_of: None,
                 });
                 self.restyle(id);
             }
@@ -542,6 +549,17 @@ impl Tree {
                     self.tsel = None;
                 }
                 self.hovered.retain(|&h| h != id); // gone: no event, there's no one to tell
+                // A span: its Text sets its runs without it. A Text: its spans are free again.
+                if let Some(t) = node.span_of {
+                    self.resolve_rich(t);
+                }
+                for s in node.rich.iter().flat_map(|r| r.runs.iter().flat_map(|(_, c)| c.iter())) {
+                    if let Some(n) = self.nodes.get_mut(s)
+                        && n.span_of == Some(id)
+                    {
+                        n.span_of = None;
+                    }
+                }
                 if node.anim.as_ref().is_some_and(|a| a.is_active()) {
                     self.animating = self.animating.saturating_sub(1);
                 }
@@ -707,6 +725,7 @@ impl Tree {
                 self.set_focus((id != 0).then_some(id));
             }
             Op::Transition { id, prop, duration, easing } => self.set_transition(id, prop, duration, easing)?,
+            Op::TextRuns { id, runs } => self.set_runs(id, runs)?,
             Op::Keyframes { id, animation, values } => self.set_keyframes(id, animation, values)?,
             Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => {
                 self.start_animation(id, animation, prop, from, to, duration, easing, iterations, flags)?
@@ -800,8 +819,16 @@ impl Tree {
         }
         let (before, drawn_before) = (node.v, node.vis());
         node.v = v;
+        let (rich, span_of) = (node.rich.is_some(), node.span_of);
         self.layout_dirty = true;
         self.start_transitions(id, before, drawn_before);
+        // A Text's spans build on its style; a span's style changes its Text's runs.
+        if rich {
+            self.resolve_rich(id);
+        }
+        if let Some(t) = span_of {
+            self.resolve_rich(t);
+        }
     }
 
     fn viewport_logical(&self) -> (f32, f32) {
@@ -867,7 +894,7 @@ impl Tree {
                     AvailableSpace::MinContent => Some(0.0),
                     AvailableSpace::MaxContent => None,
                 });
-                let l = text.layout(&node.text, &node.v.text, width);
+                let l = text.layout_rich(&node.text, &node.v.text, node.spans(), width);
                 // Rounded up, so laying the text out again at exactly this width wraps the same.
                 Size { width: known.width.unwrap_or(l.width.ceil()), height: known.height.unwrap_or(l.height.ceil()) }
             })
@@ -1190,7 +1217,7 @@ impl Tree {
             }
             if node.kind == p::node_kind::TEXT && !node.text.is_empty() {
                 let color = rgba(v.color, alpha);
-                if color[3] <= 0.0 {
+                if color[3] <= 0.0 && node.rich.is_none() {
                     continue;
                 }
                 let c = b.content;
@@ -1207,7 +1234,7 @@ impl Tree {
                 let layout = match drawn.as_ref() {
                     Some((w, l)) if *w == width.to_bits() => l.clone(),
                     _ => {
-                        let l = text.layout(&node.text, &node.v.text, Some(width));
+                        let l = text.layout_rich(&node.text, &node.v.text, node.spans(), Some(width));
                         *drawn = Some((width.to_bits(), l.clone()));
                         l
                     }
@@ -1220,9 +1247,22 @@ impl Tree {
                         quads.push(Quad { rect, color: sel, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
                     }
                 }
-                glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, color, clip);
+                // Colours by span: 0 is the Text's own; spans' highlights go under the glyphs.
+                let looks = node.rich.as_ref().map_or(&[][..], |r| &r.looks[..]);
+                let colors: Vec<[f32; 4]> = std::iter::once(color).chain(looks.iter().map(|l| rgba(l.color, alpha))).collect();
+                // Device px, at least one tall (a hairline underline at any scale).
+                let at = |d: &[f32; 4]| [snap(c[0] + d[0] * k), snap(c[1] + d[1] * k), snap(c[0] + d[2] * k), snap(c[1] + d[3] * k).max(snap(c[1] + d[1] * k) + 1.0)];
+                for run in layout.runs.iter().filter(|r| r.span > 0) {
+                    let bg = looks.get(run.span as usize - 1).map_or(0, |l| l.background);
+                    let rect = at(&run.rect);
+                    if bg >> 24 != 0 && overlaps(rect, clip) {
+                        quads.push(Quad { rect, color: rgba(bg, alpha), uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
+                    }
+                }
+                glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (c[0], c[1]), k, s, &colors, clip);
                 for d in &layout.decorations {
-                    let rect = [snap((c[0] + d[0] * k) * s), snap((c[1] + d[1] * k) * s), snap((c[0] + d[2] * k) * s), snap((c[1] + d[3] * k) * s).max(snap((c[1] + d[1] * k) * s) + 1.0)];
+                    let rect = at(&d.rect);
+                    let color = colors.get(d.span as usize).copied().unwrap_or(color);
                     if overlaps(rect, clip) {
                         quads.push(Quad { rect, color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
                     }
@@ -1257,14 +1297,14 @@ impl Tree {
                     let pc = v.placeholder_color.map_or([color[0], color[1], color[2], color[3] * 0.4], |p| rgba(p, alpha));
                     let style = TextStyle { max_lines: if ed.multiline { 0 } else { 1 }, ..v.text };
                     let layout = text.layout(&inp.placeholder, &style, ed.multiline.then_some(((c[2] - c[0]) / k).max(0.0)));
-                    glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (ox, oy), k, s, pc, clip);
+                    glyphs |= push_glyphs(&mut quads, text, &layout.glyphs, (ox, oy), k, s, &[pc], clip);
                 }
                 if focused {
                     let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
                     quads.extend(ed.selection(text).into_iter().map(|r| fill(r, sel)));
                 }
                 let placed = ed.glyphs(text);
-                glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), k, s, color, clip);
+                glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), k, s, &[color], clip);
                 if focused {
                     for r in ed.compose(text) {
                         quads.push(fill([r[0], r[3] - 1.0, r[2], r[3]], color));
@@ -1321,11 +1361,17 @@ impl Tree {
             return None; // a scrollbar thumb is the core's, not the content's
         }
         let hit = self.hit(x, y)?;
+        // Over a run in spans, the innermost span is the target (it bubbles up through the others in JS).
+        let spans = self.spans_at(hit, x, y).unwrap_or(&[]);
+        let target = spans.last().copied().unwrap_or(hit);
+        if spans.iter().any(|s| self.nodes.get(s).is_some_and(|n| n.listen & mask != 0)) {
+            return Some(target);
+        }
         let mut a = Some(hit);
         while let Some(id) = a {
             let n = &self.nodes[&id];
             if n.listen & mask != 0 {
-                return Some(hit);
+                return Some(target);
             }
             a = n.parent;
         }
@@ -1406,17 +1452,22 @@ impl Tree {
 }
 
 /// Glyph quads for text laid out from `origin` (window px) and drawn at scale
-/// `k` (a transform's), on a display of scale `s`; returns whether any was drawn.
+/// `k` (a transform's), on a display of scale `s`, in `colors[g.span]` (the
+/// first colour for glyphs past the end); returns whether any was drawn.
 #[allow(clippy::too_many_arguments)]
-fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGlyph], origin: (f32, f32), k: f32, s: f32, color: [f32; 4], clip: [f32; 4]) -> bool {
+fn push_glyphs(quads: &mut Vec<Quad>, text: &mut TextEngine, glyphs: &[PlacedGlyph], origin: (f32, f32), k: f32, s: f32, colors: &[[f32; 4]], clip: [f32; 4]) -> bool {
     let mut any = false;
     for g in glyphs {
+        let color = colors.get(g.span as usize).or(colors.first()).copied().unwrap_or([0.0; 4]);
+        if color[3] <= 0.0 {
+            continue;
+        }
         let (gx, gy) = ((origin.0 + g.x * k) * s, (origin.1 + g.y * k) * s);
         let size = g.size * k * s;
         if size < 0.5 {
             continue; // too small to see (a scale near 0)
         }
-        let Some(e) = text.glyph(g.font, g.id, size, gx - gx.floor()) else { continue };
+        let Some(e) = text.glyph_synth(g.font, g.id, size, gx - gx.floor(), g.skew, g.embolden) else { continue };
         let x0 = gx.floor() + e.left as f32;
         let y0 = gy.round() - e.top as f32;
         let rect = [x0, y0, x0 + e.w as f32, y0 + e.h as f32];

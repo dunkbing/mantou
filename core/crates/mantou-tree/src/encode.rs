@@ -148,6 +148,16 @@ impl Ops {
         self.op(op::TRANSITION, &[id, prop as u32, duration.to_bits(), easing])
     }
     #[allow(clippy::too_many_arguments)]
+    /// Runs of a Text: (UTF-8 byte length, span ids outermost first).
+    pub fn text_runs(&mut self, id: u32, runs: &[(u32, &[u32])]) -> &mut Self {
+        let mut w = vec![id];
+        for (len, spans) in runs {
+            w.push(*len);
+            w.push(spans.len() as u32);
+            w.extend_from_slice(spans);
+        }
+        self.op(op::TEXT_RUNS, &w)
+    }
     pub fn keyframes(&mut self, id: u32, animation: u32, values: &[u32]) -> &mut Self {
         let mut w = vec![id, animation];
         w.extend_from_slice(values);

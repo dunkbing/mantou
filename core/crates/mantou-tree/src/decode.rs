@@ -51,6 +51,8 @@ pub enum Op {
     WindowSize { width: f32, height: f32 },
     Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
     Keyframes { id: u32, animation: u32, values: Vec<u32> },
+    /// A Text's runs: (UTF-8 byte length, span ids outermost first).
+    TextRuns { id: u32, runs: Vec<(u32, Vec<u32>)> },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
     /// An Input's selection, in UTF-16 code units.
     Select { id: u32, anchor: u32, focus: u32 },
@@ -251,6 +253,26 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "TRANSITION needs a finite duration of 0 or more");
                 }
                 Op::Transition { id: a[0], prop: prop(a[1], i)?, duration, easing: a[3] }
+            }
+            op::TEXT_RUNS => {
+                if n < 1 {
+                    return err(i, "TEXT_RUNS needs an id");
+                }
+                // Each run takes at least two words: lengths are checked before anything is allocated.
+                let mut runs = Vec::new();
+                let mut at = 1;
+                while at < n {
+                    if at + 2 > n {
+                        return err(i, "TEXT_RUNS: a run needs a length and a span count");
+                    }
+                    let (len, count) = (a[at], a[at + 1] as usize);
+                    if count > n - at - 2 {
+                        return err(i, "TEXT_RUNS: more spans than words");
+                    }
+                    runs.push((len, a[at + 2..at + 2 + count].to_vec()));
+                    at += 2 + count;
+                }
+                Op::TextRuns { id: a[0], runs }
             }
             op::KEYFRAMES => {
                 if n < 4 {

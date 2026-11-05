@@ -307,6 +307,27 @@
     "focus": 4
   },
   {
+    "op": "TEXT_RUNS",
+    "id": 4,
+    "runs": [
+      {
+        "length": 6,
+        "spans": []
+      },
+      {
+        "length": 5,
+        "spans": [
+          7,
+          8
+        ]
+      },
+      {
+        "length": 1,
+        "spans": []
+      }
+    ]
+  },
+  {
     "op": "WINDOW_SIZE",
     "width": 1200,
     "height": 760

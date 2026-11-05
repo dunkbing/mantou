@@ -62,6 +62,20 @@ For information (Linux, headless, this machine; not part of the tests), per comm
 
 The issue measured 208 ms, 212 ms and 98 ms at 4,200 rows before. What remains grows with the list because a negative margin re-lays it out; a `<Scroll>` ([Scrolling and dialogs](/progress/scrolling/)) scrolls without a relayout.
 
+## Rich text
+
+`<Text>` inside `<Text>` is a span ([#15](https://github.com/dunkbing/mantou/issues/15)): bold names, highlighted search matches, links. The outer Text sends its whole text in one `TEXT` op, and `TEXT_RUNS` splits it into runs, each naming the spans it's in, outermost first. A span is a Text node the core knows (its style, its listeners) but never inserts into the layout. The core sets each run in the Text's style with its spans' text properties over it (weight, italic, size, family, letter spacing, decoration), through parley's ranged styles, and draws its colour and highlight (`backgroundColor`). Only what changes the layout is in the layout cache's key, so recolouring a span lays nothing out. A press or the cursor over a run goes to its innermost span. In JS the press then bubbles through the spans around it to the Text.
+
+Op counts: changing a span's text is one `TEXT` and one `TEXT_RUNS` on the outer Text; restyling a span is its own `STYLE` op, and the core redraws its Text.
+
+Found on the way:
+- **Italics weren't drawn slanted.** The bundled Inter has no italic face, and nothing synthesized one. Glyphs now carry parley's synthesis (a slant, and emboldening for a missing weight), and the atlas caches them by it, so `fontStyle: "italic"` slants with any font.
+- **Decorations at 2×.** Underlines and strike-throughs were scaled by the display scale twice, which put them off the text on HiDPI screens. They're placed in device pixels once now.
+
+Tests: `mantou-text` (spans' glyphs, runs and decorations, the span at a point, transforms that change lengths, colours not in the cache key), `tests/rich.rs` (styles, highlights, presses and cursors on spans, nesting, recolouring with no new layout, bad runs and released spans), `runtime/rich.test.tsx` (op counts), `tests/rich.test.tsx` (a link that presses and bubbles, a bold span's width, and reference images at 1× and 2×).
+
+**Not yet:** selecting inside rich text uses the outer Text's style for the highlight's geometry, so a selection over a bigger or bolder span is slightly off; hover events on spans (the cursor works); inline images and views.
+
 ## App fonts
 
 Apps bring their own fonts: icon fonts, brand fonts, monospace for code ([#8](https://github.com/dunkbing/mantou/issues/8), [#14](https://github.com/dunkbing/mantou/issues/14)).

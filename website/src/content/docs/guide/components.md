@@ -17,11 +17,23 @@ Other props: `transition` (animate style changes, see [styling](/guide/styling/#
 
 ## Text
 
-Text is only drawn inside `<Text>`, whose children are strings and numbers.
+Text is only drawn inside `<Text>`, whose children are strings, numbers and other `<Text>`s.
 
 ```tsx
 <Text style={{ fontSize: 14, color: "#374151", maxLines: 2 }}>Hello, {name()}</Text>
 ```
+
+A `<Text>` inside a `<Text>` is a span: its text flows with the rest, in its own `fontWeight`, `fontStyle`, `fontSize`, `fontFamily`, `color`, `letterSpacing` and `textDecoration`, and `backgroundColor` highlights it. Everything else (alignment, `maxLines`, wrapping, line height) is the outer Text's. Spans nest, and handle presses, so a link is a span:
+
+```tsx
+<Text>
+  <Text style={{ fontWeight: 700 }}>{from()}</Text> sent the{" "}
+  <Text style={{ backgroundColor: "#fde047" }}>invoice</Text>.{" "}
+  <Text onPress={openIt} style={{ color: "#2563eb", textDecoration: "underline", cursor: "pointer" }}>View it</Text>
+</Text>
+```
+
+A press on a span goes to it first, then bubbles to the Texts around it. The pointer shows the innermost span's `cursor`. Spans have no box of their own (`measure()` and `onLayout` are the outer Text's).
 
 Add `selectable` to let the user select it (drag, double click for a word, triple click for a line) and copy it with Cmd/Ctrl+C. Put `selectable` on a `<View>` to make all the text inside selectable as one selection, across texts (drag from one paragraph into another; copy joins them by lines, Cmd/Ctrl+A selects all of it). The selection stays inside that view; clicking elsewhere clears it.
 

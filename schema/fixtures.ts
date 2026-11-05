@@ -55,6 +55,7 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.transition(3, 32, 200, 3);
   e.animate(3, 1, 32, 0, 1065353216, 300, 0, 2, 1);
   e.select(5, 2, 4);
+  e.textRuns(4, [6, 0, 5, 2, 7, 8, 1, 0]);
   e.windowSize(1200, 760);
   e.windowLimits(900, 560, 0, 0, 0);
   e.fontFamily(1, "Lucide, monospace");

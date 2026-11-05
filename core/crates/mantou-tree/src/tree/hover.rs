@@ -55,12 +55,20 @@ impl Tree {
         &self.hovered
     }
 
-    /// The cursor to show (a `protocol::cursor` value, never AUTO): the
-    /// innermost hovered node's that sets one, else the text cursor over an
+    /// The cursor to show (a `protocol::cursor` value, never AUTO): over a
+    /// span, the innermost span's that sets one; then the innermost hovered
+    /// node's that sets one, else the text cursor over an
     /// input, else the arrow. Over a scrollbar thumb, the arrow.
     pub fn cursor(&self) -> u32 {
         if self.pointer.is_some_and(|(x, y)| self.on_thumb(x, y)) {
             return cursor::DEFAULT;
+        }
+        // Over a run in spans, the innermost span that sets a cursor (a link's pointer).
+        if let (Some(&last), Some((x, y))) = (self.hovered.last(), self.pointer)
+            && let Some(spans) = self.spans_at(last, x, y)
+            && let Some(c) = spans.iter().rev().filter_map(|s| self.nodes.get(s)).map(|n| n.v.cursor).find(|&c| c != cursor::AUTO)
+        {
+            return c;
         }
         for &id in self.hovered.iter().rev() {
             let n = &self.nodes[&id];

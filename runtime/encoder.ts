@@ -80,6 +80,7 @@ export class OpEncoder {
   }
   fontFamily(family: number, names: string) { this.op(Op.FONT_FAMILY, [family, ...stringWords(names)]); }
   transition(id: number, prop: number, duration: number, easing: number) { this.op(Op.TRANSITION, [id, prop, f32bits(duration), easing]); }
+  textRuns(id: number, words: number[]) { this.op(Op.TEXT_RUNS, [id, ...words]); }
   keyframes(id: number, animation: number, values: number[]) { this.op(Op.KEYFRAMES, [id, animation, ...values]); }
   animate(id: number, animation: number, prop: number, from: number, to: number, duration: number, easing: number, iterations: number, flags: number) {
     this.op(Op.ANIMATE, [id, animation, prop, from, to, f32bits(duration), easing, f32bits(iterations), flags]);

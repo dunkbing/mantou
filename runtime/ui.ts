@@ -255,6 +255,21 @@ export function defineStyle(style: Style | (() => Style)): SharedStyle {
  * the turn). Elsewhere a leaf sends nothing: Solid uses empty leaves as
  * placeholders, and text outside <Text> isn't drawn.
  */
+/** The UTF-8 length of a string, as TextEncoder writes it (a lone surrogate is U+FFFD, 3 bytes). */
+function utf8Length(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c < 0xdc00 && i + 1 < s.length && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
+
 export class TextLeaf {
   parent: Node | null = null;
   constructor(private value: string) {}
@@ -301,6 +316,7 @@ export class Node {
   layout: Rect | null = null;
   /** The content last sent for a Text node. */
   sentText = "";
+  private sentRuns = "";
   /**
    * An Input's text: what the core last reported, or the app last set. The
    * core owns it while the user types; `rev` counts the user's edits seen.
@@ -557,10 +573,19 @@ export class Node {
       }
     }
     if (this.isText) {
-      const text = this.textContent;
+      if (this.isSpan) return; // its Text sends it
+      const runs = this.textRuns();
+      const text = runs.map((r) => r.text).join("");
       if (text !== this.sentText) {
         this.sentText = text;
         this.ui.enc.text(this.id, text);
+      }
+      // Runs only when something is in a span (or was): (UTF-8 length, span count, spans…) each.
+      const words = runs.some((r) => r.spans.length) ? runs.flatMap((r) => [utf8Length(r.text), r.spans.length, ...r.spans]) : [];
+      const key = words.join(",");
+      if (key !== this.sentRuns) {
+        this.sentRuns = key;
+        this.ui.enc.textRuns(this.id, words);
       }
     } else if (this.isInput) {
       const o = this.options, s = this.sentOptions;
@@ -583,13 +608,38 @@ export class Node {
   /** A Text node's content: its text leaves joined. */
   get textContent(): string {
     let s = "";
-    for (const c of this.children) if (c instanceof TextLeaf) s += c.text;
+    for (const c of this.children) s += c instanceof TextLeaf ? c.text : c.isText ? c.textContent : "";
     return s;
+  }
+
+  /** A Text's text in runs: each with the spans it's in, outermost first (adjacent runs in the same spans joined). */
+  private textRuns(): { text: string; spans: number[] }[] {
+    const runs: { text: string; spans: number[] }[] = [];
+    const walk = (n: Node, spans: number[]) => {
+      for (const c of n.children) {
+        if (c instanceof TextLeaf) {
+          if (!c.text) continue;
+          const last = runs.at(-1);
+          if (last && last.spans.length === spans.length && last.spans.every((s, i) => s === spans[i])) last.text += c.text;
+          else runs.push({ text: c.text, spans });
+        } else if (c.isText) walk(c, [...spans, c.id]);
+      }
+    };
+    walk(this, []);
+    return runs;
   }
 
   /** @internal */
   textChanged() {
-    if (this.isText && !this.released) this.ui.markPending(this);
+    // A span's text is its Text's: the outermost Text sends it.
+    let root: Node = this;
+    while (root.parent?.isText) root = root.parent;
+    if (root.isText && !root.released) this.ui.markPending(root);
+  }
+
+  /** A span: a <Text> inside a <Text>. */
+  get isSpan(): boolean {
+    return this.isText && !!this.parent?.isText;
   }
 
   /** Child nodes, without text leaves. */
@@ -638,7 +688,7 @@ export class Node {
     this.alive();
     if (child instanceof Node) {
       child.alive();
-      if (this.isText) throw new Error("mantou: <Text> holds only text; put views next to it, not inside it");
+      if (this.isText && !child.isText) throw new Error("mantou: <Text> holds only text and <Text> spans; put views next to it, not inside it");
       if (this.isInput) throw new Error("mantou: <Input> has no children");
       if (this.isImage) throw new Error("mantou: <Image> has no children");
     } else if (!this.isText && child.text.trim()) {
@@ -653,8 +703,9 @@ export class Node {
     const at = before ? this.children.indexOf(before) : this.children.length;
     this.children.splice(at, 0, child);
     child.parent = this;
-    if (child instanceof TextLeaf) this.textChanged();
-    if (child instanceof Node) {
+    if (child instanceof TextLeaf || this.isText) this.textChanged();
+    // A <Text> inside a <Text> is a span: the core hears of it through its Text's runs, not as a child.
+    if (child instanceof Node && !this.isText) {
       const next = this.nextNode(child);
       if (wasHere && next === oldNext) return this;
       this.ui.enc.insert(this.id, child.id, next?.id ?? 0);
@@ -680,8 +731,8 @@ export class Node {
   remove(child: Child): this {
     if (child.parent !== this) return this;
     this.detach(child);
-    if (child instanceof TextLeaf) this.textChanged();
-    if (child instanceof Node && !this.released && !child.released) {
+    if (child instanceof TextLeaf || this.isText) this.textChanged();
+    if (child instanceof Node && !this.isText && !this.released && !child.released) {
       this.ui.enc.remove(this.id, child.id);
       this.ui.schedule();
     }
@@ -691,6 +742,7 @@ export class Node {
   private detach(child: Child) {
     this.children.splice(this.children.indexOf(child), 1);
     child.parent = null;
+    if (this.isText && child instanceof Node) this.textChanged(); // a span went: its runs change
   }
 
   /** Frees the node in the core. Its children are detached, not released. */

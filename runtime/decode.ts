@@ -72,6 +72,12 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "IMAGE_DATA": o = { op: name, id: w[a], bytes: w[a + 1] }; break;
       case "FONT_FAMILY": o = { op: name, family: w[a], names: str(w, a + 1) }; break;
       case "TRANSITION": o = { op: name, id: w[a], prop: StylePropByCode[w[a + 1]], duration: bitsf32(w[a + 2]), easing: w[a + 3] }; break;
+      case "TEXT_RUNS": {
+        const runs: { length: number; spans: number[] }[] = [];
+        for (let j = a + 1; j + 1 < a + n; j += 2 + w[j + 1]) runs.push({ length: w[j], spans: Array.from(w.subarray(j + 2, j + 2 + w[j + 1])) });
+        o = { op: name, id: w[a], runs };
+        break;
+      }
       case "KEYFRAMES": o = { op: name, id: w[a], animation: w[a + 1], values: w.slice(a + 2, a + n) }; break;
       case "ANIMATE": o = { op: name, id: w[a], animation: w[a + 1], prop: StylePropByCode[w[a + 2]], from: w[a + 3], to: w[a + 4], duration: bitsf32(w[a + 5]), easing: w[a + 6], iterations: bitsf32(w[a + 7]), flags: w[a + 8] }; break;
       case "SELECT": o = { op: name, id: w[a], anchor: w[a + 1], focus: w[a + 2] }; break;

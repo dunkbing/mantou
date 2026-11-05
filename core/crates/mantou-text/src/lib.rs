@@ -117,6 +117,11 @@ impl Default for TextStyle {
 }
 
 impl TextStyle {
+    /// What a span's style changes in the layout.
+    fn span_key(&self) -> [u32; 6] {
+        [self.family, self.size.to_bits(), self.weight.to_bits(), self.italic as u32, self.letter_spacing.to_bits(), self.decoration as u32]
+    }
+
     fn key(&self) -> [u32; 9] {
         [
             self.family,
@@ -141,6 +146,30 @@ pub struct PlacedGlyph {
     pub x: f32,
     pub y: f32,
     pub advance: f32,
+    /// The span it's in: 0 = the text's own style, n = `spans[n - 1]` of `layout_rich`.
+    pub span: u32,
+    /// What the font lacks and is drawn in: a slant (degrees; italic in a font
+    /// without an italic face) and emboldening (a weight it doesn't have).
+    pub skew: f32,
+    pub embolden: bool,
+}
+
+/// Part of rich text set in its own style: bytes `start..end` of the text.
+/// Of its style, the font (family, size, weight, italic), letter spacing and
+/// decoration count; the rest (alignment, lines, wrapping) is the text's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Span {
+    pub start: u32,
+    pub end: u32,
+    pub style: TextStyle,
+}
+
+/// A stretch of one line in one span: [x0, y0, x1, y1] in logical px from
+/// the layout's top left, from the line box's top to its bottom.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RunBox {
+    pub rect: [f32; 4],
+    pub span: u32,
 }
 
 /// Laid-out text. Immutable; shared between the tree and scenes.
@@ -152,8 +181,17 @@ pub struct TextLayout {
     /// Lines were cut off (`max_lines`) or a single line was too wide: it ends in an ellipsis.
     pub truncated: bool,
     pub glyphs: Vec<PlacedGlyph>,
-    /// Underlines and strike-throughs, as boxes [x0, y0, x1, y1] in logical px from the layout's top left.
-    pub decorations: Vec<[f32; 4]>,
+    /// Underlines and strike-throughs, as boxes in logical px from the layout's top left, in their span's colour.
+    pub decorations: Vec<RunBox>,
+    /// Each line's stretches of one span (for highlights and finding the span at a point).
+    pub runs: Vec<RunBox>,
+}
+
+impl TextLayout {
+    /// The span at a point (logical px from the layout's top left): 0 for the text's own style, None off the text.
+    pub fn span_at(&self, x: f32, y: f32) -> Option<u32> {
+        self.runs.iter().find(|r| x >= r.rect[0] && x < r.rect[2] && y >= r.rect[1] && y < r.rect[3]).map(|r| r.span)
+    }
 }
 
 /// A glyph's bitmap in the atlas, and where it sits relative to its pen position (device px).
@@ -190,6 +228,9 @@ struct GlyphKey {
     id: u32,
     size_bits: u32,
     bin: u8,
+    /// Synthesized: the slant's bits, and emboldening.
+    skew_bits: u32,
+    embolden: bool,
 }
 
 struct Shelf {
@@ -264,12 +305,13 @@ impl Atlas {
     }
 }
 
-type LayoutKey = (String, [u32; 9], u32);
+/// Text, style, width, and the spans' ranges and layout styles.
+type LayoutKey = (String, [u32; 9], u32, Vec<(u32, u32, [u32; 6])>);
 
 /// Text layout and glyph rasterization for one tree.
 pub struct TextEngine {
     fcx: FontContext,
-    lcx: LayoutContext<()>,
+    lcx: LayoutContext<u32>,
     scx: ScaleContext,
     font_ids: HashMap<(u64, u32), u32>,
     fonts: Vec<FontData>,
@@ -368,8 +410,9 @@ impl TextEngine {
         id
     }
 
-    fn shape(&mut self, text: &str, style: &TextStyle) -> Layout<()> {
+    fn shape(&mut self, text: &str, style: &TextStyle, spans: &[Span]) -> Layout<u32> {
         let family = self.family_source(style.family).to_owned();
+        let span_families: Vec<Option<String>> = spans.iter().map(|sp| (sp.style.family != style.family).then(|| self.family_source(sp.style.family).to_owned())).collect();
         let mut b = self.lcx.ranged_builder(&mut self.fcx, text, 1.0, false);
         b.push_default(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(family))));
         b.push_default(StyleProperty::FontSize(style.size));
@@ -389,23 +432,49 @@ impl TextEngine {
         } else {
             LineHeight::MetricsRelative(1.0)
         }));
+        for (i, (sp, fam)) in spans.iter().zip(span_families).enumerate() {
+            let range = (sp.start as usize).min(text.len())..(sp.end as usize).min(text.len());
+            if range.is_empty() {
+                continue;
+            }
+            let t = &sp.style;
+            b.push(StyleProperty::Brush(i as u32 + 1), range.clone());
+            if let Some(f) = fam {
+                b.push(StyleProperty::FontFamily(FontFamily::Source(Cow::Owned(f))), range.clone());
+            }
+            if t.size != style.size {
+                b.push(StyleProperty::FontSize(t.size), range.clone());
+            }
+            if t.weight != style.weight {
+                b.push(StyleProperty::FontWeight(FontWeight::new(t.weight)), range.clone());
+            }
+            if t.italic != style.italic {
+                b.push(StyleProperty::FontStyle(if t.italic { FontStyle::Italic } else { FontStyle::Normal }), range.clone());
+            }
+            if t.letter_spacing != style.letter_spacing {
+                b.push(StyleProperty::LetterSpacing(t.letter_spacing), range);
+            }
+        }
         b.build(text)
     }
 
-    /// Each kept line's glyphs, and its (baseline, line height, width without hanging whitespace).
-    pub(crate) fn glyphs_of(&mut self, layout: &Layout<()>, max_lines: usize) -> (Vec<Vec<PlacedGlyph>>, Vec<(f32, f32, f32)>) {
+    /// Each kept line's glyphs, and its (baseline, line height, width without hanging whitespace, top, bottom).
+    pub(crate) fn glyphs_of(&mut self, layout: &Layout<u32>, max_lines: usize) -> (Vec<Vec<PlacedGlyph>>, Vec<(f32, f32, f32, f32, f32)>) {
         let mut lines = Vec::new();
         let mut extents = Vec::new();
         for line in layout.lines().take(max_lines) {
             let m = line.metrics();
-            extents.push((m.baseline, m.line_height, m.advance - m.hanging_advance));
+            extents.push((m.baseline, m.line_height, m.advance - m.hanging_advance, m.block_min_coord, m.block_max_coord));
             let mut glyphs = Vec::new();
             for item in line.items() {
                 if let PositionedLayoutItem::GlyphRun(run) = item {
                     let font = self.font_id(run.run().font());
                     let size = run.run().font_size();
+                    let span = run.style().brush;
+                    let synth = run.run().synthesis();
+                    let (skew, embolden) = (synth.skew().unwrap_or(0.0), synth.embolden());
                     for g in run.positioned_glyphs() {
-                        glyphs.push(PlacedGlyph { font, id: g.id, size, x: g.x, y: g.y, advance: g.advance });
+                        glyphs.push(PlacedGlyph { font, id: g.id, size, x: g.x, y: g.y, advance: g.advance, span, skew, embolden });
                     }
                 }
             }
@@ -418,7 +487,7 @@ impl TextEngine {
         if let Some(e) = self.ellipses.get(&style.key()) {
             return e.clone();
         }
-        let mut layout = self.shape("…", style);
+        let mut layout = self.shape("…", style, &[]);
         layout.break_all_lines(None);
         let (lines, _) = self.glyphs_of(&layout, 1);
         let e = lines.into_iter().next().unwrap_or_default();
@@ -428,7 +497,12 @@ impl TextEngine {
 
     /// Lays `text` out within `max_width` (logical px; None = one line per paragraph).
     pub fn layout(&mut self, text: &str, style: &TextStyle, max_width: Option<f32>) -> Arc<TextLayout> {
-        let key = (text.to_owned(), style.key(), max_width.map_or(u32::MAX, f32::to_bits));
+        self.layout_rich(text, style, &[], max_width)
+    }
+
+    /// Lays out rich text: `spans` (byte ranges, in order, not overlapping) set parts of it in their own style.
+    pub fn layout_rich(&mut self, text: &str, style: &TextStyle, spans: &[Span], max_width: Option<f32>) -> Arc<TextLayout> {
+        let key = (text.to_owned(), style.key(), max_width.map_or(u32::MAX, f32::to_bits), spans.iter().map(|s| (s.start, s.end, s.style.span_key())).collect::<Vec<_>>());
         if let Some(l) = self.cache.get(&key) {
             return l.clone();
         }
@@ -436,7 +510,7 @@ impl TextEngine {
             Some(l) => l, // still in use: back to the newer generation
             None => {
                 self.uncached += 1;
-                Arc::new(self.layout_uncached(text, style, max_width))
+                Arc::new(self.layout_uncached(text, style, spans, max_width))
             }
         };
         if self.cache.len() >= CACHE_LIMIT {
@@ -446,18 +520,36 @@ impl TextEngine {
         result
     }
 
-    fn layout_uncached(&mut self, text: &str, style: &TextStyle, max_width: Option<f32>) -> TextLayout {
+    fn layout_uncached(&mut self, text: &str, style: &TextStyle, spans: &[Span], max_width: Option<f32>) -> TextLayout {
         if text.is_empty() {
             return TextLayout::default();
         }
         let transformed;
-        let text = if style.transform == Transform::None {
-            text
+        let mut moved = Vec::new();
+        let (text, spans) = if style.transform == Transform::None {
+            (text, spans)
         } else {
-            transformed = style.transform.apply(text);
-            &transformed
+            // Upper-casing can change lengths (ß is SS): transform piece by piece, and move the spans with it.
+            let mut out = String::with_capacity(text.len());
+            let mut at = 0usize;
+            let piece = |out: &mut String, from: usize, to: usize| {
+                let (from, to) = (from.min(text.len()), to.min(text.len()).max(from.min(text.len())));
+                if let Some(t) = text.get(from..to) {
+                    out.push_str(&style.transform.apply(t));
+                }
+            };
+            for sp in spans {
+                piece(&mut out, at, sp.start as usize);
+                let start = out.len() as u32;
+                piece(&mut out, sp.start as usize, sp.end as usize);
+                moved.push(Span { start, end: out.len() as u32, ..*sp });
+                at = sp.end as usize;
+            }
+            piece(&mut out, at, text.len());
+            transformed = out;
+            (transformed.as_str(), moved.as_slice())
         };
-        let mut layout = self.shape(text, style);
+        let mut layout = self.shape(text, style, spans);
         let single = style.max_lines == 1 || style.nowrap;
         layout.break_all_lines(if single { None } else { max_width });
         if !single {
@@ -513,28 +605,46 @@ impl TextEngine {
             }
         }
         let height = if keep == total { layout.height() } else { extents.iter().map(|e| e.1).sum() };
-        // ponytail: line positions from the font size, not the font's own underline metrics.
+        // Each line's stretches of one span, from the glyphs that were kept, and their decorations.
+        // ponytail: decoration positions from the font size, not the font's own underline metrics.
+        let style_of = |span: u32| if span == 0 { style } else { spans.get(span as usize - 1).map_or(style, |s| &s.style) };
+        let mut runs: Vec<RunBox> = Vec::new();
         let mut decorations = Vec::new();
-        if style.decoration != Decoration::None {
-            for (l, e) in lines.iter().zip(&extents) {
-                let (Some(first), Some(last)) = (l.first(), l.last()) else { continue };
-                let thickness = (style.size / 14.0).max(1.0);
-                let y = match style.decoration {
-                    Decoration::Underline => first.y + style.size * 0.12,
-                    _ => first.y - style.size * 0.3,
-                };
-                let _ = e;
-                decorations.push([first.x, y, last.x + last.advance, y + thickness]);
+        for (l, e) in lines.iter().zip(&extents) {
+            let mut i = 0;
+            while i < l.len() {
+                let span = l[i].span;
+                let mut j = i;
+                while j + 1 < l.len() && l[j + 1].span == span {
+                    j += 1;
+                }
+                let (x0, x1) = (l[i].x, l[j].x + l[j].advance);
+                runs.push(RunBox { rect: [x0, e.3, x1, e.4], span });
+                let st = style_of(span);
+                if st.decoration != Decoration::None {
+                    let thickness = (st.size / 14.0).max(1.0);
+                    let y = match st.decoration {
+                        Decoration::Underline => l[i].y + st.size * 0.12,
+                        _ => l[i].y - st.size * 0.3,
+                    };
+                    decorations.push(RunBox { rect: [x0, y, x1, y + thickness], span });
+                }
+                i = j + 1;
             }
         }
-        TextLayout { width, height, lines: keep as u32, truncated, glyphs: lines.into_iter().flatten().collect(), decorations }
+        TextLayout { width, height, lines: keep as u32, truncated, glyphs: lines.into_iter().flatten().collect(), decorations, runs }
     }
 
     /// The glyph's bitmap in the atlas, rasterizing it the first time, at `size_px`
     /// device px and a horizontal subpixel offset `frac` (0..1). None for blank glyphs.
     pub fn glyph(&mut self, font: u32, id: u32, size_px: f32, frac: f32) -> Option<AtlasEntry> {
+        self.glyph_synth(font, id, size_px, frac, 0.0, false)
+    }
+
+    /// `glyph`, slanted by `skew` degrees and emboldened, as a `PlacedGlyph` asks.
+    pub fn glyph_synth(&mut self, font: u32, id: u32, size_px: f32, frac: f32, skew: f32, embolden: bool) -> Option<AtlasEntry> {
         let bin = ((frac * SUBPIXEL_BINS).floor() as u8).min(SUBPIXEL_BINS as u8 - 1);
-        let key = GlyphKey { font, id, size_bits: size_px.to_bits(), bin };
+        let key = GlyphKey { font, id, size_bits: size_px.to_bits(), bin, skew_bits: skew.to_bits(), embolden };
         if let Some(e) = self.atlas.entries.get(&key) {
             return *e;
         }
@@ -547,10 +657,16 @@ impl TextEngine {
         let data = self.fonts.get(key.font as usize)?.clone();
         let font = swash::FontRef::from_index(data.data.data(), data.index as usize)?;
         let mut scaler = self.scx.builder(font).size(size_px).hint(false).build();
-        let image = Render::new(&[Source::ColorOutline(0), Source::ColorBitmap(StrikeWith::BestFit), Source::Outline])
-            .format(Format::Alpha)
-            .offset(Vector::new(offset, 0.0))
-            .render(&mut scaler, key.id as u16)?;
+        let mut render = Render::new(&[Source::ColorOutline(0), Source::ColorBitmap(StrikeWith::BestFit), Source::Outline]);
+        render.format(Format::Alpha).offset(Vector::new(offset, 0.0));
+        let skew = f32::from_bits(key.skew_bits);
+        if skew != 0.0 {
+            render.transform(Some(swash::zeno::Transform::skew(swash::zeno::Angle::from_degrees(skew), swash::zeno::Angle::ZERO)));
+        }
+        if key.embolden {
+            render.embolden(size_px / 48.0);
+        }
+        let image = render.render(&mut scaler, key.id as u16)?;
         let (w, h) = (image.placement.width, image.placement.height);
         if w == 0 || h == 0 {
             return None;
@@ -621,6 +737,42 @@ mod tests {
         assert!(bold.width > regular.width);
         let again = e.layout("Mantou", &TextStyle::default(), None);
         assert!(Arc::ptr_eq(&regular, &again));
+    }
+
+    #[test]
+    fn spans_set_parts_of_the_text_in_their_own_style() {
+        let mut e = TextEngine::new();
+        let base = TextStyle { size: 16.0, ..TextStyle::default() };
+        let plain = e.layout("Hello brave world", &base, None);
+        // "brave" (bytes 6..11) bold and underlined, "world" (12..17) twice the size.
+        let spans = [
+            Span { start: 6, end: 11, style: TextStyle { weight: 800.0, decoration: Decoration::Underline, ..base } },
+            Span { start: 12, end: 17, style: TextStyle { size: 32.0, ..base } },
+        ];
+        let rich = e.layout_rich("Hello brave world", &base, &spans, None);
+        assert!(rich.width > plain.width && rich.height > plain.height, "bold and bigger: {} × {} vs {} × {}", rich.width, rich.height, plain.width, plain.height);
+        assert_eq!(rich.glyphs.iter().map(|g| g.span).collect::<Vec<_>>(), [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2]);
+        assert_eq!(rich.runs.iter().map(|r| r.span).collect::<Vec<_>>(), [0, 1, 0, 2]);
+        assert_eq!(rich.decorations.len(), 1, "only the bold span is underlined");
+        assert_eq!(rich.decorations[0].span, 1);
+        let brave = rich.runs[1].rect;
+        assert_eq!(rich.span_at((brave[0] + brave[2]) / 2.0, (brave[1] + brave[3]) / 2.0), Some(1));
+        assert_eq!(rich.span_at(1.0, (brave[1] + brave[3]) / 2.0), Some(0));
+        assert_eq!(rich.span_at(rich.width + 5.0, 1.0), None);
+        // The same spans again: cached; colours aren't part of it, so a recolour lays nothing out.
+        let n = e.uncached_layouts();
+        e.layout_rich("Hello brave world", &base, &spans, None);
+        assert_eq!(e.uncached_layouts(), n);
+    }
+
+    #[test]
+    fn spans_follow_a_text_transform_that_changes_lengths() {
+        let mut e = TextEngine::new();
+        let base = TextStyle { transform: Transform::Upper, ..TextStyle::default() };
+        // "ß" (2 bytes) upper-cases to "SS" (2 bytes) but "ŉ" (2 bytes) to "ʼN" (3 bytes): the span after it moves.
+        let spans = [Span { start: 3, end: 5, style: TextStyle { weight: 800.0, ..base } }];
+        let l = e.layout_rich("ŉ ab", &base, &spans, None);
+        assert_eq!(l.glyphs.iter().filter(|g| g.span == 1).count(), 2, "\"AB\" is still the span");
     }
 
     #[test]
