@@ -56,6 +56,17 @@ onMenu((id) => id === "open" && show());                // tray items arrive her
 
 `setBadge` and `createTray` work on macOS only for now (they resolve `false` elsewhere). A notification can't tell you it was clicked yet. Notifications from a program that isn't an app bundle show up under another name on macOS; `mantou package` apps use their own.
 
+## Where to keep files
+
+```tsx
+import { paths } from "mantou-ui";
+
+await Bun.write(`${paths.config}/settings.json`, JSON.stringify(settings));
+// paths.data (databases, documents), paths.cache (can be deleted), paths.temp
+```
+
+Each is the user's folder for the app (`~/Library/Application Support/<app>` on macOS, `%APPDATA%` or `%LOCALAPPDATA%` on Windows, XDG folders on Linux), created when you read it. The app's name is the `name` in the package.json in the working directory, or `MANTOU_APP`, or `paths.setApp("Notes")`.
+
 ## The window
 
 Open it the way you want with `run`:

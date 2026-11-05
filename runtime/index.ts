@@ -23,3 +23,4 @@ export {
 } from "./solid/solid";
 export { dumpTree } from "./debug";
 export { CanvasContext } from "./canvas";
+export { paths } from "./paths";
