@@ -98,7 +98,7 @@ pub(super) struct TextSel {
 impl Tree {
     /// Whether some static text is selected (it takes Copy and Select All).
     pub fn has_text_selection(&self) -> bool {
-        self.tsel.is_some()
+        self.tsel.is_some() || self.html_sel.is_some()
     }
 
     /// The topmost node at or above `id` that has `userSelect: "text"`, if any: a View with it makes all the
@@ -127,9 +127,15 @@ impl Tree {
     /// The primary button went down off the inputs: on selectable text, place the caret (a word on
     /// 2 clicks, a line on 3; shift extends); elsewhere, drop the text selection. Returns whether the scene changed.
     fn text_select_down(&mut self, x: f32, y: f32, clicks: u32, extend: bool) -> bool {
+        // An Html node's document selects its own text.
+        if let Some(id) = self.hit(x, y).filter(|id| self.nodes[id].html.is_some()) {
+            let had = self.tsel.take().is_some();
+            return self.html_press(id, x, y) || had;
+        }
+        let html_gone = self.html_unselect(None);
         let hit = self.hit(x, y).filter(|id| self.nodes[id].kind == crate::protocol::node_kind::TEXT);
         let Some((id, root)) = hit.and_then(|id| self.selection_root(id).map(|r| (id, r))) else {
-            return self.tsel.take().is_some();
+            return self.tsel.take().is_some() || html_gone;
         };
         let Some((content, k)) = self.text_box(id) else { return false };
         if extend && self.tsel.as_ref().is_some_and(|t| t.root == root) {
@@ -200,6 +206,16 @@ impl Tree {
         let primary = if self.mac { mods & m::META != 0 } else { mods & m::CONTROL != 0 };
         if !primary || mods & m::ALT != 0 {
             return false;
+        }
+        if self.html_sel.is_some() {
+            // Copy from an Html node's document (Select All isn't there yet).
+            if char::from_u32(key).map(|c| c.to_ascii_lowercase()) != Some('c') {
+                return false;
+            }
+            if let Some(text) = self.html_selected_text() {
+                clipboard.set(&text);
+            }
+            return true;
         }
         let Some(root) = self.tsel.as_ref().map(|t| t.root) else { return false };
         let texts = self.selectable_texts(root);
@@ -332,6 +348,7 @@ impl Tree {
             return self.text_select_down(x, y, clicks, extend) || changed;
         };
         self.tsel = None;
+        self.html_unselect(None);
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };
         self.set_focus(Some(id));
         let (px, py) = ((x - ox) / k, (y - oy) / k);
@@ -353,6 +370,9 @@ impl Tree {
         }
         if self.drag.is_some_and(|d| self.tsel.as_ref().is_some_and(|t| t.anchor == d)) {
             return self.extend_text_selection(x, y);
+        }
+        if let Some(id) = self.drag.filter(|&d| self.html_sel == Some(d)) {
+            return self.html_drag(id, x, y);
         }
         let Some(id) = self.drag.filter(|&d| Some(d) == self.focus) else { return false };
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };

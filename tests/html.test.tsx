@@ -135,3 +135,38 @@ test("colorScheme answers prefers-color-scheme, and changing it redraws", () => 
   setScheme("dark");
   expect(h.capture().at(5, 5)).toEqual([0, 0, 0, 255]);
 });
+
+test("dragging selects the document's text, the highlight is drawn, and Copy copies it", () => {
+  const doc = `<body style="margin:0;font-size:20px;line-height:30px;color:#000000;background:#ffffff"><p style="margin:0">Hello there</p><p style="margin:0">General Kenobi</p></body>`;
+  const h = app(() => (
+    <View style={{ padding: 20, gap: 10 }}>
+      <Html html={doc} style={{ width: 300 }} />
+      <Html html={`<p style="margin:0">Another one</p>`} style={{ width: 300 }} />
+    </View>
+  ));
+  const before = h.capture();
+  h.hover([22, 35]);
+  expect(h.cursor()).toBe("text"); // over its text
+  h.hover([290, 35]);
+  expect(h.cursor()).toBe("default"); // past the end of the line
+  h.pointer("down", 22, 35);
+  h.pointer("move", 90, 65);
+  h.pointer("up", 90, 65);
+  const after = h.capture();
+  // The highlight is behind the selected text: some pixels changed in the first line, none past it.
+  const differs = (x0: number, y0: number, x1: number, y1: number) => {
+    for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) if (String(before.at(x, y)) !== String(after.at(x, y))) return true;
+    return false;
+  };
+  expect(differs(20, 20, 120, 50)).toBe(true);
+  expect(differs(20, 90, 320, 140)).toBe(false); // the other document
+  h.clipboard = "";
+  h.key("c", { primary: true });
+  expect(h.clipboard).toMatch(/^Hello there Gen/);
+  // A press in the other document drops it.
+  h.press([40, 100]);
+  h.clipboard = "";
+  h.key("c", { primary: true });
+  expect(h.clipboard).toBe("");
+  expect(String(h.capture().at(25, 35))).toBe(String(before.at(25, 35))); // the highlight went
+});

@@ -78,6 +78,53 @@ impl HtmlNode {
         out
     }
 
+    /// Starts a selection at (x, y) (the document's px); whether there's text there.
+    fn select_start(&self, x: f32, y: f32) -> bool {
+        #[cfg(feature = "html")]
+        return self.doc.borrow_mut().as_mut().is_some_and(|d| d.select_start(x, y));
+        #[cfg(not(feature = "html"))]
+        {
+            let _ = (x, y);
+            false
+        }
+    }
+
+    /// Moves the selection's end to (x, y); whether it changed.
+    fn select_to(&self, x: f32, y: f32) -> bool {
+        #[cfg(feature = "html")]
+        return self.doc.borrow_mut().as_mut().is_some_and(|d| d.select_to(x, y));
+        #[cfg(not(feature = "html"))]
+        {
+            let _ = (x, y);
+            false
+        }
+    }
+
+    /// Drops the selection; whether there was one.
+    fn select_none(&self) -> bool {
+        #[cfg(feature = "html")]
+        return self.doc.borrow_mut().as_mut().is_some_and(|d| d.select_none());
+        #[cfg(not(feature = "html"))]
+        false
+    }
+
+    fn selected_text(&self) -> Option<String> {
+        #[cfg(feature = "html")]
+        return self.doc.borrow().as_ref()?.selected_text();
+        #[cfg(not(feature = "html"))]
+        None
+    }
+
+    fn text_at(&self, x: f32, y: f32) -> bool {
+        #[cfg(feature = "html")]
+        return self.doc.borrow().as_ref().is_some_and(|d| d.text_at(x, y));
+        #[cfg(not(feature = "html"))]
+        {
+            let _ = (x, y);
+            false
+        }
+    }
+
     /// The link at (x, y), logical px from the content box's top left at `k`.
     pub(super) fn link_at(&self, x: f32, y: f32, k: f32) -> Option<String> {
         #[cfg(feature = "html")]
@@ -139,6 +186,60 @@ impl Tree {
                 self.events.push(TreeEvent::HtmlRequest { id, url });
             }
         }
+    }
+
+    /// (x, y) in the window's logical px, as Html node `id`'s document px (outside its box too), and the node.
+    fn html_at(&self, id: u32, x: f32, y: f32) -> Option<(&HtmlNode, f32, f32)> {
+        let b = self.boxes.iter().find(|b| b.id == id)?;
+        let k = b.k.max(1e-3);
+        Some((self.nodes.get(&id)?.html.as_deref()?, (x - b.content[0]) / k, (y - b.content[1]) / k))
+    }
+
+    /// A press on Html node `id` at (x, y): any other selection goes, and one starts here when there's text.
+    /// Returns whether the scene changed.
+    pub(super) fn html_press(&mut self, id: u32, x: f32, y: f32) -> bool {
+        let mut changed = self.html_unselect(Some(id));
+        if let Some((h, px, py)) = self.html_at(id, x, y) {
+            changed |= h.select_none();
+            if h.select_start(px, py) {
+                self.html_sel = Some(id);
+                self.drag = Some(id);
+            }
+        }
+        if changed {
+            self.scene_dirty = true;
+        }
+        changed
+    }
+
+    /// The pointer moved to (x, y) while selecting in Html node `id`; whether the selection changed.
+    pub(super) fn html_drag(&mut self, id: u32, x: f32, y: f32) -> bool {
+        let changed = self.html_at(id, x, y).is_some_and(|(h, px, py)| h.select_to(px, py));
+        if changed {
+            self.scene_dirty = true;
+        }
+        changed
+    }
+
+    /// Drops the Html selection, unless it's in `keep`; whether one went.
+    pub(super) fn html_unselect(&mut self, keep: Option<u32>) -> bool {
+        let Some(id) = self.html_sel.filter(|&i| Some(i) != keep) else { return false };
+        self.html_sel = None;
+        let gone = self.nodes.get(&id).and_then(|n| n.html.as_ref()).is_some_and(|h| h.select_none());
+        if gone {
+            self.scene_dirty = true;
+        }
+        gone
+    }
+
+    /// The text selected in an Html node's document, if any.
+    pub(super) fn html_selected_text(&self) -> Option<String> {
+        self.nodes.get(&self.html_sel?)?.html.as_ref()?.selected_text()
+    }
+
+    /// Whether there's text in Html node `id`'s document at (x, y) (the window's logical px).
+    pub(super) fn html_text_at(&self, id: u32, x: f32, y: f32) -> bool {
+        self.html_at(id, x, y).is_some_and(|(h, px, py)| h.text_at(px, py))
     }
 
     /// The `href` of the link at (x, y) (logical px, the window's) in Html node `id`, if any.

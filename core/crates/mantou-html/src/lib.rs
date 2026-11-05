@@ -143,6 +143,55 @@ impl HtmlDoc {
         (w, h, rgba)
     }
 
+    /// A press at (x, y) (logical px from its top left): a selection starts there, empty, when there's text
+    /// there (whether it did); any earlier one is dropped.
+    pub fn select_start(&mut self, x: f32, y: f32) -> bool {
+        if self.doc.has_text_selection() {
+            self.version += 1; // its highlight goes
+        }
+        match self.doc.find_text_position(x, y) {
+            Some((node, offset)) => {
+                self.doc.set_text_selection(node, offset, node, offset);
+                true
+            }
+            None => {
+                self.doc.clear_text_selection();
+                false
+            }
+        }
+    }
+
+    /// The pointer moved to (x, y) while selecting: the selection's end goes there (when there's text there).
+    /// Whether it changed.
+    pub fn select_to(&mut self, x: f32, y: f32) -> bool {
+        let before = self.doc.get_text_selection_ranges();
+        if !self.doc.extend_text_selection_to_point(x, y) || self.doc.get_text_selection_ranges() == before {
+            return false;
+        }
+        self.version += 1;
+        true
+    }
+
+    /// Drops the selection; whether there was one.
+    pub fn select_none(&mut self) -> bool {
+        if !self.doc.has_text_selection() {
+            return false;
+        }
+        self.doc.clear_text_selection();
+        self.version += 1;
+        true
+    }
+
+    /// The selected text, if any is selected (blocks joined by a space).
+    pub fn selected_text(&self) -> Option<String> {
+        self.doc.get_selected_text().filter(|s| !s.is_empty())
+    }
+
+    /// Whether there's text at (x, y): the pointer shows the text cursor there.
+    pub fn text_at(&self, x: f32, y: f32) -> bool {
+        self.doc.hit(x, y).is_some_and(|h| h.is_text)
+    }
+
     /// The `href` of the link at (x, y), logical px from its top left, if there is one.
     pub fn link_at(&self, x: f32, y: f32) -> Option<String> {
         let hit = self.doc.hit(x, y)?;
@@ -221,6 +270,29 @@ mod tests {
         assert_eq!(d.link_at(20.0, 20.0).as_deref(), Some("https://example.com/go"));
         assert_eq!(d.link_at(20.0, 120.0), None, "the red block");
         assert_eq!(d.link_at(350.0, 20.0), None, "beside the 300 px table");
+    }
+
+    #[test]
+    fn a_drag_selects_text_and_the_selection_is_drawn() {
+        let mut d = HtmlDoc::new("<body style='margin:0;font-size:20px;line-height:30px'><p style='margin:0'>Hello there</p><p style='margin:0'>General Kenobi</p></body>", false);
+        d.layout(400.0, 1.0);
+        let plain = d.paint(0.0, 60.0, 1.0).2;
+        assert!(d.select_start(2.0, 15.0));
+        assert_eq!(d.selected_text(), None, "a press selects nothing yet");
+        assert!(d.select_to(60.0, 15.0));
+        let first = d.selected_text().unwrap();
+        assert!(first.starts_with("Hel") && "Hello there".starts_with(&first), "{first}");
+        assert!(!d.select_to(60.0, 15.0), "the same point: no change");
+        assert!(d.select_to(70.0, 45.0));
+        let both = d.selected_text().unwrap();
+        assert!(both.starts_with("Hello there") && both.contains("Gen"), "{both}");
+        assert_ne!(d.paint(0.0, 60.0, 1.0).2, plain, "the highlight is drawn");
+        assert!(d.select_none());
+        assert_eq!(d.selected_text(), None);
+        assert!(!d.select_none());
+        assert_eq!(d.paint(0.0, 60.0, 1.0).2, plain);
+        assert!(d.text_at(5.0, 15.0));
+        assert!(!d.text_at(300.0, 15.0), "past the end of the line");
     }
 
     #[test]

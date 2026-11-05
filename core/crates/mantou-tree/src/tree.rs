@@ -646,6 +646,8 @@ pub struct Tree {
     follow: Option<(u32, f32, f32)>,
     /// Html nodes (their documents' requests are collected after layouts).
     html_nodes: HashSet<u32>,
+    /// The Html node whose document has the text selection.
+    html_sel: Option<u32>,
     hovered: Vec<u32>,
 }
 
@@ -717,6 +719,7 @@ impl Tree {
             pointer: None,
             follow: None,
             html_nodes: HashSet::new(),
+            html_sel: None,
             hovered: Vec::new(),
         }
     }
@@ -858,6 +861,9 @@ impl Tree {
                     self.follow = None;
                 }
                 self.html_nodes.remove(&id);
+                if self.html_sel == Some(id) {
+                    self.html_sel = None;
+                }
                 if self.tsel.as_ref().is_some_and(|t| t.root == id || t.anchor == id || t.editors.contains_key(&id)) {
                     self.tsel = None;
                 }

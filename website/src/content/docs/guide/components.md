@@ -111,7 +111,8 @@ A static HTML/CSS document, such as an HTML mail, laid out and drawn by the core
 
 - **Images and stylesheets** the document asks for go to `loadImage(url)`, once per URL. It returns the bytes, a promise of them, or `null` to leave one out (blocked, or not found). Without `loadImage` nothing loads, and `data:` URLs always do. To load what was blocked, make a new `<Html>` (the example does it with `<Show>`).
 - **What it handles:** tables (with `bgcolor`, `width` and `cellpadding`), inline and `<style>` CSS with media queries, `<center>` and `<font>`, rounded corners, PNG, JPEG, GIF, WebP and SVG images. It's [Blitz](https://github.com/DioxusLabs/blitz): Stylo for CSS, with the same Taffy and Parley as the rest of the core.
-- **Not yet:** text selection, and one-sided cell borders in `border-collapse: collapse` tables.
+- **Selecting text:** dragging over the document selects its text, and Cmd+C (Ctrl+C elsewhere) copies it. The core does this with no JS, and the pointer shows the text cursor over text. A press elsewhere drops the selection.
+- **Not yet:** double-click to select a word, Select All, and one-sided cell borders in `border-collapse: collapse` tables.
 - `bun run mail` shows an HTML mail with "Load images".
 
 ## WebView
