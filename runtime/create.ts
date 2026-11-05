@@ -62,7 +62,7 @@ export function create(dir: string): string[] {
         version: "0.0.0",
         private: true,
         type: "module",
-        scripts: { dev: "mantou run src/main.tsx", build: `mantou build src/main.tsx --name ${name}`, test: "bun test", typecheck: "bun check" },
+        scripts: { dev: "mantou dev src/main.tsx", start: "mantou run src/main.tsx", build: `mantou build src/main.tsx --name ${name}`, test: "bun test", typecheck: "bun check" },
         dependencies: { "mantou-ui": version() },
         devDependencies: { "@types/bun": "latest" },
       },

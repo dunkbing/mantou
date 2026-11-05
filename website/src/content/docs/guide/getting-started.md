@@ -48,8 +48,10 @@ run(() => <App />, { title: "Counter", width: 360, height: 240 });
 ```
 
 ```bash
-bunx mantou run src/main.tsx
+bunx mantou dev src/main.tsx
 ```
+
+`mantou dev` reloads the app when you save a file under the entry's folder (`--watch DIR` for another), keeping the window: an edit shows in about a tenth of a second. A load error or an uncaught error shows in the window (and the terminal) until the next save. State starts over on each reload. `mantou run` runs it without watching.
 
 ## How it works, in four lines
 

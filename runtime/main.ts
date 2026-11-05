@@ -37,7 +37,7 @@ export interface WindowOptions {
  * Worker (`worker` is the app's own, for a compiled app that embeds its entry). Never returns: this thread runs the native event loop until the app
  * quits, then the process exits with its code.
  */
-export async function start(entry: string, args: string[] = [], worker?: Worker): Promise<never> {
+export async function start(entry: string, args: string[] = [], worker?: Worker, dev?: { watch: string }): Promise<never> {
   // Command-line flags win over what the app asks for, which wins over the defaults.
   const flag = (name: string) => {
     const i = args.indexOf(`--${name}`);
@@ -48,8 +48,10 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
   process.env.MANTOU_T0 ??= String(Date.now());
   const core = openCore();
 
-  // The Worker entry registers the JSX plugin, then imports the app.
-  worker ??= new Worker(new URL("./worker.ts", import.meta.url).href);
+  // The Worker entry registers the JSX plugin, then imports the app. For
+  // `mantou dev`, a supervisor runs the app in a Worker of its own, and starts
+  // it again when a file changes (runtime/dev.ts).
+  worker ??= new Worker(new URL(dev ? "./dev.ts" : "./worker.ts", import.meta.url).href);
   const w = worker;
   await new Promise<void>((ok, fail) => {
     const timer = setTimeout(() => fail(new Error("mantou: the app Worker did not start within 10 s")), 10_000);
@@ -68,7 +70,7 @@ export async function start(entry: string, args: string[] = [], worker?: Worker)
       clearTimeout(timer);
       fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
     });
-    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href });
+    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch) });
   }).catch((err) => {
     console.error(err instanceof Error ? err.message : err);
     process.exit(70);

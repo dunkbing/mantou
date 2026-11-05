@@ -3,17 +3,26 @@
 // app the bootstrap names.
 import "./solid/preload";
 
-globalThis.addEventListener(
-  "message",
-  async (e: Event) => {
-    const data = (e as MessageEvent).data;
-    if (data?.type !== "mantou:entry") return;
-    try {
-      await import(data.entry);
-    } catch (err) {
-      console.error("mantou: the app failed to load:", err);
-      postMessage("mantou:failed");
+globalThis.addEventListener("message", async (e: Event) => {
+  const data = (e as MessageEvent).data;
+  // `mantou dev` starts the next app's Worker ahead and has it load the
+  // framework, so a reload only compiles and runs the app's own files.
+  if (data?.type === "mantou:warm") {
+    await import("./index");
+    postMessage({ type: "mantou:warmed" });
+    return;
+  }
+  if (data?.type !== "mantou:entry") return;
+  // Under `mantou dev`, errors go to the supervisor (runtime/dev.ts), which shows them and waits for a save.
+  if (data.dev) (globalThis as { __mantouDev?: boolean }).__mantouDev = true;
+  try {
+    await import(data.entry);
+  } catch (err) {
+    if (data.dev) {
+      postMessage({ type: "mantou:error", message: `the app failed to load: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}` });
+      return;
     }
-  },
-  { once: true },
-);
+    console.error("mantou: the app failed to load:", err);
+    postMessage("mantou:failed");
+  }
+});

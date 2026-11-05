@@ -12,7 +12,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `schema/gen.ts` | Generates `runtime/gen/protocol.ts`, `core/crates/mantou-tree/src/protocol.rs`, `schema/fixtures/*` |
 | `runtime/index.ts` | `mantou-ui`, what apps import: `run`, `mount`, `View`, `Text`, `Input`, `For`/`Index`/`Show`, `defineStyle`, Solid's reactivity |
 | `runtime/solid/` | The JSX layer: `plugin.ts` (Bun plugin: Babel + `babel-preset-solid`, universal mode), `renderer.ts` (Solid's universal renderer over the node tree), `components.ts`, `mount.ts`, `solid.ts` (Solid's client build), `preload.ts` |
-| `runtime/` | The rest: `main.ts` (bootstrap, main thread), `worker.ts` (Worker entry: registers the plugin, imports the app), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
+| `runtime/` | The rest: `main.ts` (bootstrap, main thread), `worker.ts` (Worker entry: registers the plugin, imports the app), `dev.ts` (`mantou dev`'s supervisor Worker), `run.ts`, `core.ts` (window client), `headless.ts` (headless instances for tests), `ui.ts` (node tree, one commit per turn), `encoder.ts`/`decode.ts`/`style.ts`/`events.ts` (wire format), `mock.ts` (mock core), `jsx-runtime.ts` (JSX types), `ffi.ts` (bindings) |
 | `core/crates/mantou-tree` | Shadow tree: op decoding and encoding, styles, Taffy layout, scene, hit-testing, `Tree::check`; inputs' focus, keys, pointer and IME (`src/tree/input.rs`). No platform deps |
 | `core/crates/mantou-text` | Text: parley layout, swash rasterization, the glyph atlas, the bundled Inter font (`fonts/`, OFL); the inputs' editor (`editor.rs`: caret, selection, undo, limits, scrolling) |
 | `core/crates/mantou-image` | Images: PNG/JPEG/WebP decoding and SVG rasterization (`resvg`), as RGBA pixels. No platform deps |
@@ -24,7 +24,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/showcase` | A screen showing what Mantou draws (list, inputs, shadows, an app font); the README's screenshot |
 | `examples/gallery` | The base components (`runtime/widgets.tsx`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
-| `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
+| `spike/` | `selftest.ts` (window self-test), `devtest.ts` (`mantou dev` reloads in a window), `app.ts` (threading demo) |
 | `scripts/` | `npm.ts` (stages the npm packages of a release), `smoke.ts` (installs them into a fresh app and tests it), `screenshots.tsx` (renders `docs/images/` at 2×: `bun run screenshots`) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
 
@@ -40,6 +40,7 @@ bun run test                # Bun tests of the runtime and examples (mock core)
 bun run test:headless       # Bun tests on the real core, no window (captures need a GPU adapter; lavapipe is fine)
 bun run test:core           # cargo tests: tree, fixtures, random batches, incremental-vs-scratch layout
 bun run selftest            # window self-test; on headless Linux: xvfb-run -a bun run selftest
+bun spike/devtest.ts        # mantou dev: edit, break and fix a copy of the counter; times each reload
 bun run counter             # the counter in a window (bun runtime/main.ts <entry.tsx> runs any app)
 bun run todos               # the to-do list (text input) in a window
 bun run showcase            # the showcase screen in a window
@@ -73,7 +74,7 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 
 ## Apps built on Mantou
 
-Apps live in their own repos and depend on `mantou-ui` from npm (`bun add mantou-ui`, with a prebuilt core per platform as an optional dependency: `mantou-ui-linux-x64`, `-linux-arm64`, `-darwin-arm64`, `-darwin-x64`, `-windows-x64`) or from GitHub (`bun add github:dunkbing/mantou`, then `mantou build-core`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`), so keep those working: a change to them is a breaking change for every app.
+Apps live in their own repos and depend on `mantou-ui` from npm (`bun add mantou-ui`, with a prebuilt core per platform as an optional dependency: `mantou-ui-linux-x64`, `-linux-arm64`, `-darwin-arm64`, `-darwin-x64`, `-windows-x64`) or from GitHub (`bun add github:dunkbing/mantou`, then `mantou build-core`), as [dunkbing/mantou-mail](https://github.com/dunkbing/mantou-mail) does. They use the package's exports (`mantou-ui`, `mantou-ui/headless`, `mantou-ui/mock`, `mantou-ui/preload`) and the `mantou` command (`runtime/cli.ts`: `build-core`, `run`, `dev`), so keep those working: a change to them is a breaking change for every app.
 
 Apps report what they need as issues here, through the templates in `.github/ISSUE_TEMPLATE` (bug reports with a minimal repro, ideally a failing headless test; feature requests with the app feature they unblock and an API sketch). When fixing one, turn its repro into a test in this repo, and say in the issue which commit has the fix so the app can update (`bun update mantou-ui`).
 

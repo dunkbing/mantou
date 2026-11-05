@@ -100,8 +100,10 @@ pub struct Instance {
     wake_pending: AtomicBool,
     /// Where in `events` the last queued pointer move starts (usize::MAX = none), to coalesce moves. Under the `events` lock.
     last_move: AtomicUsize,
-    /// `extern "C" fn()` of the threadsafe JSCallback, 0 when none.
-    wake: AtomicUsize,
+    /// `extern "C" fn()` of the threadsafe JSCallback, 0 when none. Calling it
+    /// holds the lock, so once `set_wake(None)` returns no call is in flight
+    /// (the Worker that owns it can be terminated: `mantou dev`'s reloads).
+    wake: Mutex<usize>,
     pointer: Mutex<Pointer>,
     /// Modifier keys held (key_modifier bits), for shift-clicks.
     pub modifiers: AtomicU32,
@@ -121,12 +123,7 @@ pub struct Instance {
 impl Instance {
     pub fn new(headless: bool) -> Instance {
         Instance {
-            tree: Mutex::new({
-                let mut t = Tree::new();
-                // MANTOU_DEBUG=layout (comma-separated list): outline every box.
-                t.set_debug_layout(std::env::var("MANTOU_DEBUG").is_ok_and(|v| v.split(',').any(|p| p.trim() == "layout")));
-                t
-            }),
+            tree: Mutex::new(Self::fresh_tree()),
             scene: Mutex::new(Arc::new(Scene { clear: [0.08, 0.08, 0.1, 1.0], ..Scene::default() })),
             stats: Stats::default(),
             headless,
@@ -134,7 +131,7 @@ impl Instance {
             events: Mutex::new(Vec::new()),
             wake_pending: AtomicBool::new(false),
             last_move: AtomicUsize::new(usize::MAX),
-            wake: AtomicUsize::new(0),
+            wake: Mutex::new(0),
             pointer: Mutex::new(Pointer::default()),
             modifiers: AtomicU32::new(0),
             swallowed: Mutex::new(HashSet::new()),
@@ -144,6 +141,36 @@ impl Instance {
             last_service: Mutex::new(String::new()),
             access_dirty: AtomicBool::new(false),
         }
+    }
+
+    fn fresh_tree() -> Tree {
+        let mut t = Tree::new();
+        // MANTOU_DEBUG=layout (comma-separated list): outline every box.
+        t.set_debug_layout(std::env::var("MANTOU_DEBUG").is_ok_and(|v| v.split(',').any(|p| p.trim() == "layout")));
+        t
+    }
+
+    /// Starts the UI over for a new app Worker (`mantou dev`'s reloads),
+    /// keeping the window: no wake-up callback (the old Worker's goes), an
+    /// empty tree at the same size, no queued events but a WINDOW_READY that
+    /// tells the new app the size when it registers its callback.
+    pub fn reset(&self) {
+        self.set_wake(None);
+        let (w, h, s) = {
+            let mut tree = lock(&self.tree);
+            let ((w, h), s) = (tree.viewport_px(), tree.scale());
+            *tree = Self::fresh_tree();
+            tree.set_viewport(w, h, s);
+            tree.set_time(self.now_ms());
+            self.publish(&mut tree);
+            (w, h, s)
+        };
+        lock(&self.events).clear();
+        self.last_move.store(usize::MAX, Ordering::Release);
+        self.wake_pending.store(false, Ordering::Release);
+        lock(&self.swallowed).clear();
+        *lock(&self.pointer) = Pointer::default();
+        self.push_event([ev::WINDOW_READY, w, h, s.to_bits()]);
     }
 
     /// Runs `f` with the clipboard: the system's for the window, a private one for headless instances.
@@ -296,22 +323,22 @@ impl Instance {
         if self.wake_pending.swap(true, Ordering::AcqRel) {
             return; // a wake-up is already on its way; the Worker takes everything at once
         }
-        let f = self.wake.load(Ordering::Acquire);
-        if f == 0 {
+        let wake = lock(&self.wake);
+        if *wake == 0 {
             // Nobody to wake (yet, or ever for a headless instance): the caller takes events itself.
             self.wake_pending.store(false, Ordering::Release);
             return;
         }
         bump(&self.stats.wakes);
-        // SAFETY: `f` was registered by mt_set_wake as a threadsafe JSCallback
+        // SAFETY: `wake` was registered by mt_set_wake as a threadsafe JSCallback
         // pointer with the signature `void (*)(void)`. Bun queues the call to the
-        // Worker's thread and returns.
-        let f: extern "C" fn() = unsafe { std::mem::transmute::<usize, extern "C" fn()>(f) };
+        // Worker's thread and returns; the lock keeps it registered until then.
+        let f: extern "C" fn() = unsafe { std::mem::transmute::<usize, extern "C" fn()>(*wake) };
         f();
     }
 
     pub fn set_wake(&self, f: Option<extern "C" fn()>) {
-        self.wake.store(f.map_or(0, |f| f as usize), Ordering::Release);
+        *lock(&self.wake) = f.map_or(0, |f| f as usize);
         if f.is_some() && self.events_pending() {
             self.wake_js();
         }

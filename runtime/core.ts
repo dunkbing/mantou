@@ -50,6 +50,11 @@ export class MantouCore {
     // The main thread runs no JS, so nothing there would notice a crash here
     // (design §5.2 invariant 6).
     const fatal = (what: string, err: unknown) => {
+      // Under `mantou dev`, the supervisor shows it in the window until the next save.
+      if ((globalThis as { __mantouDev?: boolean }).__mantouDev) {
+        postMessage({ type: "mantou:error", message: `${what}: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}` });
+        return;
+      }
       console.error(`mantou: ${what} in the app Worker:`, err);
       this.quit(70);
     };

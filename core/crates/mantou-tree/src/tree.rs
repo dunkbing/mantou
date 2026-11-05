@@ -1685,6 +1685,11 @@ impl Tree {
     }
 
     /// Scale factor of the last viewport.
+    /// The viewport's size in device px.
+    pub fn viewport_px(&self) -> (u32, u32) {
+        self.viewport_px
+    }
+
     pub fn scale(&self) -> f32 {
         self.scale
     }

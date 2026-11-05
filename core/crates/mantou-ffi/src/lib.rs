@@ -57,7 +57,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 11: FILE_DROP and the Drop listener bit; mt_test_drop.
 /// 10: pointer events on nodes: the NODE_POINTER event and Pointer listener bit; mt_test_button.
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
-pub const ABI_VERSION: u32 = 12;
+/// 13: mt_reset (mantou dev's reloads).
+pub const ABI_VERSION: u32 = 13;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -310,6 +311,20 @@ pub extern "C" fn mt_quit(code: i32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_set_wake(inst: u32, f: Option<extern "C" fn()>) {
     with(inst, (), |i| i.set_wake(f))
+}
+
+/// Starts an instance's UI over for a new app Worker, keeping its window (`mantou dev`'s
+/// reloads): the wake-up callback goes, the tree is emptied at the same size, queued events
+/// are dropped, and a WINDOW_READY waits for the next callback. Call it before terminating
+/// the old Worker: no wake-up reaches that Worker once this returns.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_reset(inst: u32) {
+    with(inst, (), |i| {
+        i.reset();
+        if !i.headless {
+            send(UserEvent::Redraw);
+        }
+    })
 }
 
 /// Applies a batch of ops (one per JS turn), lays out and publishes the scene;

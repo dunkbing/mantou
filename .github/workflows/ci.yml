@@ -94,6 +94,12 @@ jobs:
       - name: Self-test
         if: runner.os != 'Linux'
         run: bun run selftest
+      - name: mantou dev reloads (Linux, under Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1280x800x24" bun spike/devtest.ts
+      - name: mantou dev reloads
+        if: runner.os != 'Linux'
+        run: bun spike/devtest.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
