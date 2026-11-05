@@ -109,6 +109,23 @@ On Windows and Linux `"overlay"` is the native title bar for now.
 
 Each call answers with the window's state right after asking; the OS may take a moment (full screen animates), so use `onState` for the result. A window without a title bar or a resizable frame doesn't report `maximized`. A transparent window and the window icon aren't supported yet.
 
+## More windows
+
+```tsx
+import { openWindow } from "mantou-ui";
+
+const composer = openWindow(() => <Composer draft={draft} />, { title: "New message", width: 560, height: 420 });
+composer.onClose(() => (draft.dirty ? confirmDiscard() : undefined)); // return false to keep it open
+composer.focus();
+composer.close();
+```
+
+- **Options:** `openWindow(app, options)` opens another window after the app's own is up (from a handler or an effect, not before `run()`). It takes `run()`'s window options (`title`, `width`, `height`, limits, `frameless`, `alwaysOnTop`, `x`, `y`…).
+- **What you get back:** a handle with `close()`, `focus()`, `setTitle()`, `onClose()`, `closed` and the window's own `ui`.
+- **Signals:** each window has its own tree, but the same Worker runs them all, so a signal read in two windows updates both.
+- **Closing:** the close button (or Cmd/Ctrl+W) closes the window, unless an `onClose` handler returns `false`. Closing the app's first window quits the app, as before, and closes the others with it.
+- **`mantou dev`:** a reload closes the other windows too; the app opens them again.
+
 ## Accessibility
 
 Screen readers (VoiceOver, Narrator, Orca) see a tree built from your views. Text is a label, an `Input` a text field, and a view with `onPress` a button. Add the rest with props:

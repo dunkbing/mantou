@@ -6,7 +6,7 @@
 //   (apps outside this repo use the `mantou` command: runtime/cli.ts)
 import { resolve } from "node:path";
 import { openCore } from "./ffi";
-import { WindowFlag } from "./gen/protocol";
+import { encodeWindowConfig } from "./winconfig";
 
 /** What the app asks of its window before it opens (run()'s options), in logical px. */
 export interface WindowOptions {
@@ -82,28 +82,18 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
     const v = Number(flag(name) ?? fromApp ?? d);
     return Number.isFinite(v) && v >= 0 ? Math.round(v) : d;
   };
-  const title = new TextEncoder().encode(flag("title") ?? "Mantou");
-  const cfg = new Uint8Array(40 + title.length);
-  const placed = asked.x !== undefined && asked.y !== undefined;
-  new Uint32Array(cfg.buffer, 0, 10).set([
-    num("width", asked.width, 640),
-    num("height", asked.height, 400),
-    title.length,
-    num("min-width", asked.minWidth, 0),
-    num("min-height", asked.minHeight, 0),
-    num("max-width", asked.maxWidth, 0),
-    num("max-height", asked.maxHeight, 0),
-    (asked.resizable === false ? WindowFlag.NotResizable : 0) |
-      (asked.frameless ? WindowFlag.Frameless : 0) |
-      (asked.alwaysOnTop ? WindowFlag.AlwaysOnTop : 0) |
-      (asked.titleBar === "overlay" ? WindowFlag.TitleOverlay : 0) |
-      (asked.fullscreen ? WindowFlag.Fullscreen : 0) |
-      (asked.maximized ? WindowFlag.Maximized : 0) |
-      (placed ? WindowFlag.HasPosition : 0),
-    placed ? asked.x! | 0 : 0,
-    placed ? asked.y! | 0 : 0,
-  ]);
-  cfg.set(title, 40);
+  const cfg = encodeWindowConfig(
+    {
+      ...asked,
+      width: num("width", asked.width, 640),
+      height: num("height", asked.height, 400),
+      minWidth: num("min-width", asked.minWidth, 0),
+      minHeight: num("min-height", asked.minHeight, 0),
+      maxWidth: num("max-width", asked.maxWidth, 0),
+      maxHeight: num("max-height", asked.maxHeight, 0),
+    },
+    flag("title") ?? "Mantou",
+  );
   const code = core.symbols.mt_run(cfg, cfg.byteLength);
   process.exit(code);
 }

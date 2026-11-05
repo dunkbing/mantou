@@ -58,7 +58,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 10: pointer events on nodes: the NODE_POINTER event and Pointer listener bit; mt_test_button.
 /// 9: the accessibility tree: mt_test_access (and the ACCESS op).
 /// 13: mt_reset (mantou dev's reloads).
-pub const ABI_VERSION: u32 = 13;
+/// 14: more windows: mt_window_open, mt_window_close, mt_window_focus.
+pub const ABI_VERSION: u32 = 14;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -78,22 +79,27 @@ pub unsafe extern "C" fn mt_input_selection(inst: u32, id: u32, dst: *mut u32) -
     })
 }
 
-/// The window's instance.
-const APP: u32 = 1;
+/// The first window's instance (the one `mt_run` opens).
+pub(crate) const APP: u32 = 1;
 
+/// Work for the main thread. The first `u32` of most is the instance (window) it's for.
 #[derive(Debug)]
 pub(crate) enum UserEvent {
-    Redraw,
+    Redraw(u32),
     Quit,
-    Resize(u32, u32),
+    Resize(u32, u32, u32),
+    /// Another window, for an instance `mt_window_open` made; closing it; bringing it to the front.
+    OpenWindow(u32, window::Config),
+    CloseWindow(u32),
+    FocusWindow(u32),
     /// Test input, handled exactly as the window's own: kind 0 = down, 1 = up, 2 = move.
-    TestPointer(u32, f32, f32),
-    TestKey(u32, bool, u32),
-    TestWheel(f32, f32, f32, f32),
-    TestText(String),
-    TestIme(String, Option<(usize, usize)>),
-    /// A platform service request (JSON) to run on the main thread: its id and body.
-    Service(u32, String),
+    TestPointer(u32, u32, f32, f32),
+    TestKey(u32, u32, bool, u32),
+    TestWheel(u32, f32, f32, f32, f32),
+    TestText(u32, String),
+    TestIme(u32, String, Option<(usize, usize)>),
+    /// A platform service request (JSON) to run on the main thread: the instance, the request's id and body.
+    Service(u32, u32, String),
     /// Assistive technology asking for the tree or an action (accesskit_winit's events).
     Access(accesskit_winit::Event),
 }
@@ -135,6 +141,18 @@ pub(crate) static G: LazyLock<Globals> = LazyLock::new(|| Globals {
 /// The window's instance (created on first use).
 pub(crate) fn app() -> Arc<Instance> {
     lock(&G.instances).entry(APP).or_insert_with(|| Arc::new(Instance::new(false))).clone()
+}
+
+/// An instance by handle (for the window module).
+pub(crate) fn instance(handle: u32) -> Option<Arc<Instance>> {
+    get(handle)
+}
+
+/// Drops a closed window's instance.
+pub(crate) fn forget(handle: u32) {
+    if handle != APP {
+        lock(&G.instances).remove(&handle);
+    }
 }
 
 fn get(handle: u32) -> Option<Arc<Instance>> {
@@ -316,15 +334,24 @@ pub extern "C" fn mt_set_wake(inst: u32, f: Option<extern "C" fn()>) {
 /// Starts an instance's UI over for a new app Worker, keeping its window (`mantou dev`'s
 /// reloads): the wake-up callback goes, the tree is emptied at the same size, queued events
 /// are dropped, and a WINDOW_READY waits for the next callback. Call it before terminating
-/// the old Worker: no wake-up reaches that Worker once this returns.
+/// the old Worker: no wake-up reaches that Worker once this returns. Resetting the first
+/// window also closes the app's other windows.
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_reset(inst: u32) {
     with(inst, (), |i| {
         i.reset();
         if !i.headless {
-            send(UserEvent::Redraw);
+            send(UserEvent::Redraw(inst));
         }
-    })
+    });
+    // The other windows belong to the same app Worker: they go with it.
+    if inst == APP {
+        let others: Vec<(u32, Arc<Instance>)> = lock(&G.instances).iter().filter(|(h, i)| **h != APP && !i.headless).map(|(h, i)| (*h, i.clone())).collect();
+        for (h, i) in others {
+            i.set_wake(None);
+            send(UserEvent::CloseWindow(h));
+        }
+    }
 }
 
 /// Applies a batch of ops (one per JS turn), lays out and publishes the scene;
@@ -340,7 +367,7 @@ pub unsafe extern "C" fn mt_commit(inst: u32, ptr: *const u8, len: u32) -> i32 {
     let b = unsafe { bytes(ptr, len) };
     with(inst, -2, |i| {
         let r = i.commit(b);
-        if r == 0 && !i.headless && send(UserEvent::Redraw) {
+        if r == 0 && !i.headless && send(UserEvent::Redraw(inst)) {
             bump(&i.stats.redraw_requests);
         }
         r
@@ -399,6 +426,55 @@ pub extern "C" fn mt_headless_new(width_px: u32, height_px: u32, scale: f32) -> 
     })
 }
 
+/// Opens another window, as the config says (`mt_run`'s format), with an
+/// instance of its own; returns its handle (0 before the first window's loop
+/// runs). WINDOW_READY comes to that instance once it's open (CLOSE_REQUESTED
+/// if it couldn't be). Commit to it, take its events and register its wake-up
+/// as for the first window (dunkbing/mantou#23).
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_window_open(ptr: *const u8, len: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let config = window::Config::parse(unsafe { bytes(ptr, len) });
+    guard(0, || {
+        if lock(&G.proxy).is_none() {
+            return 0;
+        }
+        let handle = G.next_handle.fetch_add(1, Ordering::Relaxed);
+        lock(&G.instances).insert(handle, Arc::new(Instance::new(false)));
+        if send(UserEvent::OpenWindow(handle, config)) {
+            handle
+        } else {
+            forget(handle);
+            0
+        }
+    })
+}
+
+/// Closes a window `mt_window_open` opened, and frees its instance. (The first window closes with the app.)
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_window_close(inst: u32) {
+    guard((), || {
+        if inst != APP {
+            // No wake-up reaches its Worker callback after this returns.
+            if let Some(i) = get(inst) {
+                i.set_wake(None);
+            }
+            send(UserEvent::CloseWindow(inst));
+        }
+    })
+}
+
+/// Brings a window to the front and gives it the keyboard.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_window_focus(inst: u32) {
+    guard((), || {
+        send(UserEvent::FocusWindow(inst));
+    })
+}
+
 /// Frees a headless instance. The window's instance cannot be freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn mt_headless_free(inst: u32) {
@@ -418,7 +494,7 @@ pub extern "C" fn mt_test_input(inst: u32, kind: u32, x: f32, y: f32) {
         if i.headless {
             i.pointer(kind, x, y);
         } else {
-            send(UserEvent::TestPointer(kind, x, y));
+            send(UserEvent::TestPointer(inst, kind, x, y));
         }
     })
 }
@@ -443,7 +519,7 @@ pub extern "C" fn mt_test_key(inst: u32, key: u32, down: u32, modifiers: u32) {
         if i.headless {
             i.key(key, key_text(key).as_deref(), down != 0, false, modifiers);
         } else {
-            send(UserEvent::TestKey(key, down != 0, modifiers));
+            send(UserEvent::TestKey(inst, key, down != 0, modifiers));
         }
     })
 }
@@ -467,7 +543,7 @@ pub unsafe extern "C" fn mt_test_text(inst: u32, ptr: *const u8, len: u32) {
         if i.headless {
             i.insert_text(&text);
         } else {
-            send(UserEvent::TestText(text));
+            send(UserEvent::TestText(inst, text));
         }
     })
 }
@@ -488,7 +564,7 @@ pub unsafe extern "C" fn mt_test_ime(inst: u32, ptr: *const u8, len: u32, cursor
         if i.headless {
             i.ime_preedit(&text, cursor);
         } else {
-            send(UserEvent::TestIme(text, cursor));
+            send(UserEvent::TestIme(inst, text, cursor));
         }
     })
 }
@@ -538,7 +614,7 @@ pub unsafe extern "C" fn mt_service(inst: u32, req: u32, ptr: *const u8, len: u3
                 _ => i.push_service_result(req, None),
             }
             0
-        } else if send_service(UserEvent::Service(req, body)) {
+        } else if send_service(UserEvent::Service(inst, req, body)) {
             0
         } else {
             1
@@ -643,7 +719,7 @@ pub extern "C" fn mt_test_wheel(inst: u32, x: f32, y: f32, dx: f32, dy: f32) {
         if i.headless {
             let _ = i.wheel(x, y, dx, dy);
         } else {
-            send(UserEvent::TestWheel(x, y, dx, dy));
+            send(UserEvent::TestWheel(inst, x, y, dx, dy));
         }
     })
 }
@@ -658,7 +734,7 @@ pub extern "C" fn mt_test_viewport(inst: u32, width_px: u32, height_px: u32, sca
             bump(&i.stats.resizes);
             i.push_event([ev::RESIZED, width_px, height_px, lock(&i.tree).scale().to_bits()]);
         } else {
-            send(UserEvent::Resize(width_px, height_px));
+            send(UserEvent::Resize(inst, width_px, height_px));
         }
     })
 }
@@ -768,7 +844,7 @@ pub extern "C" fn mt_test_resize(count: u32, interval_ms: u32, w0: u32, h0: u32,
             for n in 0..count {
                 std::thread::sleep(Duration::from_millis(interval_ms as u64));
                 let (w, h) = if n % 2 == 0 { (w0, h0) } else { (w1, h1) };
-                send(UserEvent::Resize(w, h));
+                send(UserEvent::Resize(APP, w, h));
             }
         });
     })

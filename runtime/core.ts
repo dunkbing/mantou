@@ -11,8 +11,8 @@ export type { CoreEvent, Stats } from "./events";
 
 export class MantouCore {
   readonly lib: CoreLib = openCore();
-  /** The window's instance handle. */
-  readonly handle = this.lib.symbols.mt_app();
+  /** The window's instance handle: the first window's, or one `openWindow` made. */
+  readonly handle: number;
   readonly ui: Ui;
   /** Events delivered to JS so far, by type. */
   readonly received: Record<string, number> = {};
@@ -25,7 +25,9 @@ export class MantouCore {
   // this far away costs nothing.
   private keepAlive = setInterval(() => {}, 1e9);
 
-  constructor() {
+  /** `handle`: another window's instance (`openWindow`); without it, the first window's. */
+  constructor(handle?: number) {
+    this.handle = handle ?? this.lib.symbols.mt_app();
     this.ui = new Ui({
       commit: (bytes) => {
         const r = this.lib.symbols.mt_commit(this.handle, bytes, bytes.byteLength);
@@ -47,6 +49,7 @@ export class MantouCore {
     });
     this.wake = new JSCallback(() => this.drain(), { args: [], returns: "void", threadsafe: true });
     this.lib.symbols.mt_set_wake(this.handle, this.wake.ptr);
+    if (handle !== undefined) return; // the first window's client reports errors for all of them
     // The main thread runs no JS, so nothing there would notice a crash here
     // (design §5.2 invariant 6).
     const fatal = (what: string, err: unknown) => {
@@ -133,6 +136,13 @@ export class MantouCore {
   nodeRect(id: number): [number, number, number, number] | null {
     const r = new Float32Array(4);
     return this.lib.symbols.mt_test_node_rect(this.handle, id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
+  }
+
+  /** Stops listening to this instance (its window is closing): no more wake-ups, no more events. */
+  detach() {
+    this.lib.symbols.mt_set_wake(this.handle, null);
+    this.wake.close();
+    clearInterval(this.keepAlive);
   }
 
   quit(code = 0) {

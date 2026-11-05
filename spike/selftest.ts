@@ -7,6 +7,9 @@
 import { MantouCore, type Stats } from "../runtime/core";
 import { Counter } from "../examples/counter/Counter";
 import { mount } from "../runtime/solid/mount";
+import { openWindow } from "../runtime/windows";
+import { View } from "../runtime/solid/components";
+import { STAT_NAMES, statsFrom } from "../runtime/events";
 
 const core = new MantouCore();
 type Check = { name: string; pass: boolean; detail: Record<string, unknown> };
@@ -266,6 +269,31 @@ async function main() {
     });
     root.remove(box);
     box.release();
+  }
+
+  // 12. Another window: it opens and draws, one turn commits to both, and closing it leaves the first running.
+  {
+    const statsOf = (id: number) => {
+      const a = new BigUint64Array(STAT_NAMES.length);
+      core.lib.symbols.mt_stats(id, a, a.length);
+      return statsFrom(a);
+    };
+    let ready2 = false;
+    const second = openWindow(() => View({ style: { flexGrow: 1, backgroundColor: "#16a34a" } }), { title: "Second", width: 240, height: 160 });
+    second.ui.onResize(() => (ready2 = true));
+    await until("the second window opened", () => ready2, 10_000);
+    await until("the second window's first frame", () => statsOf(second.id).frames >= 1, 10_000);
+    const [a0, b0] = [core.stats(), statsOf(second.id)];
+    // One turn, both windows: one commit each.
+    core.clearColor(0.3, 0.2, 0.5, 1);
+    second.ui.clearColor(0.1, 0.4, 0.2, 1);
+    await until("both drew", () => core.stats().frames > a0.frames && statsOf(second.id).frames > b0.frames, 10_000);
+    const both = { first: core.stats().commits - a0.commits, second: statsOf(second.id).commits - b0.commits };
+    second.close();
+    const a1 = core.stats();
+    core.clearColor(0.2, 0.5, 0.8, 1);
+    await until("the first window still draws", () => core.stats().frames > a1.frames, 10_000);
+    check("a second window", both.first === 1 && both.second === 1 && second.closed, { commitsInOneTurn: both, closed: second.closed });
   }
 }
 
