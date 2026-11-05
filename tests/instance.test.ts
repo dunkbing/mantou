@@ -55,3 +55,14 @@ test("in the app Worker, process.argv has the launch args and onOpen hears them"
   await first.exited;
   rmSync(join(tmpdir(), app), { recursive: true, force: true });
 }, 20000);
+
+test("onOpen reports absolute file arguments as they are, from any cwd (#77)", async () => {
+  const file = join(tmpdir(), app + "-a.png");
+  await Bun.write(file, "x");
+  const first = spawn("tests/fixtures/instance-app.ts", [file]);
+  expect(await until(first, "open ")).toContain("open " + file);
+  first.stdin.write("x");
+  await first.exited;
+  rmSync(file);
+  rmSync(join(tmpdir(), app), { recursive: true, force: true });
+}, 20000);

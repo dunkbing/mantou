@@ -248,7 +248,13 @@ export function List<T>(props: ListProps<T>): JSX.Element {
           if (i >= n) return; // past the end: the range effect is about to dispose this row
           row.style({ position: "absolute", left: 0, right: 0, top: top(i), height: top(i + 1) - top(i) });
         });
-        insert(row, () => props.children(() => props.each[i], i));
+        // When the list shrinks past this row it is disposed after effects run: the accessor keeps the last item meanwhile.
+        let last = props.each[i];
+        const item = () => {
+          if (i < props.each.length) last = props.each[i];
+          return last;
+        };
+        insert(row, () => props.children(item, i));
         inner.append(row);
         rows.set(i, dispose);
       }, owner ?? undefined);

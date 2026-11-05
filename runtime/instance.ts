@@ -1,7 +1,7 @@
 // One running copy of an app: a second launch hands its arguments to the first and quits.
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { paths } from "./paths";
 import { win } from "./platform";
 
@@ -12,7 +12,7 @@ const opens = new Set<(what: { url?: string; file?: string }) => void>();
 function dispatch(args: string[], cwd: string) {
   for (const a of args) {
     if (/^([a-z][a-z0-9+.-]*:\/\/|mailto:)/i.test(a)) opens.forEach((f) => f({ url: a }));
-    else if (existsSync(join(cwd, a))) opens.forEach((f) => f({ file: join(cwd, a) }));
+    else if (existsSync(resolve(cwd, a))) opens.forEach((f) => f({ file: resolve(cwd, a) }));
   }
 }
 
@@ -29,7 +29,7 @@ export function onOpen(handler: (what: { url?: string; file?: string }) => void)
  * `onLaunch` hears the arguments of later launches (the window is focused for you).
  */
 export async function singleInstance(onLaunch?: Launch): Promise<boolean> {
-  const file = join(paths.temp, "instance.json");
+  const file = resolve(paths.temp, "instance.json");
   const args = process.argv.slice(2), cwd = process.cwd();
   try {
     const { port, token } = JSON.parse(readFileSync(file, "utf8"));
@@ -59,7 +59,7 @@ export async function singleInstance(onLaunch?: Launch): Promise<boolean> {
           if (m.token !== token) return void s.end();
           s.end("ok");
           try {
-            void win.focus().catch(() => {});
+            void win.restore().catch(() => {});
           } catch {} // no window yet
           onLaunch?.(m.args, m.cwd);
           dispatch(m.args, m.cwd);

@@ -161,6 +161,11 @@ export const win = {
   setFullscreen: (on = true) => windowOp("fullscreen", { value: on }),
   setMaximized: (on = true) => windowOp("maximize", { value: on }),
   minimize: () => windowOp("minimize", { value: true }),
+  /** Brings a minimized window back and focuses it (what "Show window" from a tray icon needs). */
+  restore: async () => {
+    await windowOp("minimize", { value: false });
+    return windowOp("focus");
+  },
   setAlwaysOnTop: (on = true) => windowOp("alwaysOnTop", { value: on }),
   /** Remove (or restore) the title bar and border. */
   setFrameless: (on = true) => windowOp("frameless", { value: on }),

@@ -165,3 +165,23 @@ test("a List whose itemHeight is a function can shrink (dunkbing/mantou#50)", ()
   h.step();
   expect([...h.ui.nodes.values()].filter((n) => n.isText).map((n) => n.textContent)).toEqual(["1"]);
 });
+
+test("a shrinking list never reads a stale row's item as undefined (#78)", () => {
+  const h = new HeadlessCore({ width: 400, height: 400 });
+  open.push(h);
+  const [items, setItems] = createSignal([{ name: "a" }, { name: "b" }, { name: "c" }]);
+  const seen: unknown[] = [];
+  mount(h.ui, () => (
+    <List each={items()} itemHeight={30} style={{ height: 300 }}>
+      {(item) => (
+        <View>
+          <Text>{(seen.push(item()), item().name)}</Text>
+        </View>
+      )}
+    </List>
+  ));
+  h.step();
+  setItems(items().slice(1));
+  h.step();
+  expect(seen).not.toContain(undefined);
+});

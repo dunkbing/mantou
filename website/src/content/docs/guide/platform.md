@@ -122,6 +122,7 @@ import { win } from "mantou-ui";
 await win.setFullscreen(true);
 await win.setMaximized(true);
 win.minimize();
+win.restore();                                   // un-minimize and focus (a tray's "Show window")
 win.setAlwaysOnTop(true);
 win.setPosition(120, 80);                         // logical px, outer top left
 win.onState((s) => save(s));                      // { focused, minimized, maximized, fullscreen, x, y }
