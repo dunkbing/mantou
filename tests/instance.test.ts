@@ -1,5 +1,5 @@
 // Single instance: a second launch hands its arguments to the first and exits.
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,10 @@ function run(...args: string[]) {
   return spawn("tests/fixtures/instance-app.ts", args);
 }
 
+// Every copy a test starts is stopped after it, so a failure doesn't leave one holding the lock for the next test.
+const started: { kill(): void }[] = [];
+afterEach(() => started.splice(0).forEach((p) => p.kill()));
+
 function spawn(file: string, args: string[]) {
   const p = Bun.spawn(["bun", file, ...args], { env: { ...process.env, MANTOU_APP: app }, stdin: "pipe", stdout: "pipe" });
   const out = { text: "" };
@@ -16,6 +20,7 @@ function spawn(file: string, args: string[]) {
     const dec = new TextDecoder();
     for await (const c of p.stdout) out.text += dec.decode(c);
   })();
+  started.push(p);
   return Object.assign(p, { out });
 }
 

@@ -7,4 +7,5 @@ if (!mine) {
 }
 onOpen((w) => console.log("open " + (w.url ?? w.file)));
 console.log("first");
-process.stdin.on("data", () => process.exit(0));
+// Only on the main thread: in a Worker, instance-host reads stdin, and two readers of one pipe stall the Worker on Windows.
+if (Bun.isMainThread) process.stdin.on("data", () => process.exit(0));
