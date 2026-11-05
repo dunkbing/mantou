@@ -33,6 +33,7 @@ macro_rules! log {
 mod crash;
 mod instance;
 mod platform;
+mod webview;
 mod window;
 
 use std::collections::HashMap;

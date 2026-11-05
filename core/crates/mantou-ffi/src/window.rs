@@ -216,6 +216,7 @@ pub struct App {
     gpu: Option<Shared>,
     modifiers: u32,
     menus: crate::platform::Menus,
+    webviews: crate::webview::Webviews,
     /// Secure keyboard entry is on (a password field has the focus in the key window).
     secure_keys: bool,
 }
@@ -342,7 +343,7 @@ impl Win {
 
 impl App {
     pub fn new(config: Config) -> App {
-        App { config, wins: HashMap::new(), by_handle: HashMap::new(), gpu: None, modifiers: 0, menus: Default::default(), secure_keys: false }
+        App { config, wins: HashMap::new(), by_handle: HashMap::new(), gpu: None, modifiers: 0, menus: Default::default(), webviews: Default::default(), secure_keys: false }
     }
 
     /// A window by its instance; 0 is whichever has the keyboard (the app menu's Edit items), else the first.
@@ -441,6 +442,7 @@ impl App {
     /// Closes a window the app opened, and drops its instance.
     fn close(&mut self, handle: u32) {
         let Some(id) = self.by_handle.remove(&handle) else { return };
+        crate::webview::close_all(&mut self.webviews, handle);
         self.wins.remove(&id); // the window, its surface and its adapter go with it
         crate::forget(handle);
         self.sync_secure_keys();
@@ -583,7 +585,13 @@ impl App {
                 let Some(inst) = crate::instance(h) else { return };
                 let id = self.by_handle.get(&h).copied();
                 let window = id.and_then(|id| self.wins.get(&id)).map(|w| w.window.clone());
-                guard((), || crate::platform::handle(&inst, window.as_ref(), &mut self.menus, req, &body));
+                let web = serde_json::from_str::<serde_json::Value>(&body).ok().filter(|v| v["kind"] == "webview");
+                if let Some(v) = web {
+                    let answer = guard(None, || crate::webview::handle(&mut self.webviews, h, window.as_ref(), &inst, &v));
+                    inst.push_service_result(req, answer.map(|a| a.to_string()).as_deref());
+                } else {
+                    guard((), || crate::platform::handle(&inst, window.as_ref(), &mut self.menus, req, &body));
+                }
                 if let Some(w) = id.and_then(|id| self.wins.get_mut(&id)) {
                     w.sync_state();
                 }

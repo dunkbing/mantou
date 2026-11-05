@@ -25,6 +25,7 @@ export type CoreEvent =
   | { type: "coreError"; message: string; report: string }
   | { type: "windowState"; flags: number; x: number; y: number }
   | { type: "fileDrop"; kind: 0 | 1 | 2; target: number; json: string }
+  | { type: "webview"; id: number; kind: number; text: string }
   | { type: "nodePointer"; target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }
   | InputCoreEvent;
 
@@ -107,6 +108,7 @@ export function decodeEvent(w: Uint32Array, f: Float32Array, i: number): CoreEve
     case Event.NODE_POINTER: return { type: "nodePointer", target: w[i + 1], x: f[i + 2], y: f[i + 3], kind: w[i + 4] as 0 | 1 | 2, button: w[i + 5], buttons: w[i + 6], mods: w[i + 7], clicks: w[i + 8] };
     case Event.WINDOW_STATE: return { type: "windowState", flags: w[i + 1], x: w[i + 2] | 0, y: w[i + 3] | 0 };
     case Event.FILE_DROP: return { type: "fileDrop", kind: w[i + 1] as 0 | 1 | 2, target: w[i + 2], json: text(w, i, w[i + 3]) };
+    case Event.WEBVIEW: return { type: "webview", id: w[i + 1], kind: w[i + 2], text: text(w, i, w[i + 3]) };
     case Event.MENU: return { type: "menu", id: text(w, i, w[i + 3]) };
     case Event.CORE_ERROR: {
       let j: { message?: unknown; report?: unknown } = {};
@@ -164,6 +166,7 @@ export function route(
     dispatchMenu(id: string): void;
     dispatchWindowState(flags: number, x: number, y: number): void;
     dispatchDrop(kind: 0 | 1 | 2, target: number, json: string): void;
+    dispatchWebview(id: number, kind: number, text: string): void;
     dispatchPointer(e: { target: number; kind: 0 | 1 | 2; x: number; y: number; button: number; buttons: number; mods: number; clicks: number }): void;
     readonly windowSize: { scale: number } | null;
   },
@@ -179,6 +182,7 @@ export function route(
   else if (e.type === "menu") ui.dispatchMenu(e.id);
   else if (e.type === "coreError") dispatchError({ kind: "core", message: e.message, report: e.report || undefined });
   else if (e.type === "windowState") ui.dispatchWindowState(e.flags, e.x, e.y);
+  else if (e.type === "webview") ui.dispatchWebview(e.id, e.kind, e.text);
   else if (e.type === "fileDrop") ui.dispatchDrop(e.kind, e.target, e.json);
   else if (e.type === "nodePointer") ui.dispatchPointer(e);
   else if (e.type === "layout") ui.dispatchLayout(e.target, { x: e.x, y: e.y, width: e.width, height: e.height });

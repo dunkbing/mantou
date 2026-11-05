@@ -273,6 +273,12 @@ impl Instance {
         self.push_record(&[ev::FILE_DROP, kind, target, words[0]], &words[1..]);
     }
 
+    /// Queues a web view's page load (kind 0) or message (kind 1).
+    pub fn push_webview(&self, id: u32, kind: u32, text: &str) {
+        let words = mantou_tree::encode::string_words(text);
+        self.push_record(&[ev::WEBVIEW, id, kind, words[0]], &words[1..]);
+    }
+
     /// Queues a chosen app-menu item.
     pub fn push_menu(&self, id: &str) {
         let words = mantou_tree::encode::string_words(id);

@@ -57,6 +57,7 @@
     "todos": "bun runtime/cli.ts run examples/todos/main.tsx --width 420 --height 520",
     "showcase": "bun runtime/cli.ts run examples/showcase/main.tsx --width 800 --height 500",
     "gallery": "bun runtime/cli.ts run examples/gallery/main.tsx",
+    "webview": "bun runtime/cli.ts run examples/webview/main.tsx",
     "screenshots": "bun --preload ./runtime/solid/preload.ts scripts/screenshots.tsx",
     "app": "bun runtime/main.ts spike/app.ts --title \"Mantou demo\"",
     "docs": "bun --cwd website run dev",

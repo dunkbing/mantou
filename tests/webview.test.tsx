@@ -1,7 +1,7 @@
 // <WebView> against the real core, headless: a page's frames reach the window, and clicks reach the page.
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { View, WebView, mount } from "mantou-ui";
+import { Show, View, WebView, createSignal, mount } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -47,3 +47,25 @@ test.skipIf(process.platform !== "darwin")("a click in the window is a click in 
   await until(h, () => px(h, 60, 60)[2] === 255);
   expect(px(h, 60, 60)).toEqual([0, 0, 255, 255]);
 }, 15000);
+
+test("native: the view asks the core to create a web view at its box, and to close it", async () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  h.answer(true);
+  const [show, setShow] = createSignal(true);
+  mount(h.ui, () => (
+    <View style={{ padding: 20 }}>
+      <Show when={show()}>
+        <WebView native src="https://example.com" style={{ width: 100, height: 80 }} />
+      </Show>
+    </View>
+  ));
+  h.step();
+  await Bun.sleep(20);
+  expect(h.lastService()).toMatchObject({ kind: "webview", op: "create", x: 20, y: 20, width: 100, height: 80, url: "https://example.com" });
+  h.answer(true);
+  setShow(false);
+  h.step();
+  await Bun.sleep(20);
+  expect(h.lastService()).toMatchObject({ kind: "webview", op: "close" });
+});

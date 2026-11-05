@@ -1317,6 +1317,13 @@ export class Ui {
     });
   }
 
+  /** Native web views by id: their page loads (kind 0) and messages (kind 1). */
+  readonly webviews = new Map<number, (kind: number, text: string) => void>();
+  nextWebview = 1;
+  dispatchWebview(id: number, kind: number, text: string) {
+    this.webviews.get(id)?.(kind, text);
+  }
+
   /** Delivers a service's answer to the promise that asked. */
   dispatchService(req: number, cancelled: boolean, json: string) {
     const resolve = this.requests.get(req);

@@ -105,6 +105,12 @@ Shows a web page in the window, through Bun's `Bun.WebView`: the page is rendere
 - **Platforms:** macOS uses WKWebView. Elsewhere Bun needs Chrome installed, so treat it as macOS-only for now.
 - **Limits:** it is a picture of the page (about 20 frames a second while something changes, then 2 a second), so there is no native text selection, no text fields' IME, and video is choppy. A native embedded webview is tracked in [#73](https://github.com/dunkbing/mantou/issues/73).
 
+For a real web view add `native`: a child web view of the window (macOS only for now), with native selection, text input and video. It sits above Mantou's own drawing, so nothing can overlap it, and it follows layout changes with a short lag. `onMessage` hears `window.ipc.postMessage(text)` from the page, `nativeRef` gives `run(script)` to evaluate JavaScript in it, and `onError` tells you when native views aren't available. `bun run webview` shows it.
+
+```tsx
+<WebView native src="https://example.com" style={{ flexGrow: 1 }} onMessage={(m) => console.log(m)} />
+```
+
 ## Scroll and List
 
 `<Scroll>` is a scrolling container; the core scrolls it with no JS and draws the scrollbar.

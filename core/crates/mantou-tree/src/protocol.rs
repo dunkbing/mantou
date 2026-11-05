@@ -322,6 +322,8 @@ pub mod event {
     pub const CORE_ERROR: u32 = 29;
     /// An Input's caret or selection moved. a = input, b = anchor, c = focus (UTF-16 units, equal = a caret); only for Inputs with a Select listener, when their selection changes.
     pub const SELECTION: u32 = 28;
+    /// A native web view (the `webview` service) loaded a page or sent a message with `window.ipc.postMessage`. a = web view id, b = kind (0 the page loaded, 1 a message from the page), c = byte length; then the UTF-8 JSON ({url, title} or the page's message text), padded to words.
+    pub const WEBVIEW: u32 = 30;
     /// Files are dragged over the window or dropped on it. The target is the topmost node under the pointer's last position with a Drop listener on its path. a = kind (0 files held over the window, 1 they left, 2 dropped), b = target node (0 none), c = byte length; then the UTF-8 JSON {x, y, files}, padded to words.
     pub const FILE_DROP: u32 = 26;
 }
