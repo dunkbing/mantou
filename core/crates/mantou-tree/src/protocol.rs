@@ -594,11 +594,12 @@ pub enum Prop {
     BorderRightColor = 96,
     BorderBottomColor = 97,
     BorderLeftColor = 98,
+    Layout = 99,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 98;
+    pub const COUNT: usize = 99;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -699,6 +700,7 @@ impl Prop {
             96 => Prop::BorderRightColor,
             97 => Prop::BorderBottomColor,
             98 => Prop::BorderLeftColor,
+            99 => Prop::Layout,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -803,6 +805,7 @@ impl Prop {
             Prop::BorderRightColor => "borderRightColor",
             Prop::BorderBottomColor => "borderBottomColor",
             Prop::BorderLeftColor => "borderLeftColor",
+            Prop::Layout => "layout",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -906,6 +909,7 @@ impl Prop {
             Prop::BorderRightColor => ValueKind::Color,
             Prop::BorderBottomColor => ValueKind::Color,
             Prop::BorderLeftColor => ValueKind::Color,
+            Prop::Layout => ValueKind::F32,
             Prop::ZIndex => ValueKind::F32,
         }
     }

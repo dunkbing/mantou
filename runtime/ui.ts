@@ -26,8 +26,8 @@ export interface Sink {
 }
 
 /** Properties the core can animate (design §9.4). */
-export type AnimatableProp = "opacity" | "translateX" | "translateY" | "scale" | "rotate" | "backgroundColor" | "borderColor" | "color";
-const ANIMATABLE: readonly AnimatableProp[] = ["opacity", "translateX", "translateY", "scale", "rotate", "backgroundColor", "borderColor", "color"];
+export type AnimatableProp = "opacity" | "translateX" | "translateY" | "scale" | "rotate" | "layout" | "backgroundColor" | "borderColor" | "color";
+const ANIMATABLE: readonly AnimatableProp[] = ["opacity", "translateX", "translateY", "scale", "rotate", "layout", "backgroundColor", "borderColor", "color"];
 const COLOURS: readonly AnimatableProp[] = ["backgroundColor", "borderColor", "color"];
 
 /** CSS's timing functions. */

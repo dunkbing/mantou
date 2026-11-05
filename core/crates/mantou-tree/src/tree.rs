@@ -508,6 +508,8 @@ struct Node {
     drawn: RefCell<Option<(u32, Arc<TextLayout>)>>,
     /// Its transitions and running animations.
     anim: Option<Box<Anims>>,
+    /// Where layout last put it, relative to its parent (for `transition: { layout }`).
+    last_loc: Option<[f32; 2]>,
     /// It has been placed at least once (a transition needs a look to start from).
     placed: bool,
     /// A Text's runs in spans (TEXT_RUNS).
@@ -806,6 +808,7 @@ impl Tree {
                     image: (kind == p::node_kind::IMAGE).then(Box::default),
                     drawn: RefCell::new(None),
                     anim: None,
+                    last_loc: None,
                     placed: false,
                     rich: None,
                     span_of: None,
@@ -1210,6 +1213,7 @@ impl Tree {
         });
         if measured.is_ok() {
             self.stats.layouts += 1;
+            self.animate_layout();
         }
         self.place();
         true
@@ -2085,6 +2089,7 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::TranslateY => v.translate[1] = finite(num(), 0.0),
         Prop::Scale => v.scale = finite(num(), 1.0).max(0.0),
         Prop::Rotate => v.rotate = finite(num(), 0.0),
+        Prop::Layout => {} // only a key for `transition`
         Prop::Brightness => v.brightness = finite(num(), 1.0).clamp(0.0, 10.0),
         Prop::Saturate => v.saturate = finite(num(), 1.0).clamp(0.0, 10.0),
         Prop::Contrast => v.contrast = finite(num(), 1.0).clamp(0.0, 10.0),

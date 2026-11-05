@@ -27,7 +27,7 @@ fn pack(c: [f32; 4]) -> u32 {
 
 /// Whether a property can be animated.
 pub(super) fn animatable(p: Prop) -> bool {
-    matches!(p, Prop::Opacity | Prop::TranslateX | Prop::TranslateY | Prop::Scale | Prop::Rotate | Prop::BackgroundColor | Prop::BorderColor | Prop::Color)
+    matches!(p, Prop::Opacity | Prop::TranslateX | Prop::TranslateY | Prop::Scale | Prop::Rotate | Prop::Layout | Prop::BackgroundColor | Prop::BorderColor | Prop::Color)
 }
 
 /// Whether animating it moves boxes (so they're placed again), rather than only changing how they're drawn.
@@ -273,6 +273,42 @@ impl Tree {
         }
         if started {
             self.after_anim_change(moved);
+        }
+    }
+
+    /// After a layout: nodes with a `layout` transition that landed somewhere else (relative to their parent)
+    /// slide there, from where they were drawn, as a translation that ends at the style's own.
+    pub(super) fn animate_layout(&mut self) {
+        let now = self.now;
+        let ids: Vec<u32> = self.nodes.iter().filter(|(_, n)| n.anim.as_ref().is_some_and(|a| a.transitions.iter().any(|t| t.0 == Prop::Layout))).map(|(id, _)| *id).collect();
+        let mut started = false;
+        for id in ids {
+            let Some(taffy_id) = self.nodes.get(&id).map(|n| n.taffy) else { continue };
+            let Ok(l) = self.taffy.layout(taffy_id) else { continue };
+            let loc = [l.location.x, l.location.y];
+            let node = self.nodes.get_mut(&id).expect("exists");
+            let Some(prev) = node.last_loc.replace(loc) else { continue };
+            let drawn = node.vis().translate;
+            let style = node.v.translate;
+            let Some(&(_, duration, easing)) = node.anim.as_ref().and_then(|a| a.transitions.iter().find(|t| t.0 == Prop::Layout)) else { continue };
+            let anims = node.anim.as_mut().expect("has transitions");
+            for (i, prop) in [Prop::TranslateX, Prop::TranslateY].into_iter().enumerate() {
+                let d = prev[i] - loc[i];
+                if d.abs() < 0.5 {
+                    continue;
+                }
+                // It was drawn at its old place plus the translation then running; it ends at the style's.
+                let from = d + drawn[i];
+                anims.active.retain(|a| a.prop != prop || a.id != 0);
+                if anims.active.iter().any(|a| a.prop == prop) {
+                    continue; // an explicit animation of it keeps control
+                }
+                anims.active.push(Active { prop, from: Val::F(from), to: Val::F(style[i]), start: now, duration: duration as f64, easing, id: 0, iterations: 1.0, alternate: false, steps: Vec::new(), current: Val::F(from) });
+                started = true;
+            }
+        }
+        if started {
+            self.after_anim_change(true);
         }
     }
 

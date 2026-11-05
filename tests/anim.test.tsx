@@ -3,7 +3,7 @@
 // `step(ms)` advances it).
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Text, View, createSignal, mount, type Node } from "mantou-ui";
+import { For, Show, Text, View, createSignal, mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -168,4 +168,49 @@ test("a critically damped spring never overshoots", () => {
     max = Math.max(max, h.rect(box)![0]);
   }
   expect(max).toBeLessThanOrEqual(100);
+});
+
+test("transition: { layout } slides a node to where layout puts it when its siblings change", () => {
+  const colors = { a: "#ff0000", b: "#00ff00", c: "#0000ff" } as const;
+  const [rows, setRows] = createSignal<("a" | "b" | "c")[]>(["a", "b", "c"]);
+  const h = new HeadlessCore({ width: 100, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View>
+      <For each={rows()}>{(r) => <View transition={{ layout: 200 }} style={{ height: 30, backgroundColor: colors[r] }} />}</For>
+    </View>
+  ));
+  h.step();
+  const yOf = (hex: string) => Number((h.scene().split("\n").find((l) => l.includes(hex)) ?? "").split(" ")[2]);
+  expect(yOf("#00ff00")).toBe(30);
+  setRows(["b", "c"]); // the red one goes
+  h.step(0);
+  expect(yOf("#00ff00")).toBeCloseTo(30, 0); // drawn where it was: nothing jumps
+  h.step(100);
+  const mid = yOf("#00ff00");
+  expect(mid).toBeGreaterThan(0);
+  expect(mid).toBeLessThan(30);
+  h.step(150);
+  expect(yOf("#00ff00")).toBe(0);
+  expect(yOf("#0000ff")).toBe(30);
+});
+
+test("a layout transition doesn't animate a node's first placement", () => {
+  const [on, setOn] = createSignal(false);
+  const h = new HeadlessCore({ width: 100, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View>
+      <Show when={on()}>
+        <View transition={{ layout: 200 }} style={{ height: 30, backgroundColor: "#ff0000" }} />
+      </Show>
+      <View style={{ height: 30, backgroundColor: "#00ff00" }} />
+    </View>
+  ));
+  h.step();
+  setOn(true);
+  h.step(0);
+  const y = (hex: string) => Number((h.scene().split("\n").find((l) => l.includes(hex)) ?? "").split(" ")[2]);
+  expect(y("#ff0000")).toBe(0); // a new node appears in place
+  expect(y("#00ff00")).toBe(30); // the green one (no transition of its own) jumps
 });

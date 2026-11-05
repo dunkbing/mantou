@@ -225,6 +225,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "borderRightColor", code: 96, type: "color", default: "borderColor" },
   { name: "borderBottomColor", code: 97, type: "color", default: "borderColor" },
   { name: "borderLeftColor", code: 98, type: "color", default: "borderColor" },
+  { name: "layout", code: 99, type: "f32", default: "no value: only a key for `transition`, which animates the box to where layout puts it when it moves (siblings added, removed or reordered)" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 

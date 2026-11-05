@@ -107,7 +107,7 @@ Animation runs in the core, not in your code. Say which properties animate and s
 />
 ```
 
-Animatable: `opacity`, `translateX`, `translateY`, `scale`, `rotate`, `backgroundColor`, `borderColor`, `color`. A spring instead of a duration: `transition={{ translateY: { spring: { stiffness: 300, damping: 20 } } }}`. It overshoots when `damping` is under about `2 × √stiffness` and settles at the end; the duration comes from the spring.
+Animatable: `opacity`, `translateX`, `translateY`, `scale`, `rotate`, `backgroundColor`, `borderColor`, `color` (and `layout`, below). A spring instead of a duration: `transition={{ translateY: { spring: { stiffness: 300, damping: 20 } } }}`. It overshoots when `damping` is under about `2 × √stiffness` and settles at the end; the duration comes from the spring.
 
 For a one-off, call `node.animate` with a property and options. It returns `{ finished, stop }`:
 
@@ -117,6 +117,18 @@ node.animate("scale", { keyframes: [1, 1.2, 0.95, 1], duration: 400 });   // eve
 node.animate("translateY", { from: 40, to: 0, spring: { stiffness: 250, damping: 18 } });
 node.animate("rotate", { from: 0, to: 360, duration: 900, easing: "linear", iterations: Infinity }); // a spinner
 ```
+
+### Animating layout
+
+Add `layout` to a view's `transition` and it slides to its new place when layout moves it, for example when siblings are added, removed or reordered. The core does it as a translation from where the box was drawn, so there's no JS per frame, and `onLayout` still reports where layout put it.
+
+```tsx
+<For each={items()}>
+  {(item) => <Row transition={{ layout: { spring: { stiffness: 300, damping: 30 } } }} item={item()} />}
+</For>
+```
+
+A node that has just appeared is placed where it lands (no enter animation yet), and nodes without the transition jump as before.
 
 ## Light and dark
 
