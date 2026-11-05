@@ -93,6 +93,18 @@ g.fill(new Path().arc(75, 75, 65, a, b).arc(75, 75, 38, b, a).close(), "#2563eb"
 
 `g.text(string, x, y, colour, size = 14, weight = 400)` draws one line from its top left (it doesn't wrap: put longer text in a `<Text>` over the canvas). Gradients and images in the canvas (use views for those) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
 
+## WebView
+
+Shows a web page in the window, through Bun's `Bun.WebView`: the page is rendered off screen and its frames are drawn as an image, so Mantou content can sit over it. Clicks, the wheel and typing are forwarded to the page.
+
+```tsx
+<WebView src="https://example.com" style={{ flexGrow: 1 }} onNavigate={(url, title) => setTitle(title)} />
+<WebView html={mail.bodyHtml} style={{ height: 400 }} ref={(page) => (view = page)} />   // page.evaluate, goBack, reload…
+```
+
+- **Platforms:** macOS uses WKWebView. Elsewhere Bun needs Chrome installed, so treat it as macOS-only for now.
+- **Limits:** it is a picture of the page (about 20 frames a second while something changes, then 2 a second), so there is no native text selection, no text fields' IME, and video is choppy. A native embedded webview is tracked in [#73](https://github.com/dunkbing/mantou/issues/73).
+
 ## Scroll and List
 
 `<Scroll>` is a scrolling container; the core scrolls it with no JS and draws the scrollbar.
