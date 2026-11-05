@@ -1,7 +1,7 @@
 // Pointer events on views against the real core, headless: down, move, up, context menu,
 // double click, capture while a button is held, and bubbling.
 import { afterEach, expect, test } from "bun:test";
-import { mount, View } from "mantou-ui";
+import { mount, View, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -10,11 +10,11 @@ afterEach(() => open.splice(0).forEach((h) => h.free()));
 function app(log: string[]) {
   const h = new HeadlessCore();
   open.push(h);
-  let box!: any;
+  let box!: Node;
   mount(h.ui, () => (
     <View style={{ width: 400, height: 300 }} onPointerDown={(e) => log.push(`outer-down`)}>
       <View
-        ref={(n: any) => (box = n)}
+        ref={(n: Node) => (box = n)}
         style={{ width: 100, height: 100 }}
         onPointerDown={(e) => log.push(`down b${e.button} c${e.clicks}`)}
         onPointerMove={(e) => log.push(`move ${e.x},${e.y}`)}

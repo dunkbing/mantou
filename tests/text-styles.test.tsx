@@ -1,7 +1,7 @@
 // Text styles against the real core, headless: letterSpacing, textTransform, whiteSpace,
 // textOverflow and textDecoration.
 import { afterEach, expect, test } from "bun:test";
-import { mount, Text, View } from "mantou-ui";
+import { mount, Text, View, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -11,10 +11,10 @@ afterEach(() => open.splice(0).forEach((h) => h.free()));
 function lay(text: string, style: object, width = 200) {
   const h = new HeadlessCore();
   open.push(h);
-  let node!: any;
+  let node!: Node;
   mount(h.ui, () => (
     <View style={{ width, alignItems: "start" }}>
-      <Text ref={(n: any) => (node = n)} style={{ fontSize: 14, ...style }}>{text}</Text>
+      <Text ref={(n: Node) => (node = n)} style={{ fontSize: 14, ...style }}>{text}</Text>
     </View>
   ));
   h.step();

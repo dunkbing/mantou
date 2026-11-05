@@ -1,7 +1,7 @@
 // Gradients, corners and sides of their own, and zIndex against the real core, headless: what the
 // scene says is drawn, and a capture's pixels for the shader.
 import { afterEach, expect, test } from "bun:test";
-import { mount, View } from "mantou-ui";
+import { mount, View, type Node, type Style } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -37,10 +37,10 @@ test("corners and sides of their own", () => {
 });
 
 test("a bottom border takes its room from the content", () => {
-  let box!: any, inner!: any;
+  let box!: Node, inner!: Node;
   const h = app(() => (
-    <View ref={(n: any) => (box = n)} style={{ width: 100, borderBottomWidth: 5, borderColor: "#000" }}>
-      <View ref={(n: any) => (inner = n)} style={{ height: 10 }} />
+    <View ref={(n: Node) => (box = n)} style={{ width: 100, borderBottomWidth: 5, borderColor: "#000" }}>
+      <View ref={(n: Node) => (inner = n)} style={{ height: 10 }} />
     </View>
   ));
   expect(h.rect(box)![3]).toBe(15); // 10 of content and a 5 px border below it
@@ -60,11 +60,11 @@ test("pixels: a gradient changes along its angle, a lone round corner is cut", (
 });
 
 test("zIndex lifts a view over later siblings, in painting and under the pointer", () => {
-  let low!: any, high!: any;
+  let low!: Node, high!: Node;
   const h = app(() => (
     <View style={{ width: 100, height: 100 }}>
-      <View ref={(n: any) => (high = n)} style={{ position: "absolute", top: 0, left: 0, width: 100, height: 100, zIndex: 5 }} />
-      <View ref={(n: any) => (low = n)} style={{ position: "absolute", top: 0, left: 0, width: 100, height: 100 }} />
+      <View ref={(n: Node) => (high = n)} style={{ position: "absolute", top: 0, left: 0, width: 100, height: 100, zIndex: 5 }} />
+      <View ref={(n: Node) => (low = n)} style={{ position: "absolute", top: 0, left: 0, width: 100, height: 100 }} />
     </View>
   ));
   expect(h.hit(50, 50)).toBe(high); // later in the tree, but lower
@@ -129,7 +129,7 @@ test("a square clip stays square", () => {
 });
 
 test("brightness and saturate change what's drawn inside, nested ones multiply", () => {
-  const red = (style: any) => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: "#ff0000" }} /></View>);
+  const red = (style: Style) => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: "#ff0000" }} /></View>);
   expect(near(px(red({ brightness: 0 }), 10, 10), [0, 0, 0], 3)).toBe(true);
   const gray = px(red({ saturate: 0 }), 10, 10);
   expect(Math.abs(gray[0] - gray[1]) < 3 && Math.abs(gray[1] - gray[2]) < 3).toBe(true);
@@ -169,7 +169,7 @@ test("side colours alone make a border (no borderColor)", () => {
 });
 
 test("contrast and invert", () => {
-  const on = (style: any, color = "#ff0000") => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: color }} /></View>);
+  const on = (style: Style, color = "#ff0000") => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: color }} /></View>);
   expect(near(px(on({ invert: 1 }), 10, 10), [0, 255, 255], 4)).toBe(true);
   expect(near(px(on({ invert: 1 }, "#ffffff"), 10, 10), [0, 0, 0], 4)).toBe(true);
   const flat = px(on({ contrast: 0 }, "#ff0000"), 10, 10);

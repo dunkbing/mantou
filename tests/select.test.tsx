@@ -1,7 +1,7 @@
 // Selectable static text against the real core, headless: dragging selects, double click picks
 // a word, Cmd/Ctrl+C copies, and clicking elsewhere clears it.
 import { afterEach, expect, test } from "bun:test";
-import { mount, Text, View, clipboard } from "mantou-ui";
+import { mount, Text, View, clipboard, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -10,12 +10,12 @@ afterEach(() => open.splice(0).forEach((h) => h.free()));
 function app() {
   const h = new HeadlessCore();
   open.push(h);
-  let text!: any;
-  let plain!: any;
+  let text!: Node;
+  let plain!: Node;
   mount(h.ui, () => (
     <View style={{ width: 300, gap: 20 }}>
-      <Text ref={(n: any) => (text = n)} selectable style={{ fontSize: 16 }}>hello brave world</Text>
-      <Text ref={(n: any) => (plain = n)} style={{ fontSize: 16 }}>not selectable</Text>
+      <Text ref={(n: Node) => (text = n)} selectable style={{ fontSize: 16 }}>hello brave world</Text>
+      <Text ref={(n: Node) => (plain = n)} style={{ fontSize: 16 }}>not selectable</Text>
     </View>
   ));
   h.step();
@@ -72,12 +72,12 @@ test("text that isn't selectable can't be selected, and clicking away clears the
 function article() {
   const h = new HeadlessCore();
   open.push(h);
-  const t: any[] = [];
+  const t: Node[] = [];
   mount(h.ui, () => (
     <View selectable style={{ width: 300, gap: 20 }}>
-      <Text ref={(n: any) => (t[0] = n)} style={{ fontSize: 16 }}>First line</Text>
-      <Text ref={(n: any) => (t[1] = n)} style={{ fontSize: 16 }}>Second line</Text>
-      <Text ref={(n: any) => (t[2] = n)} style={{ fontSize: 16 }}>Third line</Text>
+      <Text ref={(n: Node) => (t[0] = n)} style={{ fontSize: 16 }}>First line</Text>
+      <Text ref={(n: Node) => (t[1] = n)} style={{ fontSize: 16 }}>Second line</Text>
+      <Text ref={(n: Node) => (t[2] = n)} style={{ fontSize: 16 }}>Third line</Text>
     </View>
   ));
   h.step();
@@ -112,11 +112,11 @@ test("dragging back up and Select All", async () => {
 test("a selection in a View stays inside it", async () => {
   const h = new HeadlessCore();
   open.push(h);
-  const t: any[] = [];
+  const t: Node[] = [];
   mount(h.ui, () => (
     <View style={{ width: 300, gap: 20 }}>
-      <View selectable><Text ref={(n: any) => (t[0] = n)} style={{ fontSize: 16 }}>inside</Text></View>
-      <Text ref={(n: any) => (t[1] = n)} style={{ fontSize: 16 }}>outside</Text>
+      <View selectable><Text ref={(n: Node) => (t[0] = n)} style={{ fontSize: 16 }}>inside</Text></View>
+      <Text ref={(n: Node) => (t[1] = n)} style={{ fontSize: 16 }}>outside</Text>
     </View>
   ));
   h.step();

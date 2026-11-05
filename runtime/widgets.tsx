@@ -868,7 +868,7 @@ export function Table<T>(props: TableProps<T>): JSX.Element {
             style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: props.selected === i ? "#e0e7ff" : i % 2 ? "#fafafa" : "#ffffff", cursor: props.onRowPress ? "pointer" : "default" }}
           >
             <For each={props.columns}>
-              {(c) => <View style={cell(c)}>{c.render ? c.render(row(), i) : <Text style={{ color: "#111827", whiteSpace: "nowrap" }}>{String((row() as any)[c.key] ?? "")}</Text>}</View>}
+              {(c) => <View style={cell(c)}>{c.render ? c.render(row(), i) : <Text style={{ color: "#111827", whiteSpace: "nowrap" }}>{String((row() as Record<string, unknown>)[c.key] ?? "")}</Text>}</View>}
             </For>
           </View>
         )}

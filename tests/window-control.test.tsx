@@ -1,7 +1,7 @@
 // Window control against the real core, headless: requests reach the core as JSON, state changes
 // reach onState, and a dragRegion asks to move the window.
 import { afterEach, expect, test } from "bun:test";
-import { mount, View, win } from "mantou-ui";
+import { mount, View, win, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -10,8 +10,8 @@ afterEach(() => open.splice(0).forEach((h) => h.free()));
 function app() {
   const h = new HeadlessCore();
   open.push(h);
-  let bar!: any;
-  mount(h.ui, () => <View ref={(n: any) => (bar = n)} dragRegion style={{ width: 200, height: 30 }} />);
+  let bar!: Node;
+  mount(h.ui, () => <View ref={(n: Node) => (bar = n)} dragRegion style={{ width: 200, height: 30 }} />);
   h.step();
   return { h, bar };
 }
