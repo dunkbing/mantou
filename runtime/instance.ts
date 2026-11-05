@@ -56,7 +56,7 @@ export async function singleInstance(onLaunch?: Launch): Promise<boolean> {
       data(s, chunk) {
         try {
           const m = JSON.parse(chunk.toString());
-          if (m.token !== token) return s.end();
+          if (m.token !== token) return void s.end();
           s.end("ok");
           try {
             void win.focus().catch(() => {});
