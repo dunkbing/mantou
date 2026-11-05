@@ -214,3 +214,49 @@ test("a layout transition doesn't animate a node's first placement", () => {
   expect(y("#ff0000")).toBe(0); // a new node appears in place
   expect(y("#00ff00")).toBe(30); // the green one (no transition of its own) jumps
 });
+
+test("enter: a new node starts from the given values and moves to its style", () => {
+  const [on, setOn] = createSignal(false);
+  const h = new HeadlessCore({ width: 100, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View>
+      <Show when={on()}>
+        <View enter={{ from: { translateY: 20 }, duration: 200 }} style={{ height: 30, backgroundColor: "#ff0000" }} />
+      </Show>
+    </View>
+  ));
+  h.step();
+  setOn(true);
+  h.step(0);
+  const y = () => Number((h.scene().split("\n").find((l) => l.includes("#ff0000")) ?? "").split(" ")[2]);
+  expect(y()).toBeCloseTo(20, 0);
+  h.step(100);
+  expect(y()).toBeGreaterThan(0);
+  expect(y()).toBeLessThan(20);
+  h.step(150);
+  expect(y()).toBe(0);
+});
+
+test("exit: a removed node stays and moves to its exit values, then goes", async () => {
+  const [on, setOn] = createSignal(true);
+  const h = new HeadlessCore({ width: 100, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View>
+      <Show when={on()}>
+        <View exit={{ to: { translateY: 40 }, duration: 100 }} style={{ height: 30, backgroundColor: "#ff0000" }} />
+      </Show>
+    </View>
+  ));
+  h.step();
+  const has = () => h.scene().includes("#ff0000");
+  setOn(false);
+  h.step(0);
+  expect(has()).toBe(true);
+  h.step(50);
+  expect(has()).toBe(true);
+  await new Promise((r) => setTimeout(r, 200));
+  h.step(10);
+  expect(has()).toBe(false);
+});

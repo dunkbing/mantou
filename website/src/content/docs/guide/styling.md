@@ -128,7 +128,19 @@ Add `layout` to a view's `transition` and it slides to its new place when layout
 </For>
 ```
 
-A node that has just appeared is placed where it lands (no enter animation yet), and nodes without the transition jump as before.
+Nodes without the transition jump as before.
+
+### Enter and exit
+
+`enter` starts a new view from the given values; `exit` keeps a removed view on screen while it moves to the given values, then removes it. Both take a duration (default 200 ms) and easing, or a spring.
+
+```tsx
+<Show when={open()}>
+  <Panel enter={{ from: { opacity: 0, translateY: 12 } }} exit={{ to: { opacity: 0 }, duration: 150 }} />
+</Show>
+```
+
+A leaving view ignores the pointer, and is gone from the app's tree at once.
 
 ## Light and dark
 

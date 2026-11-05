@@ -9,7 +9,7 @@ export {
 } from "./platform";
 export { useColorScheme, setColorScheme, defineTheme, type ColorScheme } from "./theme";
 export { run, type RunOptions } from "./run";
-export { defineStyle, SharedStyle, Node, TextLeaf, Ui, type Style, type AccessInfo, type AccessRoleName, type DropEvent, type WindowState, type PointerEvent, type PressEvent, type WheelEvent, type KeyEvent, type Rect, type WindowSize, type ScrollOffset, type ScrollBlockName, type InputOptions, type AnimatableProp, type AnimateOptions, type Animation, type Easing, type Transitions, type TransitionSpec } from "./ui";
+export { defineStyle, SharedStyle, Node, TextLeaf, Ui, type Style, type AccessInfo, type AccessRoleName, type DropEvent, type WindowState, type EnterSpec, type ExitSpec, type MotionTiming, type PointerEvent, type PressEvent, type WheelEvent, type KeyEvent, type Rect, type WindowSize, type ScrollOffset, type ScrollBlockName, type InputOptions, type AnimatableProp, type AnimateOptions, type Animation, type Easing, type Transitions, type TransitionSpec } from "./ui";
 export type { JSX, ViewProps, TextProps, InputProps, ScrollProps, ImageProps, ListProps, ListHandle, StyleProp } from "./jsx-runtime";
 export {
   createSignal,

@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { AccessRoleName, DropEvent, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, DropEvent, EnterSpec, ExitSpec, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 import type { CanvasContext } from "./canvas";
 
@@ -73,6 +73,10 @@ export interface ViewProps extends AccessProps, PointerProps, FocusProps {
   onHover?: (hovered: boolean) => void;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
+  /** Starts from these values when created: `{ from: { opacity: 0, translateY: 12 } }`. */
+  enter?: EnterSpec;
+  /** Stays and moves to these values when removed, then goes: `{ to: { opacity: 0 } }`. */
+  exit?: ExitSpec;
   /**
    * A focus scope, for dialogs: while it's on screen, Tab and Shift+Tab stay
    * among the inputs inside the topmost scope, and when it leaves the screen

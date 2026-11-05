@@ -53,6 +53,17 @@ function springTiming(s: Spring): { duration: number; easing: number } {
 
 /** A property's transition: a duration in ms, a duration and an easing ("ease" by default), or a spring. */
 export type TransitionSpec = number | { duration: number; easing?: Easing } | { spring: Spring };
+/** Duration in ms (default 200) and easing, or a spring. */
+export interface MotionTiming {
+  duration?: number;
+  easing?: Easing;
+  spring?: Spring;
+}
+type Motion = Partial<Record<Exclude<AnimatableProp, "layout">, number | Color>>;
+/** Starts from `from` and moves to the style. */
+export type EnterSpec = MotionTiming & { from: Motion };
+/** Stays on screen moving to `to`, then goes. */
+export type ExitSpec = MotionTiming & { to: Motion };
 /** Which properties animate to their new values when the app changes them. */
 export type Transitions = Partial<Record<AnimatableProp, TransitionSpec>>;
 
@@ -297,6 +308,10 @@ export class Node {
   readonly children: Child[] = [];
   released = false;
   private own = new Map<StylePropName, unknown>();
+  private enterSpec: EnterSpec | null = null;
+  private exitSpec: ExitSpec | null = null;
+  /** Kept in the tree until its exit is done. */
+  private exiting = false;
   private shared: SharedStyle | null = null;
   private pressHandlers: ((e: PressEvent) => void)[] = [];
   private wheelHandlers: ((e: WheelEvent) => void)[] = [];
@@ -793,6 +808,11 @@ export class Node {
    */
   remove(child: Child): this {
     if (child.parent !== this) return this;
+    if (child instanceof Node && child.exiting) return this;
+    if (child instanceof Node && child.exitSpec && !this.released && !child.released) {
+      child.startExit();
+      return this;
+    }
     this.detach(child);
     if (child instanceof TextLeaf || this.isText) this.textChanged();
     if (child instanceof Node && !this.isText && !this.released && !child.released) {
@@ -809,8 +829,60 @@ export class Node {
   }
 
   /** Frees the node in the core. Its children are detached, not released. */
+  /** Starts from these values when created. */
+  enter(spec: EnterSpec | null | undefined): this {
+    this.alive();
+    if (spec && !this.enterSpec) this.ui.pendingEnters.push(this);
+    this.enterSpec = spec ?? null;
+    return this;
+  }
+
+  /** Moves to these values before it's removed. */
+  exit(spec: ExitSpec | null | undefined): this {
+    this.alive();
+    this.exitSpec = spec ?? null;
+    return this;
+  }
+
+  /** @internal Runs at the start of the flush, after the node's style. */
+  startEnter() {
+    const spec = this.enterSpec;
+    if (!spec || this.released) return;
+    const rest: Record<string, number> = { opacity: 1, translateX: 0, translateY: 0, scale: 1, rotate: 0 };
+    const timing = spec.spring ? { spring: spec.spring } : { duration: spec.duration ?? 200, easing: spec.easing ?? ("ease-out" as Easing) };
+    for (const [prop, from] of Object.entries(spec.from) as [Exclude<AnimatableProp, "layout">, number | Color][]) {
+      const to = (this.own.get(prop as StylePropName) as number | Color | undefined) ?? rest[prop];
+      if (to !== undefined) this.animate(prop, { from, to, ...timing });
+    }
+  }
+
+  /** @internal */
+  startExit() {
+    const spec = this.exitSpec!;
+    this.exitSpec = null;
+    this.exiting = true;
+    const parent = this.parent!;
+    parent.detach(this); // gone for the app; the core keeps it until the exit is done
+    const ms = spec.spring ? springTiming(spec.spring).duration : (spec.duration ?? 200);
+    const how: TransitionSpec = spec.spring ? { spring: spec.spring } : { duration: ms, easing: spec.easing ?? "ease-in" };
+    // A transition to the new style, so nothing flashes back to the old value at the end.
+    this.transition(Object.fromEntries(Object.keys(spec.to).map((p) => [p, how])) as Transitions);
+    this.style({ ...(spec.to as Style), pointerEvents: "none" });
+    setTimeout(() => {
+      this.exiting = false;
+      if (this.released) return;
+      if (!parent.released) {
+        this.ui.enc.remove(parent.id, this.id);
+        this.ui.schedule();
+      }
+      this.release();
+    }, ms + 30);
+  }
+
   release() {
     if (this.released) return;
+    if (this.exiting) return; // it goes when its exit animation is done
+    if (this.exitSpec && this.parent && !this.parent.released) return this.startExit();
     this.parent?.detach(this);
     for (const c of this.children) c.parent = null;
     this.children.length = 0;
@@ -1219,6 +1291,8 @@ export class Ui {
     return this.root;
   }
   private pendingNodes = new Set<Node>();
+  /** @internal */
+  readonly pendingEnters: Node[] = [];
   private keyHandlers = new Set<(e: KeyEvent) => void>();
   private warnedText = false;
   /** The Input with the keyboard focus, as the core last reported. */
@@ -1598,6 +1672,7 @@ export class Ui {
 
   flush() {
     this.scheduled = false;
+    for (const node of this.pendingEnters.splice(0)) node.startEnter();
     for (const node of this.pendingNodes) node.flushPending();
     this.pendingNodes.clear();
     if (this.enc.empty) return;

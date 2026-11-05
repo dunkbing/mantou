@@ -4,7 +4,7 @@
 // them is disposed (design §7.4).
 import { createRenderer } from "solid-js/universal";
 import { createContext, getOwner, onCleanup, useContext } from "./solid";
-import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
+import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type EnterSpec, type ExitSpec, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
 export const UiContext = createContext<Ui>();
@@ -169,6 +169,12 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       return;
     case "transition":
       node.transition((value ?? {}) as Transitions);
+      return;
+    case "enter":
+      node.enter(value as EnterSpec | undefined);
+      return;
+    case "exit":
+      node.exit(value as ExitSpec | undefined);
       return;
     case "focusable":
     case "tabIndex":
