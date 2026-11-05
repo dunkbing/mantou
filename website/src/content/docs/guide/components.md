@@ -13,7 +13,7 @@ A box. It takes `style`, children and any of the [event handlers](/guide/events/
 <View style={{ flexDirection: "row", gap: 8, padding: 16 }}>…</View>
 ```
 
-Other props: `transition` (animate style changes, see [styling](/guide/styling/#animation)), `focusScope` (keep Tab inside a dialog), `ref`, and the [accessibility props](/guide/platform/#accessibility).
+Other props: `transition` (animate style changes, see [styling](/guide/styling/#animation)), `focusable` and `tabIndex` (take the keyboard focus, see [focus](/guide/events/#focus)), `focusScope` (keep Tab inside a dialog), `ref`, and the [accessibility props](/guide/platform/#accessibility).
 
 ## Text
 

@@ -1,6 +1,6 @@
 // Written by schema/gen.ts from schema/protocol.ts. Don't edit it; change the schema and run `bun run gen`.
 
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 export const Op = {
   /** Create a node; it starts detached. */
@@ -35,8 +35,10 @@ export const Op = {
   PLACEHOLDER: 15,
   /** An Input's options: InputFlag bits, and its maximum length in characters (0 = none). */
   INPUT_OPTIONS: 16,
-  /** Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow. */
+  /** Focus an Input or a focusable view (0 = blur the focused one). FOCUS and BLUR events follow. */
   FOCUS: 17,
+  /** Lets a view take the keyboard focus (FocusableFlag bits; 0 = it can't): a press or Tab focuses it, Enter and Space press it, and a focused scroll view scrolls with the keys. Tab visits nodes with an order (1 first) before the rest, which go in tree order. */
+  FOCUSABLE: 34,
   /** Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout. */
   SCROLL_TO: 19,
   /** Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout. */
@@ -71,12 +73,13 @@ export const Op = {
   ACCESS: 30,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16,"Drop":32,"Select":64} as const;
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
+export const FocusableFlag = {"Focusable":1,"SkipTab":2} as const;
 export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,"Radio":5,"Link":6,"Heading":7,"List":8,"ListItem":9,"Dialog":10,"Tab":11,"TabList":12,"Menu":13,"MenuItem":14,"Image":15,"Group":16,"Status":17,"Alert":18} as const;
 export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16} as const;
 export const WindowFlag = {"NotResizable":1,"Frameless":2,"AlwaysOnTop":4,"Fullscreen":8,"Maximized":16,"HasPosition":32,"TitleOverlay":64} as const;
@@ -112,9 +115,9 @@ export const Event = {
   PRESS: 10,
   /** The wheel or trackpad scrolled. a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up). */
   WHEEL: 11,
-  /** An Input got the keyboard focus. a = input. */
+  /** An Input or a focusable view got the keyboard focus. a = input or view. */
   FOCUS: 12,
-  /** An Input lost the keyboard focus. a = input. */
+  /** An Input or a focusable view lost the keyboard focus. a = input or view. */
   BLUR: 13,
   /** The user changed an Input's text. a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words. */
   TEXT_CHANGED: 14,
@@ -233,10 +236,12 @@ export const StyleProp = {
   borderRightWidth: { code: 81, kind: "f32" },
   borderBottomWidth: { code: 82, kind: "f32" },
   borderLeftWidth: { code: 83, kind: "f32" },
+  focusRingColor: { code: 85, kind: "color" },
+  focusRingOffset: { code: 86, kind: "f32" },
   zIndex: { code: 84, kind: "f32" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents", 74: "gradientColor", 75: "gradientAngle", 76: "borderTopLeftRadius", 77: "borderTopRightRadius", 78: "borderBottomRightRadius", 79: "borderBottomLeftRadius", 80: "borderTopWidth", 81: "borderRightWidth", 82: "borderBottomWidth", 83: "borderLeftWidth", 84: "zIndex" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents", 74: "gradientColor", 75: "gradientAngle", 76: "borderTopLeftRadius", 77: "borderTopRightRadius", 78: "borderBottomRightRadius", 79: "borderBottomLeftRadius", 80: "borderTopWidth", 81: "borderRightWidth", 82: "borderBottomWidth", 83: "borderLeftWidth", 85: "focusRingColor", 86: "focusRingOffset", 84: "zIndex" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -411,6 +416,10 @@ export interface WireStyle {
   borderBottomWidth?: number;
   /** Default: borderWidth. */
   borderLeftWidth?: number;
+  /** Default: #3b82f6. */
+  focusRingColor?: Color;
+  /** Default: 2. */
+  focusRingOffset?: number;
   /** Default: 0: among its siblings, higher is painted (and hit) on top; ties keep tree order. */
   zIndex?: number;
 }

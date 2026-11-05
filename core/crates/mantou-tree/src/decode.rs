@@ -51,6 +51,7 @@ pub enum Op {
     WindowSize { width: f32, height: f32 },
     Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
     Keyframes { id: u32, animation: u32, values: Vec<u32> },
+    Focusable { id: u32, flags: u32, order: u32 },
     /// A Text's runs: (UTF-8 byte length, span ids outermost first).
     TextRuns { id: u32, runs: Vec<(u32, Vec<u32>)> },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
@@ -253,6 +254,10 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     return err(i, "TRANSITION needs a finite duration of 0 or more");
                 }
                 Op::Transition { id: a[0], prop: prop(a[1], i)?, duration, easing: a[3] }
+            }
+            op::FOCUSABLE => {
+                fixed(3)?;
+                Op::Focusable { id: a[0], flags: a[1], order: a[2] }
             }
             op::TEXT_RUNS => {
                 if n < 1 {

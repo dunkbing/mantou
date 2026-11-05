@@ -84,7 +84,7 @@ The core does all of it, on the main thread for the window, without a round trip
 
 ## Not yet
 
-Caret blinking; character filters (`allow`) and `inputMode`; focus for views other than inputs; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
+Caret blinking; character filters (`allow`) and `inputMode`; scrolling a multiline input with the wheel; Emacs-style Control bindings on macOS; a context menu; accessibility.
 
 ## Tests
 

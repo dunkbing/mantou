@@ -3,7 +3,7 @@
 // The Solid renderer (runtime/solid) drives this layer; apps can use it
 // directly too.
 import { KeyModifier, WindowStateFlag } from "./gen/protocol";
-import { AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
+import { FocusableFlag, AccessFlag, AccessRole, AnimateFlag, Easing as EasingCode, EventMask, FocusScopeFlag, InputFlag, NodeKind, ScrollBlock, ScrollFlag, StyleProp, WindowFlag, type StylePropName } from "./gen/protocol";
 import { OpEncoder } from "./encoder";
 import type { InputCoreEvent } from "./events";
 import { createComputed, createRoot, untrack } from "./solid/solid";
@@ -144,6 +144,10 @@ export interface WheelEvent {
 
 export interface KeyEvent {
   type: "keyDown" | "keyUp";
+  /** The focused node the key went to first (it bubbles from there), if any. */
+  target?: Node | null;
+  /** Stops it bubbling further, to other nodes and to the window's `onKey` handlers. */
+  stopPropagation?(): void;
   /** A character ("j", "J", " ") or a named key ("ArrowDown", "Enter", "Escape"…). */
   key: string;
   repeat?: boolean;
@@ -441,11 +445,57 @@ export class Node {
   }
 
   /** Gives the Input the keyboard focus (FOCUS and BLUR events follow). */
+  /** Gives this Input, or a focusable view, the keyboard focus. */
   focus(): this {
-    this.assertInput("focus");
+    this.alive();
+    if (!this.isInput && !this.focusFlags) throw new Error(`mantou: focus() is for <Input> and focusable views; make this <${this.kindName}> focusable first`);
     this.ui.enc.focus(this.id);
     this.ui.schedule();
     return this;
+  }
+
+  /**
+   * Lets a view take the keyboard focus (or stops it): a press or Tab focuses
+   * it, Enter and Space press it, and a focused scroll view scrolls with the
+   * keys. `tabIndex`: -1 = Tab passes it by (presses and `focus()` still
+   * work), 1, 2… = Tab visits it in that order before the rest, which go in
+   * tree order.
+   */
+  focusable(on: boolean, tabIndex = 0): this {
+    this.alive();
+    const flags = on ? FocusableFlag.Focusable | (tabIndex < 0 ? FocusableFlag.SkipTab : 0) : 0;
+    const order = on && tabIndex > 0 ? Math.floor(tabIndex) : 0;
+    if (flags === this.focusFlags && order === this.focusOrder) return this;
+    this.focusFlags = flags;
+    this.focusOrder = order;
+    this.ui.enc.focusable(this.id, flags, order);
+    this.ui.schedule();
+    return this;
+  }
+  private focusFlags = 0;
+  private focusOrder = 0;
+
+  /**
+   * Adds a key handler: while this node (or something inside it) has the
+   * focus, keys reach it, innermost first, then the window's `onKey`
+   * handlers; `e.stopPropagation()` stops them there. Keys the core uses
+   * (an input's typing, Tab, a focused view's Enter and Space, scrolling)
+   * don't come. Returns a function that removes it.
+   */
+  onKey(handler: (e: KeyEvent) => void): () => void {
+    this.alive();
+    this.keyHandlers.push(handler);
+    return () => void this.keyHandlers.splice(this.keyHandlers.indexOf(handler) >>> 0, 1);
+  }
+  private keyHandlers: ((e: KeyEvent) => void)[] = [];
+
+  /** @internal Runs this node's key handlers; returns whether one stopped the event. */
+  handleKey(e: KeyEvent, stopped: () => boolean): boolean {
+    for (const h of [...this.keyHandlers]) {
+      h(e);
+      if (stopped()) return true;
+    }
+    return false;
   }
 
   /**
@@ -507,7 +557,9 @@ export class Node {
 
   /** Adds an Input handler: "change" (the user changed the text), "submit" (Enter), "focus", "blur". */
   onInput<K extends keyof InputHandlers>(type: K, handler: InputHandlers[K][number]): () => void {
-    this.assertInput(`on${type[0].toUpperCase()}${type.slice(1)}`);
+    // Focus and blur are for focusable views too.
+    if (type === "focus" || type === "blur") this.alive();
+    else this.assertInput(`on${type[0].toUpperCase()}${type.slice(1)}`);
     const list = ((this.inputHandlers ??= { change: [], submit: [], focus: [], blur: [], select: [] })[type] as unknown[]);
     list.push(handler);
     if (type === "select" && list.length === 1) this.listen();
@@ -756,6 +808,7 @@ export class Node {
     this.layoutHandlers.length = 0;
     this.scrollHandlers.length = 0;
     this.hoverHandlers.length = 0;
+    this.keyHandlers.length = 0;
     this.dropHandlers.drop.length = this.dropHandlers.over.length = 0;
     for (const k of Object.keys(this.pointerHandlers) as (keyof typeof this.pointerHandlers)[]) this.pointerHandlers[k].length = 0;
     this.inputHandlers = null;
@@ -1372,9 +1425,16 @@ export class Ui {
     return () => this.keyHandlers.delete(handler);
   }
 
-  /** Delivers a key event to every key listener. */
+  /** Delivers a key event to the focused node and up through its ancestors, then to every window key listener. */
   dispatchKey(e: KeyEvent) {
-    for (const h of [...this.keyHandlers]) h(e);
+    let stopped = false;
+    const target = this.focused && !this.focused.released ? this.focused : null;
+    const ev: KeyEvent = { ...e, target, stopPropagation: () => void (stopped = true) };
+    for (let n: Node | null = target; n; n = n.parent) if (n.handleKey(ev, () => stopped)) return;
+    for (const h of [...this.keyHandlers]) {
+      h(ev);
+      if (stopped) return;
+    }
   }
 
   /** Delivers a wheel event to its target and bubbles it up the tree. */

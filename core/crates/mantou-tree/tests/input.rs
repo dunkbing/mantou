@@ -147,8 +147,8 @@ fn enter_adds_a_line_to_a_multiline_input_which_grows() {
 fn tab_moves_the_focus_through_inputs_in_order() {
     let mut t = tree();
     let mut cb = MemoryClipboard::default();
-    assert!(!t.key(k::TAB, None, 0, &mut cb), "nothing focused: Tab is the app's");
-    click(&mut t, 2);
+    assert!(t.key(k::TAB, None, 0, &mut cb), "nothing focused: Tab goes to the first input");
+    assert_eq!(t.focused(), Some(2));
     t.take_events();
     assert!(t.key(k::TAB, None, 0, &mut cb));
     assert_eq!(t.focused(), Some(3));

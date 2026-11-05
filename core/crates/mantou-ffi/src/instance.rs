@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering}
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-use mantou_tree::protocol::{event as ev, key_modifier};
+use mantou_tree::protocol::{event as ev, key_modifier, named_key};
 use mantou_tree::{Clipboard, TreeEvent, MemoryClipboard, Scene, Tree};
 
 /// A poisoned lock only means another entry point panicked; the data is still usable.
@@ -279,6 +279,10 @@ impl Instance {
                 TreeEvent::AnimationEnd { id, animation } => self.push_event([ev::ANIMATION_END, id, animation, 0]),
                 TreeEvent::PointerEnter(id) => self.push_event([ev::POINTER_ENTER, id, 0, 0]),
                 TreeEvent::Select { id, anchor, focus } => self.push_event([ev::SELECTION, id, anchor, focus]),
+                TreeEvent::Press { id, x, y } => {
+                    bump(&self.stats.presses);
+                    self.push_event([ev::PRESS, id, x.to_bits(), y.to_bits()]);
+                }
                 TreeEvent::PointerLeave(id) => self.push_event([ev::POINTER_LEAVE, id, 0, 0]),
             }
         }
@@ -570,7 +574,8 @@ impl Instance {
         }
         let mut used = false;
         let changed = self.edit(|t| {
-            if t.focused().is_none() && !t.has_text_selection() {
+            // With nothing focused, only Tab (to the first focusable thing) and a text selection's keys are the core's.
+            if t.focused().is_none() && !t.has_text_selection() && key != named_key::TAB {
                 return false;
             }
             used = self.with_clipboard(|cb| t.key(key, text, modifiers, cb));

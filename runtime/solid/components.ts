@@ -60,6 +60,22 @@ export function Scroll(props: ScrollProps): JSX.Element {
       get onHover() {
         return props.onHover;
       },
+      // A focused scroll view scrolls with the keys (dunkbing/mantou#17).
+      get focusable() {
+        return props.focusable;
+      },
+      get tabIndex() {
+        return props.tabIndex;
+      },
+      get onFocus() {
+        return props.onFocus;
+      },
+      get onBlur() {
+        return props.onBlur;
+      },
+      get onKey() {
+        return props.onKey;
+      },
       get ref() {
         return props.ref;
       },

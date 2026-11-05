@@ -7,7 +7,7 @@
 // Codes are part of the ABI: never renumber or reuse one. Append new entries,
 // and bump PROTOCOL_VERSION when existing meaning changes.
 
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 /** Operand types. Every op is `word0 = code | operandWords << 16`, then operands. */
 export type Operand = "u32" | "f32" | "id" | "kind" | "styleId" | "string" | "bytes" | "styleValue" | "styleList";
@@ -36,7 +36,8 @@ export const ops: OpDef[] = [
   { name: "VALUE", code: 14, operands: [["id", "id"], ["rev", "u32"], ["text", "string"]], doc: "An Input's text, from the app. Applied only when `rev` (the last TEXT_CHANGED rev the app has seen, 0 before any) is at least the input's, so a value derived from an older edit never undoes newer typing." },
   { name: "PLACEHOLDER", code: 15, operands: [["id", "id"], ["text", "string"]], doc: "What an empty Input shows." },
   { name: "INPUT_OPTIONS", code: 16, operands: [["id", "id"], ["flags", "u32"], ["maxLength", "u32"]], doc: "An Input's options: InputFlag bits, and its maximum length in characters (0 = none)." },
-  { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow." },
+  { name: "FOCUS", code: 17, operands: [["id", "id"]], doc: "Focus an Input or a focusable view (0 = blur the focused one). FOCUS and BLUR events follow." },
+  { name: "FOCUSABLE", code: 34, operands: [["id", "id"], ["flags", "u32"], ["order", "u32"]], doc: "Lets a view take the keyboard focus (FocusableFlag bits; 0 = it can't): a press or Tab focuses it, Enter and Space press it, and a focused scroll view scrolls with the keys. Tab visits nodes with an order (1 first) before the rest, which go in tree order." },
   { name: "SCROLL_TO", code: 19, operands: [["id", "id"], ["x", "f32"], ["y", "f32"], ["flags", "u32"]], doc: "Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout." },
   { name: "SCROLL_INTO_VIEW", code: 20, operands: [["id", "id"], ["block", "u32"]], doc: "Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout." },
   { name: "FONT", code: 21, operands: [["data", "bytes"]], doc: "Register a font file (TTF, OTF or a collection) with the instance; text uses it by its family name." },
@@ -80,6 +81,9 @@ export const accessRoles = {
 export const accessFlags = { Checked: 1, Mixed: 2, Selected: 4, Disabled: 8, Hidden: 16 } as const;
 
 export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
+
+/** FOCUSABLE flags. SkipTab: presses and FOCUS focus it, Tab passes it by (tabIndex -1). */
+export const focusableFlags = { Focusable: 1, SkipTab: 2 } as const;
 
 /** INPUT_OPTIONS flags. Secure: a bullet per character, no copying, the IME off. */
 export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
@@ -202,6 +206,9 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "borderRightWidth", code: 81, type: "f32", default: "borderWidth" },
   { name: "borderBottomWidth", code: 82, type: "f32", default: "borderWidth" },
   { name: "borderLeftWidth", code: 83, type: "f32", default: "borderWidth" },
+  // The ring the core draws around a focused view when the focus came from the keyboard (2 px, `offset` outside its border box). Transparent: none.
+  { name: "focusRingColor", code: 85, type: "color", default: "#3b82f6" },
+  { name: "focusRingOffset", code: 86, type: "f32", default: "2" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 
@@ -222,8 +229,8 @@ export const events: { name: string; code: number; fields: string; doc: string }
   { name: "SCALE_CHANGED", code: 9, fields: "c = scale (f32)", doc: "The window's scale factor changed." },
   { name: "PRESS", code: 10, fields: "a = target node, b = x, c = y (f32, logical px)", doc: "A press (down and up on the same node) on a node with a Press listener on its path." },
   { name: "WHEEL", code: 11, fields: "a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up)", doc: "The wheel or trackpad scrolled." },
-  { name: "FOCUS", code: 12, fields: "a = input", doc: "An Input got the keyboard focus." },
-  { name: "BLUR", code: 13, fields: "a = input", doc: "An Input lost the keyboard focus." },
+  { name: "FOCUS", code: 12, fields: "a = input or view", doc: "An Input or a focusable view got the keyboard focus." },
+  { name: "BLUR", code: 13, fields: "a = input or view", doc: "An Input or a focusable view lost the keyboard focus." },
   { name: "TEXT_CHANGED", code: 14, fields: "a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words", doc: "The user changed an Input's text." },
   { name: "SUBMIT", code: 15, fields: "a = input", doc: "Enter in a single-line Input." },
   { name: "SCROLL", code: 17, fields: "a = scroll view, b = x, c = y (f32, logical px: the offset)", doc: "A scroll view with a Scroll listener scrolled (at most once per frame)." },

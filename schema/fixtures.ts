@@ -56,6 +56,8 @@ export function fixtureScenarios(): Record<string, Uint8Array> {
   e.animate(3, 1, 32, 0, 1065353216, 300, 0, 2, 1);
   e.select(5, 2, 4);
   e.textRuns(4, [6, 0, 5, 2, 7, 8, 1, 0]);
+  e.focusable(3, 1, 2);
+  e.style(3, "focusRingColor", "#22c55e");
   e.windowSize(1200, 760);
   e.windowLimits(900, 560, 0, 0, 0);
   e.fontFamily(1, "Lucide, monospace");

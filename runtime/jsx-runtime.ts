@@ -1,7 +1,7 @@
 // JSX types for Mantou (tsconfig: "jsx": "preserve", "jsxImportSource":
 // "mantou-ui"). JSX is compiled by Mantou's plugin (runtime/solid/plugin.ts),
 // never through this module at run time.
-import type { AccessRoleName, DropEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
+import type { AccessRoleName, DropEvent, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
 
 export type { StyleProp } from "./solid/renderer";
@@ -47,7 +47,24 @@ export interface PointerProps {
   onDragOver?: (e: DropEvent | null) => void;
 }
 
-export interface ViewProps extends AccessProps, PointerProps {
+/** Keyboard focus for views (dunkbing/mantou#17). */
+export interface FocusProps {
+  /**
+   * It can take the keyboard focus: a press or Tab focuses it (the core draws
+   * a ring when it came from the keyboard; style it with `focusRingColor` and
+   * `focusRingOffset`), Enter and Space press it, and a focused scroll view
+   * scrolls with the keys.
+   */
+  focusable?: boolean;
+  /** -1: focusable, but Tab passes it by; 1, 2…: Tab visits it in that order first. Makes the view focusable. */
+  tabIndex?: number;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  /** Keys while it (or something inside it) has the focus, innermost first, before the window's `onKey` handlers. */
+  onKey?: (e: KeyEvent) => void;
+}
+
+export interface ViewProps extends AccessProps, PointerProps, FocusProps {
   style?: StyleProp;
   /** Properties that animate to their new values when they change: `{ opacity: 200, scale: { duration: 150, easing: "ease-out" } }` (ms). */
   transition?: Transitions;
@@ -122,7 +139,7 @@ export interface ImageProps {
 }
 
 /** A scroll view (see `Scroll`). */
-export interface ScrollProps extends AccessProps, PointerProps {
+export interface ScrollProps extends AccessProps, PointerProps, FocusProps {
   /** The scroll view's own style; `overflow: "scroll"` is set for you. */
   style?: StyleProp;
   /** The style of the content view inside, which holds the children. */

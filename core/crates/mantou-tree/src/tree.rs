@@ -18,6 +18,7 @@ pub mod access;
 mod anim;
 mod hover;
 mod image;
+mod focus;
 mod input;
 mod rich;
 mod scroll;
@@ -58,6 +59,8 @@ pub enum TreeEvent {
     PointerLeave(u32),
     /// A focused Input with a Select listener moved its caret or selection (UTF-16 units).
     Select { id: u32, anchor: u32, focus: u32 },
+    /// A focused view was pressed from the keyboard (Enter or Space), at its centre (logical px).
+    Press { id: u32, x: f32, y: f32 },
 }
 
 /// Selections of inputs whose style doesn't set one: #3b82f666.
@@ -226,6 +229,9 @@ struct Visual {
     placeholder_color: Option<u32>,
     caret_color: Option<u32>,
     selection_color: Option<u32>,
+    /// The focus ring's colour and offset (None: #3b82f6 and 2 px).
+    focus_ring_color: Option<u32>,
+    focus_ring_offset: Option<f32>,
     /// overflow: "scroll".
     scrolls: bool,
     /// The node's own or shared style set `color` (an Image is then tinted with it).
@@ -275,6 +281,8 @@ struct Node {
     rich: Option<Box<rich::Rich>>,
     /// A span: the Text whose runs it's in.
     span_of: Option<u32>,
+    /// FOCUSABLE: (flags, Tab order); flags 0 = it can't take the focus.
+    focusable: (u32, u32),
 }
 
 /// A laid-out box in paint order: the node, its border box and content box
@@ -329,6 +337,10 @@ pub struct Tree {
     /// The focus when the current batch began: where a scope that appears in
     /// it (and takes the focus with an autoFocus input) gives it back.
     focus_at_batch: Option<u32>,
+    /// The last input was the keyboard (not the pointer): focus rings show.
+    keyboard_mode: bool,
+    /// The focus came from the keyboard: the focused view draws its ring.
+    focus_visible: bool,
     /// A scroll offset changed: boxes must be placed again (no relayout needed).
     boxes_dirty: bool,
     /// Scrollbar thumbs, placed with the boxes.
@@ -402,6 +414,8 @@ impl Tree {
             reports_pending: false,
             scopes: Vec::new(),
             focus_at_batch: None,
+            keyboard_mode: false,
+            focus_visible: false,
             boxes_dirty: false,
             thumbs: Vec::new(),
             thumb_drag: None,
@@ -516,6 +530,7 @@ impl Tree {
                     placed: false,
                     rich: None,
                     span_of: None,
+                    focusable: (0, 0),
                 });
                 self.restyle(id);
             }
@@ -719,10 +734,18 @@ impl Tree {
                 self.layout_dirty = true; // scopes open and close at layout
             }
             Op::Focus { id } => {
-                if id != 0 && self.node(id)?.input.is_none() {
-                    return Err(format!("FOCUS: {id} is not an input"));
+                if id != 0 && !self.can_focus(self.nodes.get(&id).ok_or_else(|| format!("no node {id}"))?) {
+                    return Err(format!("FOCUS: {id} is not an input or a focusable view"));
                 }
                 self.set_focus((id != 0).then_some(id));
+                // As browsers do for focus(): a ring if the user was last using the keyboard.
+                self.focus_visible = self.keyboard_mode;
+            }
+            Op::Focusable { id, flags, order } => {
+                self.node(id)?.focusable = (flags, order);
+                if flags == 0 && self.focus == Some(id) {
+                    self.set_focus(None);
+                }
             }
             Op::Transition { id, prop, duration, easing } => self.set_transition(id, prop, duration, easing)?,
             Op::TextRuns { id, runs } => self.set_runs(id, runs)?,
@@ -1193,6 +1216,17 @@ impl Tree {
             let extra = Extra { radii, widths, gradient };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
+            }
+            // The focus ring: over the box, `offset` outside it, when the focus came from the keyboard.
+            if self.focus == Some(b.id) && self.focus_visible && node.input.is_none() {
+                let ring = rgba(v.focus_ring_color.unwrap_or(0xfff6823b), alpha);
+                let off = v.focus_ring_offset.unwrap_or(2.0) * k;
+                let (w, rr) = (2.0 * k, [r[0] - off - 2.0 * k, r[1] - off - 2.0 * k, r[2] + off + 2.0 * k, r[3] + off + 2.0 * k]);
+                let rect = [snap(rr[0]), snap(rr[1]), snap(rr[2]), snap(rr[3])];
+                if ring[3] > 0.0 && overlaps(rect, clip) {
+                    let radius = ((v.radius * k + off + w) * s).max(0.0);
+                    quads.push(Quad { rect, color: [0.0; 4], uv: [0.0; 4], clip, radius, border: (w * s).round().max(1.0), border_color: ring, shadow: None, image: None, extra: Extra::NONE });
+                }
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
                 let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());
@@ -1782,6 +1816,12 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
                 v.selection_color = Some(c)
             }
         }
+        Prop::FocusRingColor => {
+            if let Value::Color(c) = value {
+                v.focus_ring_color = Some(c)
+            }
+        }
+        Prop::FocusRingOffset => v.focus_ring_offset = Some(num()),
         Prop::AlignContent => {
             use crate::protocol::align_content as ac;
             s.align_content = match e {

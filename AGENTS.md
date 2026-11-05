@@ -67,6 +67,7 @@ Linux needs a Vulkan or GL driver (Mesa lavapipe works without a GPU) and `libxk
 14. **The core scrolls.** `overflow: "scroll"` views (`<Scroll>`) keep their offset in the core, which applies it when placing boxes: the wheel and the thumb scroll on the main thread with no JS and no relayout. Apps scroll with `scrollTo`/`scrollBy`/`scrollIntoView` (applied after the turn's layout) and listen with `onScroll`; never scroll with negative margins.
 15. **The core animates.** `transition` and `node.animate()` send one op; the main thread advances opacity, colours and transforms (`translateX`, `translateY`, `scale`) on the core's clock (`Tree::tick`, a headless instance's `step(ms)`). Never animate from JS timers, one style op per frame. Transforms move what's drawn and hit-tested, not layout: `onLayout` reports the untransformed box.
 16. **The core tracks the pointer.** Hover (`onHover`, only for nodes that listen) and the `cursor` style are worked out on the main thread as the pointer moves and as boxes move under it; never track hover from `POINTER_MOVE` in JS.
+17. **The core owns the focus.** Inputs and `focusable` views take it; Tab (also with nothing focused, when something can take it), Enter and Space on a focused view, and a focused scroll view's keys are handled in the core and never reach JS. The core draws the focus ring only when the focus came from the keyboard. JS routes the other keys to the focused node, bubbling, then to the window's `onKey`.
 
 ## Apps built on Mantou
 

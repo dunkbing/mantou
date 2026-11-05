@@ -2,7 +2,7 @@
 
 #![allow(missing_docs, dead_code)]
 
-pub const PROTOCOL_VERSION: u32 = 13;
+pub const PROTOCOL_VERSION: u32 = 14;
 
 pub mod op {
     /// Create a node; it starts detached.
@@ -37,8 +37,10 @@ pub mod op {
     pub const PLACEHOLDER: u32 = 15;
     /// An Input's options: InputFlag bits, and its maximum length in characters (0 = none).
     pub const INPUT_OPTIONS: u32 = 16;
-    /// Focus an Input (0 = blur the focused one). FOCUS and BLUR events follow.
+    /// Focus an Input or a focusable view (0 = blur the focused one). FOCUS and BLUR events follow.
     pub const FOCUS: u32 = 17;
+    /// Lets a view take the keyboard focus (FocusableFlag bits; 0 = it can't): a press or Tab focuses it, Enter and Space press it, and a focused scroll view scrolls with the keys. Tab visits nodes with an order (1 first) before the rest, which go in tree order.
+    pub const FOCUSABLE: u32 = 34;
     /// Scroll a scroll view to an offset (NaN keeps that axis), or by it with ScrollFlag.By. Clamped, and applied after the batch's layout.
     pub const SCROLL_TO: u32 = 19;
     /// Scroll the node's scroll-view ancestors so it shows (ScrollBlock), after the batch's layout.
@@ -92,6 +94,7 @@ pub fn op_name(code: u32) -> &'static str {
         15 => "PLACEHOLDER",
         16 => "INPUT_OPTIONS",
         17 => "FOCUS",
+        34 => "FOCUSABLE",
         19 => "SCROLL_TO",
         20 => "SCROLL_INTO_VIEW",
         21 => "FONT",
@@ -206,6 +209,11 @@ pub mod focus_scope_flag {
     pub const RESTORE: u32 = 2;
 }
 
+pub mod focusable_flag {
+    pub const FOCUSABLE: u32 = 1;
+    pub const SKIP_TAB: u32 = 2;
+}
+
 pub mod input_flag {
     pub const MULTILINE: u32 = 1;
     pub const SECURE: u32 = 2;
@@ -265,9 +273,9 @@ pub mod event {
     pub const PRESS: u32 = 10;
     /// The wheel or trackpad scrolled. a = node under the pointer (0 = none), b = dx, c = dy (f32, logical px; positive dy scrolls content up).
     pub const WHEEL: u32 = 11;
-    /// An Input got the keyboard focus. a = input.
+    /// An Input or a focusable view got the keyboard focus. a = input or view.
     pub const FOCUS: u32 = 12;
-    /// An Input lost the keyboard focus. a = input.
+    /// An Input or a focusable view lost the keyboard focus. a = input or view.
     pub const BLUR: u32 = 13;
     /// The user changed an Input's text. a = input, b = rev (counts the user's edits), c = byte length; then the UTF-8 text, padded to words.
     pub const TEXT_CHANGED: u32 = 14;
@@ -550,11 +558,13 @@ pub enum Prop {
     BorderRightWidth = 81,
     BorderBottomWidth = 82,
     BorderLeftWidth = 83,
+    FocusRingColor = 85,
+    FocusRingOffset = 86,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 84;
+    pub const COUNT: usize = 86;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -641,6 +651,8 @@ impl Prop {
             81 => Prop::BorderRightWidth,
             82 => Prop::BorderBottomWidth,
             83 => Prop::BorderLeftWidth,
+            85 => Prop::FocusRingColor,
+            86 => Prop::FocusRingOffset,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -731,6 +743,8 @@ impl Prop {
             Prop::BorderRightWidth => "borderRightWidth",
             Prop::BorderBottomWidth => "borderBottomWidth",
             Prop::BorderLeftWidth => "borderLeftWidth",
+            Prop::FocusRingColor => "focusRingColor",
+            Prop::FocusRingOffset => "focusRingOffset",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -820,6 +834,8 @@ impl Prop {
             Prop::BorderRightWidth => ValueKind::F32,
             Prop::BorderBottomWidth => ValueKind::F32,
             Prop::BorderLeftWidth => ValueKind::F32,
+            Prop::FocusRingColor => ValueKind::Color,
+            Prop::FocusRingOffset => ValueKind::F32,
             Prop::ZIndex => ValueKind::F32,
         }
     }

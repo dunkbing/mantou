@@ -328,6 +328,18 @@
     ]
   },
   {
+    "op": "FOCUSABLE",
+    "id": 3,
+    "flags": 1,
+    "order": 2
+  },
+  {
+    "op": "STYLE",
+    "id": 3,
+    "prop": "focusRingColor",
+    "value": "#22c55eff"
+  },
+  {
     "op": "WINDOW_SIZE",
     "width": 1200,
     "height": 760

@@ -83,6 +83,7 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
       case "SELECT": o = { op: name, id: w[a], anchor: w[a + 1], focus: w[a + 2] }; break;
       case "WINDOW_SIZE": o = { op: name, width: bitsf32(w[a]), height: bitsf32(w[a + 1]) }; break;
       case "WINDOW_LIMITS": o = { op: name, minWidth: bitsf32(w[a]), minHeight: bitsf32(w[a + 1]), maxWidth: bitsf32(w[a + 2]), maxHeight: bitsf32(w[a + 3]), flags: w[a + 4] }; break;
+      case "FOCUSABLE": o = { op: name, id: w[a], flags: w[a + 1], order: w[a + 2] }; break;
       case "FOCUS_SCOPE": o = { op: name, id: w[a], flags: w[a + 1] }; break;
       case "SCROLL_TO": o = { op: name, id: w[a], x: bitsf32(w[a + 1]), y: bitsf32(w[a + 2]), flags: w[a + 3] }; break;
       case "SCROLL_INTO_VIEW": o = { op: name, id: w[a], block: w[a + 1] }; break;

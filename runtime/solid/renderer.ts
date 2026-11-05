@@ -4,7 +4,7 @@
 // them is disposed (design §7.4).
 import { createRenderer } from "solid-js/universal";
 import { createContext, getOwner, onCleanup, useContext } from "./solid";
-import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
+import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
 export const UiContext = createContext<Ui>();
@@ -45,6 +45,18 @@ function setHandler(node: Node, name: string, value: unknown, add: (f: never) =>
   offs.get(name)?.();
   offs.delete(name);
   if (typeof value === "function") offs.set(name, add(value as never));
+}
+
+/** A view's `focusable` and `tabIndex` props, sent together. */
+const focusProps = new WeakMap<Node, { focusable: boolean; tabIndex: number }>();
+
+function setFocusProp(node: Node, name: "focusable" | "tabIndex", value: unknown) {
+  const p = focusProps.get(node) ?? { focusable: false, tabIndex: 0 };
+  if (name === "focusable") p.focusable = !!value;
+  else p.tabIndex = Number(value ?? 0) || 0;
+  focusProps.set(node, p);
+  // A tabIndex alone makes a view focusable, as in the DOM.
+  node.focusable(p.focusable || (name === "tabIndex" && value !== undefined && value !== null), p.tabIndex);
 }
 
 /** Inputs whose autoFocus was read: it counts only when the input is created (dunkbing/mantou#4). */
@@ -157,6 +169,18 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
       return;
     case "transition":
       node.transition((value ?? {}) as Transitions);
+      return;
+    case "focusable":
+    case "tabIndex":
+      if (!node.isInput) return setFocusProp(node, name, value);
+      if (name === "tabIndex") return; // inputs are always focusable; their Tab order is the tree's
+      break;
+    case "onFocus":
+    case "onBlur":
+      setHandler(node, name, value, (f: () => void) => node.onInput(name === "onFocus" ? "focus" : "blur", f));
+      return;
+    case "onKey":
+      setHandler(node, name, value, (f: (e: KeyEvent) => void) => node.onKey(f));
       return;
     case "onHover":
       setHandler(node, name, value, (f: (hovered: boolean) => void) => node.onHover(f));

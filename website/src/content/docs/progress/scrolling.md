@@ -31,7 +31,9 @@ The window self-test sends five wheel turns to a scroll view while the Worker sp
 
 **Flexbox, as in CSS:** a scroll view in a flex column needs `minHeight: 0` on it and on its ancestors up to the one with a fixed size; otherwise they grow to fit the content and there's nothing to scroll.
 
-**Not yet:** keyboard scrolling (PageUp/PageDown when a view has the focus; views can't take the focus yet), rubber-banding and smooth (animated) `scrollTo`.
+**Keyboard scrolling** ([#17](https://github.com/dunkbing/mantou/issues/17)): a focused `<Scroll focusable>` scrolls with the arrows (40 px), Page Up and Down and Space (90% of the view), and Home and End. A focused view inside one pages it, and leaves the arrows to the app's own item navigation. The core does it like the wheel, with no JS, and a key that can't scroll any further goes on to the app.
+
+**Not yet:** rubber-banding and smooth (animated) `scrollTo`.
 
 ## Virtualized lists
 
@@ -57,6 +59,16 @@ Only the rows in view, and `overscan` more on each side, exist ([#19](https://gi
 ## Focus scopes
 
 `<View focusScope>`, for dialogs: while it's on screen, Tab and Shift+Tab stay among the inputs inside the topmost scope, wherever the focus is. When it leaves the screen (released, removed or hidden), the focus goes back to the input that had it before it opened, unless the user has put it somewhere else since.
+
+## Focusable views
+
+`<View focusable>` takes the keyboard focus ([#17](https://github.com/dunkbing/mantou/issues/17)), through the `FOCUSABLE` op (flags, and an order like `tabIndex`). Tab goes through inputs and focusable views in tree order, inside the topmost trapping focus scope. Nodes with an order come first, and `tabIndex={-1}` views are passed by. With nothing focused, Tab now goes to the first one (before, it went to the app). A press focuses a view. Enter and Space press a focused view that listens for presses: the core sends `PRESS` at its centre. `FOCUS` and `BLUR` events, `node.focus()` and focus scopes' focus restoring all work for views too.
+
+The ring: the core draws it around the focused view when the focus came from the keyboard, as `:focus-visible` does. That means Tab, or `FOCUS` after the user last used a key, but not after a press. It's 2 px wide, `focusRingOffset` (default 2 px) outside the border box, rounded to match, in `focusRingColor` (default `#3b82f6`; transparent for none). Inputs don't draw one; they have their caret.
+
+Keys: JS routes key events to the focused node and up through its ancestors (`onKey` on views), then to the window's handlers. JS knows the focused node from `FOCUS` and `BLUR`, so the event format didn't change.
+
+Tests: `tests/focus.rs` (Tab order, orders, skipped views and scopes; Tab with nothing to reach; presses focus without a ring, Tab shows one, its style; Enter and Space; every scrolling key; a view inside a scroll view; `FOCUS` on views), `tests/focus.test.tsx` (buttons by keyboard, a list you tab into and page through with no commits, key bubbling and `stopPropagation`, and the ring in reference images at 1× and 2×), `runtime/focus.test.tsx` (op counts).
 
 ## Password inputs
 

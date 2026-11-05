@@ -38,6 +38,8 @@ onKey((e) => {
 
 `e.key` is a character (`"j"`) or a name (`"Enter"`, `"Escape"`, `"ArrowDown"`).
 
+`onKey` on a view hears keys while it, or something inside it, has the focus. Keys go to the focused node first, then bubble up through its ancestors to the window's `onKey` handlers; `e.stopPropagation()` stops them. Keys the core uses never come: typing in an input, Tab, Enter and Space on a focused view, and keys a focused scroll view scrolls with.
+
 ## Scrolling and layout
 
 - `onWheel` hears the wheel; `onScroll` the offset after the core scrolled; `onLayout` the box after layout.
@@ -46,7 +48,18 @@ onKey((e) => {
 
 ## Focus
 
-Inputs take focus with a click or Tab. `<View focusScope>` keeps Tab inside a dialog, and gives focus back when it closes.
+Inputs take focus with a click or Tab. A view does too with `focusable`:
+
+```tsx
+<View focusable onPress={save} onFocus={…} onBlur={…} style={{ focusRingColor: "#16a34a" }}>…</View>
+```
+
+- Tab and Shift+Tab move through inputs and focusable views in tree order. With nothing focused, Tab goes to the first. `tabIndex={-1}` leaves a view out of Tab (a press or `node.focus()` still focuses it); `tabIndex={1}`, `2`… go first, in that order.
+- A press focuses it. Enter and Space press a focused view that has `onPress`, so keyboard users can use your buttons.
+- The core draws a ring around a focused view when the focus came from the keyboard (Tab, or `focus()` after a key), not after a press, like CSS's `:focus-visible`. Style it with `focusRingColor` (transparent for none) and `focusRingOffset` (px outside the border box; default 2).
+- `<Scroll focusable>` scrolls with the keys once focused: the arrows, Page Up and Page Down, Space and Shift+Space, Home and End. A focused view inside a scroll view pages it (Page Up and Down, Home, End) and leaves the arrows to the app. The core scrolls it, like the wheel.
+
+`<View focusScope>` keeps Tab inside a dialog, and gives focus back when it closes.
 
 ## Drag and drop
 

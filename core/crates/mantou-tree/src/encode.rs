@@ -175,6 +175,9 @@ impl Ops {
     pub fn window_limits(&mut self, min: [f32; 2], max: [f32; 2], flags: u32) -> &mut Self {
         self.op(op::WINDOW_LIMITS, &[min[0].to_bits(), min[1].to_bits(), max[0].to_bits(), max[1].to_bits(), flags])
     }
+    pub fn focusable(&mut self, id: u32, flags: u32, order: u32) -> &mut Self {
+        self.op(op::FOCUSABLE, &[id, flags, order])
+    }
     pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
         self.op(op::FOCUS_SCOPE, &[id, flags])
     }

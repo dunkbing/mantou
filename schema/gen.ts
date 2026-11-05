@@ -6,7 +6,7 @@
 //   bun run gen            write them
 //   bun run gen --check    exit 1 if any is stale (CI)
 import { join } from "node:path";
-import { accessFlags, accessRoles, events, eventMask, easings, animateFlags, windowFlags, windowStateFlags, focusScopeFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
+import { accessFlags, accessRoles, events, eventMask, easings, animateFlags, windowFlags, windowStateFlags, focusScopeFlags, focusableFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
 
 const root = join(import.meta.dir, "..");
 const check = Bun.argv.includes("--check");
@@ -28,6 +28,7 @@ function ts(): string {
   L.push(`export const EventMask = ${JSON.stringify(eventMask)} as const;`);
   L.push(`export const InputFlag = ${JSON.stringify(inputFlags)} as const;`);
   L.push(`export const FocusScopeFlag = ${JSON.stringify(focusScopeFlags)} as const;`);
+  L.push(`export const FocusableFlag = ${JSON.stringify(focusableFlags)} as const;`);
   L.push(`export const AccessRole = ${JSON.stringify(accessRoles)} as const;`);
   L.push(`export const AccessFlag = ${JSON.stringify(accessFlags)} as const;`);
   L.push(`export const WindowFlag = ${JSON.stringify(windowFlags)} as const;`);
@@ -96,6 +97,8 @@ function rs(): string {
   for (const [k, v] of Object.entries(accessFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod focus_scope_flag {");
   for (const [k, v] of Object.entries(focusScopeFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod focusable_flag {");
+  for (const [k, v] of Object.entries(focusableFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod input_flag {");
   for (const [k, v] of Object.entries(inputFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod key_modifier {");

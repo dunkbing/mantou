@@ -258,17 +258,16 @@ impl Tree {
         self.nodes.get(&id)?.input.as_ref().map(|i| i.editor.borrow().text())
     }
 
-    /// Moves the focus, queueing BLUR then FOCUS. Ids that aren't inputs blur.
+    /// Moves the focus, queueing BLUR then FOCUS. Ids that can't take the focus blur.
     pub(super) fn set_focus(&mut self, id: Option<u32>) {
-        let id = id.filter(|id| self.nodes.get(id).is_some_and(|n| n.input.is_some()));
+        let id = id.filter(|id| self.nodes.get(id).is_some_and(|n| self.can_focus(n)));
         if id == self.focus {
             return;
         }
         self.scene_dirty = true;
         if let Some(old) = self.focus.take() {
-            if let (Some(n), Some(text)) = (self.nodes.get(&old), self.text.as_mut()) {
-                let mut ed = n.input.as_ref().expect("an input").editor.borrow_mut();
-                ed.set_compose(text, "", None);
+            if let (Some(inp), Some(text)) = (self.nodes.get(&old).and_then(|n| n.input.as_ref()), self.text.as_mut()) {
+                inp.editor.borrow_mut().set_compose(text, "", None);
             }
             self.events.push(TreeEvent::Blur(old));
         }
@@ -320,12 +319,17 @@ impl Tree {
         if self.thumb_down(x, y) {
             return true; // dragging a scrollbar: the focus stays where it is
         }
-        let target = self.hit(x, y).filter(|id| self.nodes[id].input.is_some());
+        self.keyboard_mode = false;
+        let had_ring = self.focus_visible;
+        self.focus_visible = false;
+        let focus = self.hit(x, y).and_then(|id| self.focus_target(id));
+        let target = focus.filter(|id| self.nodes[id].input.is_some());
         let Some(id) = target else {
+            // A focusable view takes the focus (no ring: it came from the pointer); elsewhere blurs.
             self.drag = None;
-            let had = self.focus.is_some();
-            self.set_focus(None);
-            return self.text_select_down(x, y, clicks, extend) || had;
+            let changed = self.focus != focus || had_ring;
+            self.set_focus(focus);
+            return self.text_select_down(x, y, clicks, extend) || changed;
         };
         self.tsel = None;
         let Some((ox, oy, k)) = self.origin_of(id) else { return false };
@@ -377,15 +381,23 @@ impl Tree {
         self.boxes.iter().any(|b| b.id == id)
     }
 
-    /// The inputs Tab moves through, in tree order (laid out and visible):
-    /// those inside the topmost trapping focus scope on screen, if there is one.
-    fn tab_order(&self) -> Vec<u32> {
+    /// What Tab moves through: inputs and focusable views (laid out and
+    /// visible) inside the topmost trapping focus scope on screen, if there is
+    /// one; those with an order first (1, 2…), then the rest in tree order.
+    pub(super) fn tab_order(&self) -> Vec<u32> {
         let trap = self.boxes.iter().rev().map(|b| b.id).find(|id| self.nodes[id].scope & focus_scope_flag::TRAP != 0);
-        self.boxes
+        let mut order: Vec<u32> = self
+            .boxes
             .iter()
-            .filter(|b| self.nodes[&b.id].input.is_some() && trap.is_none_or(|s| self.is_inside(b.id, s)))
+            .filter(|b| self.tabbable(&self.nodes[&b.id]) && trap.is_none_or(|s| self.is_inside(b.id, s)))
             .map(|b| b.id)
-            .collect()
+            .collect();
+        order.dedup();
+        order.sort_by_key(|id| match self.nodes[id].focusable.1 {
+            0 => u32::MAX,
+            n => n,
+        });
+        order
     }
 
     /// After a layout: scopes that appeared remember where the focus was;
@@ -397,7 +409,7 @@ impl Tree {
         self.scopes.retain(|(s, _)| on_screen.contains(s));
         for (_, restore) in gone.into_iter().rev() {
             let lost = self.focus.is_none_or(|f| !self.laid_out(f));
-            let target = restore.filter(|r| self.nodes.get(r).is_some_and(|n| n.input.is_some()) && self.laid_out(*r));
+            let target = restore.filter(|r| self.nodes.get(r).is_some_and(|n| self.can_focus(n)) && self.laid_out(*r));
             if lost && target.is_some() {
                 self.set_focus(target);
             }
@@ -415,7 +427,7 @@ impl Tree {
         }
     }
 
-    fn tab(&mut self, back: bool) {
+    pub(super) fn tab(&mut self, back: bool) {
         let order = self.tab_order();
         if order.is_empty() {
             return;
@@ -428,6 +440,8 @@ impl Tree {
             (Some(i), true) => (i + order.len() - 1) % order.len(),
         };
         self.set_focus(Some(order[next]));
+        self.focus_visible = true;
+        self.scene_dirty = true;
         self.with_focused(false, |ed, t| ed.navigate(t, |d| d.select_all()));
     }
 
@@ -435,7 +449,18 @@ impl Tree {
     /// types, if anything. Returns whether the input used the key; keys it
     /// doesn't use (Escape, shortcuts it doesn't know…) go on to the app.
     pub fn key(&mut self, key: u32, text: Option<&str>, mods: u32, clipboard: &mut dyn Clipboard) -> bool {
-        let Some(id) = self.focus else { return self.text_selection_key(key, mods, clipboard) };
+        self.keyboard_mode = true;
+        let Some(id) = self.focus else {
+            // Nothing focused: Tab starts at the first thing it can reach.
+            if key == k::TAB && !self.tab_order().is_empty() {
+                self.tab(mods & m::SHIFT != 0);
+                return true;
+            }
+            return self.text_selection_key(key, mods, clipboard);
+        };
+        if self.nodes.get(&id).is_some_and(|n| n.input.is_none()) {
+            return self.view_key(id, key, mods & m::SHIFT != 0);
+        }
         let Some(inp) = self.nodes.get(&id).and_then(|n| n.input.as_ref()) else { return false };
         let (multiline, composing) = {
             let ed = inp.editor.borrow();
