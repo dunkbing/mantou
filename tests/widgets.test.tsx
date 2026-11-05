@@ -2,7 +2,7 @@
 // one's pointer and keyboard behaviour, and the gallery as reference images.
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Button, Checkbox, Dialog, Input, Progress, RadioGroup, Select, Slider, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, dumpTree, mount, type JSX, type Node } from "mantou-ui";
+import { Button, Checkbox, Dialog, Input, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, dumpTree, mount, type JSX, type Node } from "mantou-ui";
 import { Gallery } from "../examples/gallery/Gallery";
 import { HeadlessCore } from "../runtime/headless";
 
@@ -263,4 +263,12 @@ test("Progress follows its value, clamped", () => {
   setP(7);
   h.step();
   expect(bar()).toContain("quad 0 0 200 8");
+});
+
+test("Spinner turns: its rotate animation runs in the core", () => {
+  const h = app(() => <View style={{ padding: 10 }}><Spinner size={40} color="#ff0000" /></View>);
+  const before = h.scene();
+  h.step(200);
+  expect(h.scene()).not.toBe(before);
+  expect(h.scene()).toContain("rotate");
 });

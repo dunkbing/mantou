@@ -1,12 +1,12 @@
 // Base components (dunkbing/mantou#22): Button, Checkbox, Toggle (a switch), RadioGroup,
-// Slider, Tabs, Dialog, Tooltip, Splitter, Select, Toast and Progress, built on the primitives. Each
+// Slider, Tabs, Dialog, Tooltip, Splitter, Select, Toast, Progress and Spinner, built on the primitives. Each
 // is accessible (a role, focus, the keyboard) and takes a `style`, either a
 // style or a function of the component's state (hovered, pressed, focused,
 // and its own: checked, selected…), laid over a plain default look. Keys follow
 // the platforms': Space and Enter press, arrows move in groups.
 import { Image, Show, Text, View, onKey, useWindowSize } from "./solid/components";
 import { For } from "./solid/components";
-import { createSignal, onCleanup } from "./solid/solid";
+import { createSignal, onCleanup, onMount } from "./solid/solid";
 import type { JSX, StyleProp } from "./jsx-runtime";
 import type { KeyEvent, PointerEvent } from "./ui";
 
@@ -673,6 +673,42 @@ export function Progress(props: ProgressProps): JSX.Element {
   return (
     <View role="status" label={props.label ?? `${Math.round(frac() * 100)}%`} style={[{ height: 8, minWidth: 120, borderRadius: 4, backgroundColor: MUTED, overflow: "hidden" }, props.style]}>
       <View style={{ height: "100%", width: `${frac() * 100}%`, backgroundColor: ACCENT }} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export interface SpinnerProps {
+  /** Diameter in px (default 20). */
+  size?: number;
+  color?: string;
+  label?: string;
+  style?: StyleProp;
+}
+
+/** A busy indicator: a ring of dots, fading behind the leading one, turning (the core runs the turn). */
+export function Spinner(props: SpinnerProps): JSX.Element {
+  const size = props.size ?? 20;
+  const dot = Math.max(2, Math.round(size / 5));
+  const radius = (size - dot) / 2;
+  const dots = Array.from({ length: 8 }, (_, i) => i);
+  return (
+    <View
+      role="status"
+      label={props.label ?? "Loading"}
+      ref={(n) => onMount(() => void n.animate("rotate", { from: 0, to: 360, duration: 900, easing: "linear", iterations: Infinity }))}
+      style={[{ width: size, height: size, flexShrink: 0 }, props.style]}
+    >
+      {dots.map((i) => {
+        const a = (i / 8) * 2 * Math.PI;
+        return (
+          <View
+            style={{ position: "absolute", width: dot, height: dot, borderRadius: dot / 2, backgroundColor: props.color ?? ACCENT, opacity: 1 - (i / 8) * 0.85,
+              left: size / 2 - dot / 2 + radius * Math.sin(a), top: size / 2 - dot / 2 - radius * Math.cos(a) }}
+          />
+        );
+      })}
     </View>
   );
 }

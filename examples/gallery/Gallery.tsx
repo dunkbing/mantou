@@ -1,5 +1,5 @@
 // The base components in one screen (dunkbing/mantou#22): bun run gallery.
-import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
+import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
@@ -60,6 +60,7 @@ export function Gallery() {
                 </Section>
                 <Section title="Progress">
                   <Progress value={volume() / 100} />
+                  <Spinner />
                 </Section>
                 <Section title="Tooltip">
                   <Tooltip text="Copies the link to the clipboard">
