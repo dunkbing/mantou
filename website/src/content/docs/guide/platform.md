@@ -71,6 +71,17 @@ run(App);
 - The copies talk over a local socket with a token kept in `paths.temp`.
 - Arguments only: macOS "Open with" and URL-scheme launches arrive as system events, not arguments, and aren't delivered yet ([#66](https://github.com/dunkbing/mantou/issues/66)).
 
+## Launch at login
+
+```tsx
+import { launchAtLogin } from "mantou-ui";
+
+await launchAtLogin.set(true);       // start this app when the user logs in
+const on = await launchAtLogin.get();
+```
+
+It writes a LaunchAgent (macOS), an autostart entry (Linux) or a `Run` registry value (Windows) that starts the command running now, so turn it on from the installed app, not from `bun run`.
+
 ## Where to keep files
 
 ```tsx
