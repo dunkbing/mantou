@@ -1,7 +1,7 @@
 // Platform services against the real core, headless: requests reach the core as
 // JSON, answers come back as events and resolve the promises (design §10).
 import { afterEach, expect, test } from "bun:test";
-import { mount, View, clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, openExternal, reveal, notify, setBadge, createTray } from "mantou-ui";
+import { mount, View, clipboard, openFile, saveFile, message, dialogsAvailable, showMenu, setMenu, onMenu, openExternal, reveal, notify, setBadge, createTray } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -43,6 +43,34 @@ test("answers are used in order, one per request", async () => {
   expect(await m).toBe(1);
   expect(await c).toBe("copy");
   expect(h.lastService()).toEqual({ kind: "showMenu", items: [{ id: "copy", label: "Copy" }], x: 10, y: 20 });
+});
+
+test("a dialog that can't be shown rejects with why; a cancel stays null (#28)", async () => {
+  const h = app();
+  h.answer({ unavailable: "no file dialog can be shown: install xdg-desktop-portal with a backend (gtk, gnome or kde), or zenity" });
+  const a = openFile();
+  h.step();
+  await expect(a).rejects.toThrow("mantou: no file dialog can be shown: install xdg-desktop-portal");
+  h.answer({ unavailable: "no message box can be shown: install zenity" });
+  const b = message({ message: "Remove the account?", buttons: ["Remove", "Cancel"] });
+  h.step();
+  await expect(b).rejects.toThrow("install zenity");
+  h.answer([]); // zenity's cancel
+  const c = openFile({ multiple: true });
+  h.step();
+  expect(await c).toBeNull();
+});
+
+test("dialogsAvailable answers what the core says; with no answer, both", async () => {
+  const h = app();
+  h.answer({ files: true, messages: false });
+  const a = dialogsAvailable();
+  h.step();
+  expect(await a).toEqual({ files: true, messages: false });
+  expect(h.lastService()).toEqual({ kind: "dialogs" });
+  const b = dialogsAvailable();
+  h.step();
+  expect(await b).toEqual({ files: true, messages: true });
 });
 
 test("a long answer (larger than the 64 KB event buffer) survives", async () => {

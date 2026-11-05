@@ -15,6 +15,12 @@ const path = await saveFile({ name: "notes.txt" });
 const button = await message({ title: "Delete?", message: "This can't be undone.", level: "warning", buttons: ["Delete", "Cancel"] }); // the index chosen
 ```
 
+Each answers `null` when the person cancels. When no dialog can be shown, it rejects instead, with an error that says what to install. That happens only on Linux: file dialogs need the desktop portal (with a gtk, gnome or kde backend) or `zenity`, and message boxes need `zenity`. To offer something else up front (a path field, a default folder), ask first:
+
+```tsx
+const { files, messages } = await dialogsAvailable(); // both true on macOS and Windows
+```
+
 ## Menus
 
 ```tsx

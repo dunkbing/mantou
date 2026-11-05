@@ -19,7 +19,12 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
             return inst.push_service_result(req, None);
         }
     };
+    let (files, messages) = crate::dialogs::available();
     let answer = match v["kind"].as_str() {
+        // A dialog that can't be shown answers why, not a cancel (dunkbing/mantou#28).
+        Some("openFile" | "saveFile") if !files => Some(json!({ "unavailable": crate::dialogs::missing("files") })),
+        Some("message") if !messages => Some(json!({ "unavailable": crate::dialogs::missing("messages") })),
+        Some("dialogs") => Some(json!({ "files": files, "messages": messages })),
         Some("openFile") => open_file(&v, window),
         Some("saveFile") => save_file(&v, window),
         Some("message") => message(&v, window),

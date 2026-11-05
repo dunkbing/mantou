@@ -76,20 +76,37 @@ export const clipboard = {
   writeText: async (text: string): Promise<void> => void (await ui().service<boolean>({ kind: "clipboardWrite", text })),
 };
 
+/** A dialog request: rejects when the core can't show one (Linux with no portal and no zenity), so a cancel stays null. */
+async function dialog<T>(request: { kind: string } & Record<string, unknown>): Promise<T | null> {
+  const a = await ui().service<T | { unavailable: string }>(request);
+  if (a && typeof a === "object" && !Array.isArray(a) && "unavailable" in a) throw new Error(`mantou: ${a.unavailable}`);
+  return a as T | null;
+}
+
 /** Choose files (or folders); the paths, or null when cancelled. */
 export async function openFile(options: OpenFileOptions = {}): Promise<string[] | null> {
-  const paths = await ui().service<string[]>({ kind: "openFile", ...options });
+  const paths = await dialog<string[]>({ kind: "openFile", ...options });
   return paths && paths.length ? paths : null; // some platforms' dialogs answer an empty list when cancelled
 }
 
 /** Choose where to save; the path, or null when cancelled. */
 export function saveFile(options: SaveFileOptions = {}): Promise<string | null> {
-  return ui().service<string>({ kind: "saveFile", ...options });
+  return dialog<string>({ kind: "saveFile", ...options });
 }
 
 /** Shows a message box; the index of the button chosen, or null when it was dismissed. */
 export function message(options: MessageOptions): Promise<number | null> {
-  return ui().service<number>({ kind: "message", ...options });
+  return dialog<number>({ kind: "message", ...options });
+}
+
+/**
+ * Which dialogs the system can show: always both on macOS and Windows. On Linux, file dialogs need the desktop
+ * portal (with a file chooser backend) or zenity, and message boxes need zenity. When one can't be shown, its
+ * function rejects instead of answering null. A headless instance answers what its test queued, else both.
+ */
+export async function dialogsAvailable(): Promise<{ files: boolean; messages: boolean }> {
+  const a = await ui().service<{ files: boolean; messages: boolean }>({ kind: "dialogs" });
+  return { files: a?.files !== false, messages: a?.messages !== false };
 }
 
 /** Shows a context menu at logical (x, y); the chosen item's id, or null when it was dismissed. */

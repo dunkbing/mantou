@@ -3,7 +3,7 @@ title: Menus and native dialogs
 description: "File dialogs, message boxes, the app menu and context menus as async functions, with test answers in headless instances."
 ---
 
-[#21](https://github.com/dunkbing/mantou/issues/21). Platform services are async functions from `mantou-ui`. Each sends a JSON request through `mt_service`; the core runs it on the main thread and answers with a `SERVICE_RESULT` event, which resolves the promise (`null` when the user cancels). Chosen app-menu items arrive as `MENU` events.
+[#21](https://github.com/dunkbing/mantou/issues/21). Platform services are async functions from `mantou-ui`. Each sends a JSON request through `mt_service`; the core runs it on the main thread and answers with a `SERVICE_RESULT` event, which resolves the promise (`null` when the user cancels; a rejection when no dialog can be shown, see below). Chosen app-menu items arrive as `MENU` events.
 
 ```tsx
 import { clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu } from "mantou-ui";
@@ -72,3 +72,13 @@ The first version used `muda`'s predefined Edit items (`copy:`, `paste:`…). No
 | Maximized keeps the normal box; minimized saves nothing; a resize saves a moment later | `tests/winstate.test.tsx` |
 | Real displays listed, one current; a window opened at (-20000, -20000) lands on a display | self-test, check 14 |
 | Move and resize, close, launch again: same place and size | by hand under Xvfb |
+
+## When no dialog can be shown
+
+[#28](https://github.com/dunkbing/mantou/issues/28). On Linux, rfd asks the desktop portal over D-Bus, then runs zenity, for file dialogs, and runs zenity for message boxes; with neither, it answers as if the person cancelled. The core checks first (`dialogs.rs`): zenity on `PATH`, or a session bus, the portal's D-Bus service and a portal backend whose interfaces include the file chooser (or Flatpak). When the check fails, the request answers `{ unavailable }` and the promise rejects; `dialogsAvailable()` asks the same check. Zenity's cancel (an empty list) answers `null`, like a cancel elsewhere.
+
+| What | Where it's tested |
+|---|---|
+| The check: nothing, zenity, a portal (from `DBUS_SESSION_BUS_ADDRESS` or `XDG_RUNTIME_DIR`), no bus, no service, no file chooser, `XDG_DATA_DIRS`, Flatpak | `dialogs.rs` unit tests (`cargo test --release -p mantou-ffi --lib`) |
+| A rejection names what to install; `[]` is `null`; `dialogsAvailable()` | `tests/platform.test.tsx` |
+| In a window under Xvfb: nothing installed rejects at once (it answered `null` after 15 ms before); a stand-in zenity that picks a file, and one that cancels | by hand |

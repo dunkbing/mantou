@@ -32,6 +32,7 @@ macro_rules! log {
 
 mod crash;
 mod instance;
+mod dialogs;
 mod platform;
 mod webview;
 mod window;
