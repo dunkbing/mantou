@@ -78,6 +78,7 @@ export function decodeOps(bytes: Uint8Array): DecodedOp[] {
         o = { op: name, id: w[a], runs };
         break;
       }
+      case "CANVAS": o = { op: name, id: w[a], commands: w.slice(a + 1, a + n) }; break;
       case "KEYFRAMES": o = { op: name, id: w[a], animation: w[a + 1], values: w.slice(a + 2, a + n) }; break;
       case "ANIMATE": o = { op: name, id: w[a], animation: w[a + 1], prop: StylePropByCode[w[a + 2]], from: w[a + 3], to: w[a + 4], duration: bitsf32(w[a + 5]), easing: w[a + 6], iterations: bitsf32(w[a + 7]), flags: w[a + 8] }; break;
       case "SELECT": o = { op: name, id: w[a], anchor: w[a + 1], focus: w[a + 2] }; break;

@@ -1,14 +1,31 @@
 // Mantou's components and Solid's control flow, typed for Mantou's JSX.
 import { For as SolidFor, Index as SolidIndex, Match as SolidMatch, Show as SolidShow, Switch as SolidSwitch } from "./solid";
-import type { ImageProps, InputProps, JSX, ListHandle, ListProps, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
+import type { CanvasProps, ImageProps, InputProps, JSX, ListHandle, ListProps, ScrollProps, TextProps, ViewProps } from "../jsx-runtime";
 import type { KeyEvent, Node, Ui, WindowSize } from "../ui";
+import { CanvasContext } from "../canvas";
 import { createElement, currentUi, insert, spread } from "./renderer";
-import { createEffect, createMemo, createRoot, createSignal, getOwner, onCleanup } from "./solid";
+import { createEffect, createMemo, createRenderEffect, createRoot, createSignal, getOwner, onCleanup } from "./solid";
 
 /** A box: flexbox layout, a background, press handling. */
 export function View(props: ViewProps): JSX.Element {
   const node = createElement("view") as Node;
   spread(node, props, false);
+  return node;
+}
+
+/**
+ * A drawing surface: `draw` gets a `CanvasContext` (rectangles, circles, lines, polylines) and runs again when a
+ * signal it reads changes, so a chart follows its data. Drawn by the core with no pixels in JS; it is a view, so it
+ * has a size, a background and pointer handlers like one.
+ */
+export function Canvas(props: CanvasProps): JSX.Element {
+  const node = createElement("view") as Node;
+  spread(node, { get style() { return [{ flexShrink: 0, width: props.width, height: props.height }, props.style]; } }, true);
+  createRenderEffect(() => {
+    const g = new CanvasContext();
+    props.draw(g);
+    node.canvas(g.words);
+  });
   return node;
 }
 

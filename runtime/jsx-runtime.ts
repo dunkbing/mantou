@@ -3,6 +3,7 @@
 // never through this module at run time.
 import type { AccessRoleName, DropEvent, KeyEvent, Node, PointerEvent, PressEvent, Rect, ScrollOffset, TextLeaf, Transitions, WheelEvent } from "./ui";
 import type { StyleProp } from "./solid/renderer";
+import type { CanvasContext } from "./canvas";
 
 export type { StyleProp } from "./solid/renderer";
 
@@ -87,6 +88,16 @@ export interface ViewProps extends AccessProps, PointerProps, FocusProps {
   onLayout?: (rect: Rect) => void;
   ref?: Node | ((node: Node) => void);
   children?: JSX.Element;
+}
+
+/** A drawing surface (see `Canvas`). */
+export interface CanvasProps {
+  /** Size in logical px (also settable in `style`). */
+  width?: number;
+  height?: number;
+  style?: StyleProp;
+  /** Draws the canvas. It runs again whenever a signal it reads changes. */
+  draw: (g: CanvasContext) => void;
 }
 
 /** A virtualized list (see `List`). */

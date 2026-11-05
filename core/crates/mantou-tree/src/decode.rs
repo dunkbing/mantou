@@ -50,6 +50,7 @@ pub enum Op {
     ImageData { id: u32, data: Vec<u8> },
     WindowSize { width: f32, height: f32 },
     Transition { id: u32, prop: Prop, duration: f32, easing: u32 },
+    Canvas { id: u32, commands: Vec<u32> },
     Keyframes { id: u32, animation: u32, values: Vec<u32> },
     Focusable { id: u32, flags: u32, order: u32 },
     /// A Text's runs: (UTF-8 byte length, span ids outermost first).
@@ -278,6 +279,12 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                     at += 2 + count;
                 }
                 Op::TextRuns { id: a[0], runs }
+            }
+            op::CANVAS => {
+                if n < 1 {
+                    return err(i, "CANVAS needs an id");
+                }
+                Op::Canvas { id: a[0], commands: a[1..].to_vec() }
             }
             op::KEYFRAMES => {
                 if n < 4 {

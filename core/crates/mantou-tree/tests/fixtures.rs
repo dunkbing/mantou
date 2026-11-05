@@ -54,6 +54,7 @@ fn op_json(o: &Op) -> J {
         Op::Select { id, anchor, focus } => json!({"op": "SELECT", "id": id, "anchor": anchor, "focus": focus}),
         Op::Focusable { id, flags, order } => json!({"op": "FOCUSABLE", "id": id, "flags": flags, "order": order}),
         Op::TextRuns { id, runs } => json!({"op": "TEXT_RUNS", "id": id, "runs": runs.iter().map(|(len, spans)| json!({"length": len, "spans": spans})).collect::<Vec<_>>()}),
+        Op::Canvas { id, commands } => json!({"op": "CANVAS", "id": id, "commands": commands}),
         Op::Keyframes { id, animation, values } => json!({"op": "KEYFRAMES", "id": id, "animation": animation, "values": values}),
         Op::Animate { id, animation, prop, from, to, duration, easing, iterations, flags } => json!({"op": "ANIMATE", "id": id, "animation": animation, "prop": prop.name(), "from": from, "to": to, "duration": *duration as f64, "easing": easing, "iterations": *iterations as f64, "flags": flags}),
         Op::WindowSize { width, height } => json!({"op": "WINDOW_SIZE", "width": *width as f64, "height": *height as f64}),

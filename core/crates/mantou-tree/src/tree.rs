@@ -75,10 +75,72 @@ pub struct Extra {
     pub widths: [f32; 4],
     /// The gradient's end colour and its angle in radians (CSS: 0 points up, clockwise), if it has one.
     pub gradient: Option<([f32; 4], f32)>,
+    /// Turned by this angle (radians, clockwise) about the quad's centre; only for plain filled shapes.
+    pub rotation: f32,
 }
 
 impl Extra {
-    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None };
+    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0 };
+}
+
+/// The quads of a CANVAS command list. Coordinates are logical px from `origin` (the content box's top left, in
+/// the window's logical px), multiplied by `k` (the node's transform scale), then by `s` (device px per logical px).
+/// Stops at a command it doesn't know or one that is cut short.
+fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn(u32) -> [f32; 4], clip: [f32; 4], out: &mut Vec<Quad>) {
+    use crate::protocol::canvas_cmd as cmd;
+    let dev = |x: f32, y: f32| ((origin.0 + x * k) * s, (origin.1 + y * k) * s);
+    let len = |v: f32| (v * k * s).max(0.0);
+    let rect_of = |x: f32, y: f32, w: f32, h: f32| {
+        let (x0, y0) = dev(x, y);
+        [x0, y0, x0 + len(w), y0 + len(h)]
+    };
+    let mut push = |rect: [f32; 4], color: [f32; 4], radius: f32, border: f32, border_color: [f32; 4], rotation: f32| {
+        if color[3] > 0.0 || (border > 0.0 && border_color[3] > 0.0) {
+            out.push(Quad { rect, color, uv: [0.0; 4], clip, radius, border, border_color, shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation } });
+        }
+    };
+    let clear = [0.0; 4];
+    let mut i = 0;
+    while i < words.len() {
+        let need = match words[i] {
+            cmd::FILL_RECT | cmd::CIRCLE => 6,
+            cmd::STROKE_RECT | cmd::LINE | cmd::ROUND_RECT => 7,
+            cmd::STROKE_CIRCLE => 6,
+            _ => return,
+        };
+        // FillRect: id x y w h colour (6); Circle: id cx cy r colour (5)
+        let need = if words[i] == cmd::CIRCLE { 5 } else { need };
+        if i + need > words.len() {
+            return;
+        }
+        let a = |n: usize| f32::from_bits(words[i + n]);
+        let col = |n: usize| rgba(words[i + n]);
+        match words[i] {
+            cmd::FILL_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(5), 0.0, 0.0, clear, 0.0),
+            cmd::STROKE_RECT => push(rect_of(a(1), a(2), a(3), a(4)), clear, 0.0, len(a(5)), col(6), 0.0),
+            cmd::ROUND_RECT => push(rect_of(a(1), a(2), a(3), a(4)), col(6), len(a(5)), 0.0, clear, 0.0),
+            cmd::CIRCLE => {
+                let r = a(3).max(0.0);
+                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), col(4), len(r), 0.0, clear, 0.0)
+            }
+            cmd::STROKE_CIRCLE => {
+                let r = a(3).max(0.0);
+                push(rect_of(a(1) - r, a(2) - r, 2.0 * r, 2.0 * r), clear, len(r), len(a(4)), col(5), 0.0)
+            }
+            _ => {
+                // A line: a thin rectangle along it, turned to its direction, about its middle.
+                let ((x0, y0), (x1, y1)) = (dev(a(1), a(2)), dev(a(3), a(4)));
+                let (dx, dy) = (x1 - x0, y1 - y0);
+                let l = dx.hypot(dy);
+                if l > 0.0 {
+                    let w = len(a(5));
+                    let (mx, my) = ((x0 + x1) * 0.5, (y0 + y1) * 0.5);
+                    push([mx - l / 2.0, my - w / 2.0, mx + l / 2.0, my + w / 2.0], col(6), 0.0, 0.0, clear, dy.atan2(dx));
+                }
+            }
+        }
+        i += need;
+    }
 }
 
 /// One quad, in device pixels: a filled rectangle, or a glyph from the atlas.
@@ -168,6 +230,9 @@ impl Scene {
             }
             if q.extra.widths.iter().any(|w| *w >= 0.0) {
                 out.push_str(&format!(" widths {:?}", q.extra.widths));
+            }
+            if q.extra.rotation != 0.0 {
+                out.push_str(&format!(" rotate {}", q.extra.rotation.to_degrees().round()));
             }
             if let Some((end, angle)) = q.extra.gradient {
                 out.push_str(&format!(" gradient {} {}", hex(end), angle.to_degrees().round()));
@@ -266,6 +331,8 @@ struct Node {
     scope: u32,
     /// What ACCESS told assistive technology (role, flags, label).
     access: Option<access::Access>,
+    /// What CANVAS drew over the background (commands as words).
+    canvas: Vec<u32>,
     /// A scroll view's offset and limits (overflow: "scroll").
     scroll: Option<ScrollState>,
     /// An Image node's source.
@@ -523,6 +590,7 @@ impl Tree {
                     reported: None,
                     scope: 0,
                     access: None,
+                    canvas: Vec::new(),
                     scroll: None,
                     image: (kind == p::node_kind::IMAGE).then(Box::default),
                     drawn: RefCell::new(None),
@@ -725,6 +793,10 @@ impl Tree {
                 }
                 self.text.get_or_insert_with(TextEngine::new).set_family(family, &names);
                 self.fonts_changed();
+            }
+            Op::Canvas { id, commands } => {
+                self.node(id)?.canvas = commands;
+                self.scene_dirty = true;
             }
             Op::Access { id, role, flags, label } => {
                 self.node(id)?.access = (role != 0 || flags != 0 || !label.is_empty()).then_some(access::Access { role, flags, label });
@@ -1213,7 +1285,7 @@ impl Tree {
             let own_sides = widths.iter().any(|w| *w >= 0.0);
             let gradient_end = rgba(v.gradient, alpha);
             let gradient = (gradient_end[3] > 0.0).then(|| (gradient_end, (v.gradient_angle + 180.0).to_radians()));
-            let extra = Extra { radii, widths, gradient };
+            let extra = Extra { radii, widths, gradient, rotation: 0.0 };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
             }
@@ -1226,6 +1298,13 @@ impl Tree {
                 if ring[3] > 0.0 && overlaps(rect, clip) {
                     let radius = ((v.radius * k + off + w) * s).max(0.0);
                     quads.push(Quad { rect, color: [0.0; 4], uv: [0.0; 4], clip, radius, border: (w * s).round().max(1.0), border_color: ring, shadow: None, image: None, extra: Extra::NONE });
+                }
+            }
+            if !node.canvas.is_empty() {
+                let c = b.content;
+                let area = intersect(clip, [snap(c[0]), snap(c[1]), snap(c[2]), snap(c[3])]);
+                if area[2] > area[0] && area[3] > area[1] {
+                    canvas_quads(&node.canvas, (c[0], c[1]), k, s, |col| rgba(col, alpha), area, &mut quads);
                 }
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {

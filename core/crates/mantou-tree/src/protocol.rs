@@ -65,6 +65,8 @@ pub mod op {
     pub const SELECT: u32 = 29;
     /// Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen.
     pub const FOCUS_SCOPE: u32 = 18;
+    /// What a view draws over its background: a list of drawing commands as words (CanvasCmd, then its operands: numbers as f32 bits in the view's logical px from its content box's top left, colours as RGBA8), replacing the last list. Empty = nothing.
+    pub const CANVAS: u32 = 35;
     /// Steps for the running ANIMATE `animation` on the node: two or more values (f32 bits, or colours as RGBA8) spaced evenly over one iteration; its easing applies to each step. They replace the animation's from and to.
     pub const KEYFRAMES: u32 = 32;
     /// The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered.
@@ -107,6 +109,7 @@ pub fn op_name(code: u32) -> &'static str {
         28 => "ANIMATE",
         29 => "SELECT",
         18 => "FOCUS_SCOPE",
+        35 => "CANVAS",
         32 => "KEYFRAMES",
         31 => "INPUT_ALLOW",
         33 => "TEXT_RUNS",
@@ -164,6 +167,15 @@ pub mod window_flag {
     pub const MAXIMIZED: u32 = 16;
     pub const HAS_POSITION: u32 = 32;
     pub const TITLE_OVERLAY: u32 = 64;
+}
+
+pub mod canvas_cmd {
+    pub const FILL_RECT: u32 = 1;
+    pub const STROKE_RECT: u32 = 2;
+    pub const LINE: u32 = 3;
+    pub const CIRCLE: u32 = 4;
+    pub const STROKE_CIRCLE: u32 = 5;
+    pub const ROUND_RECT: u32 = 6;
 }
 
 pub mod window_state_flag {

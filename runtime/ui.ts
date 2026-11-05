@@ -444,6 +444,17 @@ export class Node {
     return this;
   }
 
+  /**
+   * Replaces what this view draws over its background (see `CanvasContext`). Sent at the end of the turn with
+   * the rest, as one op.
+   */
+  canvas(words: number[]): this {
+    this.alive();
+    this.ui.enc.canvas(this.id, words);
+    this.ui.schedule();
+    return this;
+  }
+
   /** Gives the Input the keyboard focus (FOCUS and BLUR events follow). */
   /** Gives this Input, or a focusable view, the keyboard focus. */
   focus(): this {

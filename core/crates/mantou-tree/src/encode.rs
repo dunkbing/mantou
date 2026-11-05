@@ -158,6 +158,11 @@ impl Ops {
         }
         self.op(op::TEXT_RUNS, &w)
     }
+    pub fn canvas(&mut self, id: u32, commands: &[u32]) -> &mut Self {
+        let mut w = vec![id];
+        w.extend_from_slice(commands);
+        self.op(op::CANVAS, &w)
+    }
     pub fn keyframes(&mut self, id: u32, animation: u32, values: &[u32]) -> &mut Self {
         let mut w = vec![id, animation];
         w.extend_from_slice(values);

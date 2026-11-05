@@ -92,9 +92,17 @@ fn erf(x: f32) -> f32 {
 
 @fragment
 fn fs(in: VsOut) -> @location(0) vec4<f32> {
-    let p = in.position.xy;
+    var p = in.position.xy;
     if (p.x < in.clip.x || p.y < in.clip.y || p.x >= in.clip.z || p.y >= in.clip.w) {
         discard;
+    }
+    if (in.grad.z != 0.0) {
+        // A turned rectangle: look at the pixel in the rectangle's own frame.
+        let c = (in.rect_px.xy + in.rect_px.zw) * 0.5;
+        let d = p - c;
+        let sn = sin(in.grad.z);
+        let cs = cos(in.grad.z);
+        p = c + vec2<f32>(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
     }
     if (in.glyph == 1u) {
         let a = in.color.a * textureLoad(atlas, vec2<i32>(floor(in.uv)), 0).r;
@@ -141,7 +149,7 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     let own = in.radii.x != in.radii.y || in.radii.y != in.radii.z || in.radii.z != in.radii.w
         || in.widths.x != in.widths.y || in.widths.y != in.widths.z || in.widths.z != in.widths.w;
     let widest = max(max(in.widths.x, in.widths.y), max(in.widths.z, in.widths.w));
-    if (!own && radius <= 0.0 && border <= 0.0) {
+    if (!own && radius <= 0.0 && border <= 0.0 && in.grad.z == 0.0) {
         return vec4<f32>(color.rgb * color.a, color.a);
     }
     let d = rounded_box4(p, in.rect_px.xy, in.rect_px.zw, in.radii);

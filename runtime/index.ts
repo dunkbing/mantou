@@ -1,5 +1,5 @@
 // mantou-ui: what apps import.
-export { View, Text, Input, Image, Scroll, List, useWindowSize, For, Index, Show, Switch, Match, useUi, onKey } from "./solid/components";
+export { View, Text, Input, Image, Canvas, Scroll, List, useWindowSize, For, Index, Show, Switch, Match, useUi, onKey } from "./solid/components";
 export { mount } from "./solid/mount";
 export { Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter, type WidgetState, type WidgetStyle, type ButtonProps, type CheckboxProps, type ToggleProps, type RadioGroupProps, type RadioOption, type SliderProps, type TabsProps, type DialogProps, type TooltipProps, type SplitterProps } from "./widgets";
 export {
@@ -22,3 +22,4 @@ export {
   onMount,
 } from "./solid/solid";
 export { dumpTree } from "./debug";
+export { CanvasContext } from "./canvas";

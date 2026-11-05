@@ -209,7 +209,14 @@ impl Renderer {
         for q in &scene.quads {
             // A shadow is drawn as far as its blur reaches (three sigmas), past its shape.
             let grow = q.shadow.map_or(0.0, |sigma| (3.0 * sigma).ceil() + 1.0);
-            let [x0, y0, x1, y1] = [q.rect[0] - grow, q.rect[1] - grow, q.rect[2] + grow, q.rect[3] + grow];
+            let [mut x0, mut y0, mut x1, mut y1] = [q.rect[0] - grow, q.rect[1] - grow, q.rect[2] + grow, q.rect[3] + grow];
+            if q.extra.rotation != 0.0 {
+                // The corners of the turned rectangle: the quad covers their bounding box, and the shader turns back.
+                let (cx, cy, hx, hy) = ((q.rect[0] + q.rect[2]) / 2.0, (q.rect[1] + q.rect[3]) / 2.0, (q.rect[2] - q.rect[0]) / 2.0, (q.rect[3] - q.rect[1]) / 2.0);
+                let (sn, cs) = q.extra.rotation.sin_cos();
+                let (ex, ey) = (hx * cs.abs() + hy * sn.abs() + 1.0, hx * sn.abs() + hy * cs.abs() + 1.0);
+                (x0, y0, x1, y1) = (cx - ex, cy - ey, cx + ex, cy + ey);
+            }
             let c = self.color(q.color);
             self.scratch.extend_from_slice(&[x0 / w * 2.0 - 1.0, 1.0 - y0 / h * 2.0, x1 / w * 2.0 - 1.0, 1.0 - y1 / h * 2.0]);
             self.scratch.extend_from_slice(&c);
@@ -232,7 +239,7 @@ impl Renderer {
             self.scratch.extend_from_slice(&widths);
             let (end, angle, on) = q.extra.gradient.map_or(([0.0; 4], 0.0, 0.0), |(c, a)| (self.color(c), a, 1.0));
             self.scratch.extend_from_slice(&end);
-            self.scratch.extend_from_slice(&[angle, on, 0.0, 0.0]);
+            self.scratch.extend_from_slice(&[angle, on, q.extra.rotation, 0.0]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {

@@ -6,7 +6,7 @@
 //   bun run gen            write them
 //   bun run gen --check    exit 1 if any is stale (CI)
 import { join } from "node:path";
-import { accessFlags, accessRoles, events, eventMask, easings, animateFlags, windowFlags, windowStateFlags, focusScopeFlags, focusableFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
+import { accessFlags, accessRoles, events, eventMask, easings, animateFlags, windowFlags, windowStateFlags, canvasCmds, focusScopeFlags, focusableFlags, inputFlags, scrollBlocks, scrollFlags, keyModifiers, namedKeys, nodeKinds, ops, PROTOCOL_VERSION, styleProps, units, type ValueType } from "./protocol";
 
 const root = join(import.meta.dir, "..");
 const check = Bun.argv.includes("--check");
@@ -33,6 +33,7 @@ function ts(): string {
   L.push(`export const AccessFlag = ${JSON.stringify(accessFlags)} as const;`);
   L.push(`export const WindowFlag = ${JSON.stringify(windowFlags)} as const;`);
   L.push(`export const WindowStateFlag = ${JSON.stringify(windowStateFlags)} as const;`);
+  L.push(`export const CanvasCmd = ${JSON.stringify(canvasCmds)} as const;`);
   L.push(`export const Easing = ${JSON.stringify(easings)} as const;`);
   L.push(`export const AnimateFlag = ${JSON.stringify(animateFlags)} as const;`);
   L.push(`export const ScrollFlag = ${JSON.stringify(scrollFlags)} as const;`);
@@ -89,6 +90,8 @@ function rs(): string {
   for (const [k, v] of Object.entries(animateFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod window_flag {");
   for (const [k, v] of Object.entries(windowFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
+  L.push("}", "", "pub mod canvas_cmd {");
+  for (const [k, v] of Object.entries(canvasCmds)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod window_state_flag {");
   for (const [k, v] of Object.entries(windowStateFlags)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod access_role {");

@@ -50,6 +50,7 @@ export const ops: OpDef[] = [
   { name: "ANIMATE", code: 28, operands: [["id", "id"], ["animation", "u32"], ["prop", "u32"], ["from", "u32"], ["to", "u32"], ["duration", "f32"], ["easing", "u32"], ["iterations", "f32"], ["flags", "u32"]], doc: "Animate the node's `prop` from `from` to `to` (an f32's bits, or a colour), `iterations` times (Infinity = forever; AnimateFlag.Alternate goes back and forth), then back to its style. ANIMATION_END(animation) follows." },
   { name: "SELECT", code: 29, operands: [["id", "id"], ["anchor", "u32"], ["focus", "u32"]], doc: "Select an Input's text from `anchor` to `focus` (the caret), in UTF-16 code units like the DOM's selectionStart (clamped; equal = a caret)." },
   { name: "FOCUS_SCOPE", code: 18, operands: [["id", "id"], ["flags", "u32"]], doc: "Make a view a focus scope (FocusScopeFlag bits; 0 = not one): Tab stays inside the topmost scope on screen, and the focus goes back where it was when the scope leaves the screen." },
+  { name: "CANVAS", code: 35, operands: [["id", "id"], ["commands", "u32"]], doc: "What a view draws over its background: a list of drawing commands as words (CanvasCmd, then its operands: numbers as f32 bits in the view's logical px from its content box's top left, colours as RGBA8), replacing the last list. Empty = nothing." },
   { name: "KEYFRAMES", code: 32, operands: [["id", "id"], ["animation", "u32"], ["values", "u32"]], doc: "Steps for the running ANIMATE `animation` on the node: two or more values (f32 bits, or colours as RGBA8) spaced evenly over one iteration; its easing applies to each step. They replace the animation's from and to." },
   { name: "INPUT_ALLOW", code: 31, operands: [["id", "id"], ["allow", "string"]], doc: "The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered." },
   { name: "TEXT_RUNS", code: 33, operands: [["id", "id"], ["runs", "u32"]], doc: "Splits a Text's text into runs set in spans (nested Texts): for each run, in order, its UTF-8 byte length, how many spans it's in, and their ids, outermost first. The lengths add up to the text's. No runs: all of it in the Text's own style. A span is a Text node that is never inserted; its own style's text properties apply to its runs, and presses and the cursor over them go to it." },
@@ -90,6 +91,9 @@ export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 
 /** LISTEN bits: which events a node has handlers for. */
 export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16, Drop: 32, Select: 64 } as const;
+
+/** CANVAS commands, each followed by its operands: FillRect x y w h colour; StrokeRect x y w h width colour; Line x0 y0 x1 y1 width colour; Circle cx cy r colour; StrokeCircle cx cy r width colour; RoundRect x y w h radius colour. */
+export const canvasCmds = { FillRect: 1, StrokeRect: 2, Line: 3, Circle: 4, StrokeCircle: 5, RoundRect: 6 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;
