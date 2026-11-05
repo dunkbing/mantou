@@ -208,7 +208,7 @@ impl Renderer {
         self.scratch.clear();
         for q in &scene.quads {
             // A shadow is drawn as far as its blur reaches (three sigmas), past its shape.
-            let grow = if q.extra.trap.is_some() { 1.0 } else { q.shadow.map_or(0.0, |sigma| (3.0 * sigma).ceil() + 1.0) };
+            let grow = if q.extra.trap.is_some() || q.extra.span.is_some() { 1.0 } else { q.shadow.map_or(0.0, |sigma| (3.0 * sigma).ceil() + 1.0) };
             let [mut x0, mut y0, mut x1, mut y1] = [q.rect[0] - grow, q.rect[1] - grow, q.rect[2] + grow, q.rect[3] + grow];
             if q.extra.rotation != 0.0 {
                 // The corners of the turned rectangle: the quad covers their bounding box, and the shader turns back.
@@ -227,6 +227,7 @@ impl Renderer {
             self.scratch.extend_from_slice(&bc);
             // params.w: 1 = a shadow (z = its sigma), 2 = an image (z = 1 to tint it).
             let params = match (q.shadow, q.image) {
+                _ if q.extra.span.is_some() => [0.0, 0.0, 0.0, 4.0],
                 _ if q.extra.trap.is_some() => [0.0, 0.0, 0.0, 3.0],
                 (Some(sigma), _) => [q.radius, q.border, sigma, 1.0],
                 (None, Some(img)) => [q.radius, 0.0, if img.tint { 1.0 } else { 0.0 }, 2.0],
@@ -235,6 +236,7 @@ impl Renderer {
             self.scratch.extend_from_slice(&params);
             // Corners and sides of their own (each falls back to the quad's radius and border), and the gradient.
             let radii = match q.extra.trap {
+                _ if q.extra.span.is_some() => q.extra.span.unwrap(), // a row carries its edges' x here
                 Some([yl, yr, yb]) => [yl, yr, yb, 0.0], // a strip carries its edges' heights here
                 None => q.extra.radii.map(|r| if r >= 0.0 { r } else { q.radius }),
             };

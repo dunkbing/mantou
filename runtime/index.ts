@@ -22,5 +22,5 @@ export {
   onMount,
 } from "./solid/solid";
 export { dumpTree } from "./debug";
-export { CanvasContext } from "./canvas";
+export { CanvasContext, Path } from "./canvas";
 export { paths } from "./paths";

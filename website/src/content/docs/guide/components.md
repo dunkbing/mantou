@@ -84,7 +84,14 @@ For what views can't draw: charts, sparklines, a waveform, a drawing pad. `draw`
 }} />
 ```
 
-Coordinates are logical px from the canvas's top left; shapes are cut to its box and come out in the order drawn. Available: `fillRect`, `strokeRect`, `roundRect`, `circle`, `strokeCircle`, `line`, `polyline`, and `area(points, baseline, colour)`, the fill between a polyline and a horizontal line (an area chart; points go left to right). Colours are hex (`"#2563eb40"` is see-through) or `[r, g, b, a]`. Curves, general filled shapes, gradients, images, text (put a `<Text>` over the canvas) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
+Coordinates are logical px from the canvas's top left; shapes are cut to its box and come out in the order drawn. Available: `fillRect`, `strokeRect`, `roundRect`, `circle`, `strokeCircle`, `line`, `polyline`, and `area(points, baseline, colour)`, the fill between a polyline and a horizontal line (an area chart; points go left to right). Colours are hex (`"#2563eb40"` is see-through) or `[r, g, b, a]`. Shapes with curves go through a `Path`: `moveTo`, `lineTo`, `quadTo`, `curveTo` (cubic), `arc(cx, cy, r, from, to)` (radians, clockwise from the right; `to < from` goes back) and `close()`. Then `g.fill(path, colour)` or `g.stroke(path, colour, width)`; `g.fillPath(points, colour)` fills a polygon directly (even-odd where it crosses itself).
+
+```tsx
+// A donut slice: out along the big circle, back along the small one.
+g.fill(new Path().arc(75, 75, 65, a, b).arc(75, 75, 38, b, a).close(), "#2563eb");
+```
+
+Gradients, images and text in the canvas (put a `<Text>` over it) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
 
 ## Scroll and List
 

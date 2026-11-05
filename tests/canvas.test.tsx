@@ -1,6 +1,6 @@
 // <Canvas> against the real core, headless: the scene lists its shapes, and a capture's pixels show them.
 import { afterEach, expect, test } from "bun:test";
-import { Canvas, View, createSignal, mount } from "mantou-ui";
+import { Canvas, Path, View, createSignal, mount } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -104,4 +104,31 @@ test("translucent strips don't double up where they meet", () => {
   h.step();
   expect(pixel(h, 39, 80)).toEqual(pixel(h, 41, 80));
   expect(pixel(h, 40, 80)).toEqual(pixel(h, 41, 80));
+});
+
+test("a filled polygon covers its inside, smooths its edges and keeps to its shape", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => <Canvas width={100} height={100} draw={(g) => g.fillPath([[10, 10], [90, 10], [50, 90]], "#ff0000")} />);
+  h.step();
+  expect(pixel(h, 50, 30)).toEqual([255, 0, 0, 255]); // inside
+  expect(pixel(h, 15, 80)).not.toEqual([255, 0, 0, 255]); // beside the point
+  expect(pixel(h, 50, 5)).not.toEqual([255, 0, 0, 255]); // above the top edge
+  const outside = pixel(h, 5, 30)[0];
+  const edge = pixel(h, 20, 30)[0]; // on the slanted left edge (x = 20.25 there): part covered
+  expect(edge).toBeGreaterThan(outside + 20);
+  expect(edge).toBeLessThan(250);
+});
+
+test("a path with a hole-free donut: arcs out and back, filled", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => (
+    <Canvas width={200} height={200} draw={(g) => g.fill(new Path().arc(100, 100, 80, 0, Math.PI * 1.5).arc(100, 100, 40, Math.PI * 1.5, 0).close(), "#0000ff")} />
+  ));
+  h.step();
+  expect(pixel(h, 100, 180 - 1)[2]).toBe(255); // the bottom of the ring (angle PI/2)
+  expect(pixel(h, 100, 100)).not.toEqual([0, 0, 255, 255]); // the hole
+  expect(pixel(h, 170, 70)).not.toEqual([0, 0, 255, 255]); // the missing quarter (up and right)
+  expect(pixel(h, 30, 100)[2]).toBe(255); // the left of the ring
 });

@@ -92,8 +92,8 @@ export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 /** LISTEN bits: which events a node has handlers for. */
 export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16, Drop: 32, Select: 64 } as const;
 
-/** CANVAS commands, each followed by its operands: FillRect x y w h colour; StrokeRect x y w h width colour; Line x0 y0 x1 y1 width colour; Circle cx cy r colour; StrokeCircle cx cy r width colour; RoundRect x y w h radius colour; Area baseline colour n then n points x y: the region between the polyline and the horizontal line at `baseline`. */
-export const canvasCmds = { FillRect: 1, StrokeRect: 2, Line: 3, Circle: 4, StrokeCircle: 5, RoundRect: 6, Area: 7 } as const;
+/** CANVAS commands, each followed by its operands: FillRect x y w h colour; StrokeRect x y w h width colour; Line x0 y0 x1 y1 width colour; Circle cx cy r colour; StrokeCircle cx cy r width colour; RoundRect x y w h radius colour; FillPoly colour n then n points x y: the polygon they make, filled even-odd; Area baseline colour n then n points x y: the region between the polyline and the horizontal line at `baseline`. */
+export const canvasCmds = { FillRect: 1, StrokeRect: 2, Line: 3, Circle: 4, StrokeCircle: 5, RoundRect: 6, Area: 7, FillPoly: 8 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;

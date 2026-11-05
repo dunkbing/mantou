@@ -137,6 +137,22 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     }
     let radius = in.params.x;
     let border = in.params.y;
+    if (in.params.w > 3.5) {
+        // One pixel row of a filled shape: four sub-rows, each with exact horizontal coverage between the edges
+        // (radii: left edge at the row's top and bottom, right edge at its top and bottom).
+        if (p.y < in.rect_px.y || p.y >= in.rect_px.w) {
+            discard; // its own row only: the quad is a pixel wider all round for the smoothing, not for painting rows
+        }
+        var cover = 0.0;
+        for (var k = 0; k < 4; k++) {
+            let t = (f32(k) + 0.5) / 4.0;
+            let xl = mix(in.radii.x, in.radii.y, t);
+            let xr = mix(in.radii.z, in.radii.w, t);
+            cover += clamp(min(xr, p.x + 0.5) - max(xl, p.x - 0.5), 0.0, 1.0);
+        }
+        let a = in.color.a * cover * 0.25;
+        return vec4<f32>(in.color.rgb * a, a);
+    }
     if (in.params.w > 2.5) {
         // A strip between a slanted top edge (heights radii.x at the left side, radii.y at the right) and the
         // horizontal line radii.z. Its sides are on whole pixels, so neighbours meet without a seam; only the
