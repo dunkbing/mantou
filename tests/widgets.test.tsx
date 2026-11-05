@@ -2,7 +2,7 @@
 // one's pointer and keyboard behaviour, and the gallery as reference images.
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Button, Checkbox, Dialog, Input, RadioGroup, Slider, Splitter, Tabs, Text, Toggle, Tooltip, View, createSignal, mount, type JSX, type Node } from "mantou-ui";
+import { Button, Checkbox, Dialog, Input, Progress, RadioGroup, Select, Slider, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, dumpTree, mount, type JSX, type Node } from "mantou-ui";
 import { Gallery } from "../examples/gallery/Gallery";
 import { HeadlessCore } from "../runtime/headless";
 
@@ -211,4 +211,56 @@ test("the gallery at 1× and 2×", () => {
     const h = app(() => <Gallery />, { width: 560, height: 420 }, scale);
     expect(h.capture()).toMatchImage(`gallery@${scale}x`);
   }
+});
+
+test("Select: opens, the arrows move, Enter chooses, Escape and an outside press close", () => {
+  let box!: Node;
+  const [v, setV] = createSignal<string | undefined>("b");
+  const h = app(() => (
+    <View style={{ padding: 10, gap: 8, alignItems: "start" }}>
+      <View ref={box}><Select value={v()} onChange={setV} options={[{ value: "a", label: "Alpha" }, { value: "b", label: "Beta" }, { value: "c", label: "Gamma", disabled: true }, { value: "d", label: "Delta" }]} /></View>
+    </View>
+  ));
+  const trigger = box.elements[0].elements[0];
+  const shown = () => dumpTree().includes("Gamma");
+  expect(shown()).toBe(false);
+  h.press(trigger);
+  expect(shown()).toBe(true);
+  h.key("ArrowUp"); // Beta -> Alpha
+  h.key("Enter");
+  expect(v()).toBe("a");
+  expect(shown()).toBe(false);
+  h.key("ArrowDown"); // opens on Alpha
+  h.key("ArrowDown"); // Beta
+  h.key("ArrowDown"); // skips the disabled Gamma
+  h.key("Enter");
+  expect(v()).toBe("d");
+  h.key("ArrowDown");
+  expect(shown()).toBe(true);
+  h.key("Escape");
+  expect(shown()).toBe(false);
+  h.press(trigger);
+  h.press([380, 280]); // outside: the backdrop
+  expect(shown()).toBe(false);
+  expect(v()).toBe("d");
+});
+
+test("Toast closes itself after its duration, or on a press", async () => {
+  const [on, setOn] = createSignal(true);
+  const h = app(() => <Toast open={on()} duration={20} onClose={() => setOn(false)}>Saved</Toast>);
+  expect(dumpTree().includes("Saved")).toBe(true);
+  await new Promise((r) => setTimeout(r, 60));
+  h.step();
+  expect(on()).toBe(false);
+  expect(dumpTree().includes("Saved")).toBe(false);
+});
+
+test("Progress follows its value, clamped", () => {
+  const [p, setP] = createSignal(0.5);
+  const h = app(() => <View style={{ width: 200 }}><Progress value={p()} /></View>);
+  const bar = () => h.scene().split("\n").filter((l) => l.startsWith("quad") && l.includes("#2563eb"))[0] ?? "";
+  expect(bar()).toContain("quad 0 0 100 8");
+  setP(7);
+  h.step();
+  expect(bar()).toContain("quad 0 0 200 8");
 });

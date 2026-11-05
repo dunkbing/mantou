@@ -1,5 +1,5 @@
 // The base components in one screen (dunkbing/mantou#22): bun run gallery.
-import { Button, Checkbox, Dialog, RadioGroup, Slider, Splitter, Tabs, Text, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
+import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
@@ -20,6 +20,8 @@ export function Gallery() {
   const [open, setOpen] = createSignal(false);
   const [pane, setPane] = createSignal(160);
   const [saved, setSaved] = createSignal(0);
+  const [lang, setLang] = createSignal<string | undefined>(undefined);
+  const [toast, setToast] = createSignal(false);
   return (
     <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 16, backgroundColor: "#ffffff" }}>
       <Text style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Components</Text>
@@ -53,6 +55,12 @@ export function Gallery() {
                   <Slider value={volume()} onChange={setVolume} label="Volume" />
                   <Text style={{ fontSize: 12, color: "#6b7280" }}>{`Volume ${volume()}`}</Text>
                 </Section>
+                <Section title="Select">
+                  <Select value={lang()} onChange={(v) => (setLang(v), setToast(true))} placeholder="Language" options={[{ value: "en", label: "English" }, { value: "vi", label: "Tiếng Việt" }, { value: "ja", label: "日本語" }]} />
+                </Section>
+                <Section title="Progress">
+                  <Progress value={volume() / 100} />
+                </Section>
                 <Section title="Tooltip">
                   <Tooltip text="Copies the link to the clipboard">
                     <Button variant="secondary">Hover me</Button>
@@ -70,6 +78,7 @@ export function Gallery() {
           )
         }
       </Tabs>
+      <Toast open={toast()} onClose={() => setToast(false)}>{`Language: ${lang()}`}</Toast>
       <Dialog open={open()} onClose={() => setOpen(false)} title="Discard the draft?">
         <Text style={{ color: "#4b5563" }}>Your changes will be lost.</Text>
         <View style={{ flexDirection: "row", gap: 8, justifyContent: "end" }}>

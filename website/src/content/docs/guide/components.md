@@ -109,7 +109,7 @@ Coordinates are logical px from the canvas's top left; shapes are cut to its box
 Built on the primitives above, accessible and keyboard-friendly, with a plain default look ([#22](https://github.com/dunkbing/mantou/issues/22)). `bun run gallery` shows them all.
 
 ```tsx
-import { Button, Checkbox, Dialog, RadioGroup, Slider, Splitter, Tabs, Toggle, Tooltip } from "mantou-ui";
+import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Splitter, Tabs, Toast, Toggle, Tooltip } from "mantou-ui";
 
 <Button onPress={save}>Save</Button>                       // variant: "primary" | "secondary" | "ghost"; disabled
 <Checkbox checked={news()} onChange={setNews}>Send me news</Checkbox>
@@ -119,6 +119,9 @@ import { Button, Checkbox, Dialog, RadioGroup, Slider, Splitter, Tabs, Toggle, T
 <Tabs tabs={[{ id: "inbox", label: "Inbox" }, { id: "sent", label: "Sent" }]} value={tab()} onChange={setTab}>{(id) => <Panel id={id} />}</Tabs>
 <Dialog open={open()} onClose={() => setOpen(false)} title="Discard the draft?">…</Dialog>
 <Tooltip text="Copies the link">…</Tooltip>
+<Select value={lang()} onChange={setLang} placeholder="Language" options={[{ value: "en", label: "English" }, { value: "vi", label: "Tiếng Việt" }]} />
+<Progress value={done() / total()} />                       // 0 to 1
+<Toast open={saved()} onClose={() => setSaved(false)}>Saved</Toast>  // closes itself after `duration` (4000 ms)
 <Splitter size={width()} onResize={setWidth} min={120} max={400}>{[<Sidebar />, <Main />]}</Splitter>
 ```
 

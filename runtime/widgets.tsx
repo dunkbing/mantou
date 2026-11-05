@@ -1,10 +1,10 @@
 // Base components (dunkbing/mantou#22): Button, Checkbox, Toggle (a switch), RadioGroup,
-// Slider, Tabs, Dialog, Tooltip and Splitter, built on the primitives. Each
+// Slider, Tabs, Dialog, Tooltip, Splitter, Select, Toast and Progress, built on the primitives. Each
 // is accessible (a role, focus, the keyboard) and takes a `style`, either a
 // style or a function of the component's state (hovered, pressed, focused,
 // and its own: checked, selected…), laid over a plain default look. Keys follow
 // the platforms': Space and Enter press, arrows move in groups.
-import { Image, Show, Text, View, onKey } from "./solid/components";
+import { Image, Show, Text, View, onKey, useWindowSize } from "./solid/components";
 import { For } from "./solid/components";
 import { createSignal, onCleanup } from "./solid/solid";
 import type { JSX, StyleProp } from "./jsx-runtime";
@@ -512,6 +512,167 @@ export function Splitter(props: SplitterProps): JSX.Element {
         style={{ [row() ? "width" : "height"]: 6, flexShrink: 0, cursor: row() ? "colResize" : "rowResize", backgroundColor: state().pressed || state().hovered ? "#bfdbfe" : MUTED, focusRingOffset: 0 }}
       />
       <View style={{ flexGrow: 1, flexShrink: 1, minWidth: 0, minHeight: 0, overflow: "hidden" }}>{props.children[1]}</View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export interface SelectOption<T> {
+  value: T;
+  label: string;
+  disabled?: boolean;
+}
+
+export interface SelectProps<T> {
+  value: T | undefined;
+  options: readonly SelectOption<T>[];
+  onChange?: (value: T) => void;
+  /** What it shows while no option is chosen. */
+  placeholder?: string;
+  disabled?: boolean;
+  label?: string;
+  style?: WidgetStyle;
+}
+
+/**
+ * A dropdown: a button showing the chosen option, and a list below it. Enter, Space and the arrows open it,
+ * the arrows move, Enter chooses, Escape or a press elsewhere closes. The state is the app's, like the other inputs.
+ */
+export function Select<T>(props: SelectProps<T>): JSX.Element {
+  const win = useWindowSize();
+  const { state, handlers } = useInteraction(() => props.disabled);
+  const [open, setOpen] = createSignal(false);
+  const [active, setActive] = createSignal(-1);
+  const chosen = () => props.options.findIndex((o) => o.value === props.value);
+  const show = () => {
+    if (props.disabled) return;
+    setActive(chosen());
+    setOpen(true);
+  };
+  const choose = (i: number) => {
+    const o = props.options[i];
+    if (o && !o.disabled) props.onChange?.(o.value);
+    setOpen(false);
+  };
+  const step = (by: number) => {
+    const n = props.options.length;
+    let i = active();
+    for (let k = 0; k < n; k++) {
+      i = (i + by + n) % n;
+      if (!props.options[i].disabled) return setActive(i);
+    }
+  };
+  const keys = (e: KeyEvent) => {
+    if (e.type !== "keyDown" || props.disabled) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (open()) step(e.key === "ArrowDown" ? 1 : -1);
+      else show();
+    } else if (e.key === "Escape" && open()) setOpen(false);
+    else return;
+    e.stopPropagation?.();
+  };
+  // Enter and Space press the focused trigger: that chooses the highlighted option while open.
+  const press = () => (open() ? choose(active()) : show());
+  return (
+    <View style={{ alignSelf: "start" }}>
+      <View
+        {...handlers}
+        role="button"
+        label={props.label}
+        disabled={props.disabled}
+        focusable={!props.disabled}
+        onKey={keys}
+        onPress={press}
+        style={[
+          { minWidth: 160, height: 32, paddingLeft: 10, paddingRight: 10, flexDirection: "row", alignItems: "center", justifyContent: "spaceBetween", gap: 8, borderRadius: 8, borderWidth: 1, borderColor: open() ? ACCENT : BORDER, backgroundColor: "#ffffff", opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer" },
+          resolve(props.style, state()),
+        ]}
+      >
+        <Text style={{ color: chosen() >= 0 ? "#111827" : "#9ca3af", whiteSpace: "nowrap" }}>{chosen() >= 0 ? props.options[chosen()].label : props.placeholder ?? ""}</Text>
+        <Text style={{ color: "#6b7280", fontSize: 10 }}>▾</Text>
+      </View>
+      <Show when={open()}>
+        <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} /> {/* fixed is placed by the window but sized by its parent */}
+        <View
+          role="menu"
+          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: MUTED, backgroundColor: "#ffffff", boxShadow: { y: 6, blur: 20, color: "#0003" } }}
+        >
+          <For each={props.options}>
+            {(o, i) => (
+              <View
+                role="menuItem"
+                selected={i() === chosen()}
+                disabled={o.disabled}
+                onHover={(h) => h && !o.disabled && setActive(i())}
+                onPress={() => choose(i())}
+                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? "#e0e7ff" : "transparent", opacity: o.disabled ? 0.4 : 1, cursor: o.disabled ? "notAllowed" : "pointer" }}
+              >
+                <Text style={{ color: "#111827", fontWeight: i() === chosen() ? 600 : 400, whiteSpace: "nowrap" }}>{o.label}</Text>
+              </View>
+            )}
+          </For>
+        </View>
+      </Show>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export interface ToastProps {
+  open: boolean;
+  /** After `duration`, and for a press on it. */
+  onClose?: () => void;
+  /** In ms before it closes itself; 0 keeps it (default 4000). */
+  duration?: number;
+  children?: JSX.Element;
+  style?: StyleProp;
+}
+
+/** A message at the bottom of the window that closes itself. Reopen it by setting `open` again. */
+export function Toast(props: ToastProps): JSX.Element {
+  return (
+    <Show when={props.open}>
+      <ToastBody {...props} />
+    </Show>
+  );
+}
+
+function ToastBody(props: ToastProps): JSX.Element {
+  const ms = props.duration ?? 4000;
+  if (ms > 0) {
+    const timer = setTimeout(() => props.onClose?.(), ms);
+    onCleanup(() => clearTimeout(timer));
+  }
+  return (
+    <View style={{ position: "fixed", left: 0, right: 0, bottom: 24, zIndex: 1100, alignItems: "center", pointerEvents: "none" }}>
+      <View
+        role="status"
+        onPress={() => props.onClose?.()}
+        style={[{ pointerEvents: "auto", maxWidth: "90%", paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: 8, backgroundColor: "#111827", boxShadow: { y: 4, blur: 16, color: "#0004" } }, props.style]}
+      >
+        {label(props.children, { color: "#ffffff" })}
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+export interface ProgressProps {
+  /** 0 to 1. */
+  value: number;
+  label?: string;
+  style?: StyleProp;
+}
+
+/** A progress bar. */
+export function Progress(props: ProgressProps): JSX.Element {
+  const frac = () => Math.max(0, Math.min(1, Number.isFinite(props.value) ? props.value : 0));
+  return (
+    <View role="status" label={props.label ?? `${Math.round(frac() * 100)}%`} style={[{ height: 8, minWidth: 120, borderRadius: 4, backgroundColor: MUTED, overflow: "hidden" }, props.style]}>
+      <View style={{ height: "100%", width: `${frac() * 100}%`, backgroundColor: ACCENT }} />
     </View>
   );
 }
