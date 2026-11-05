@@ -1,5 +1,5 @@
 // The base components in one screen (dunkbing/mantou#22): bun run gallery.
-import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
+import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Table, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, type JSX } from "mantou-ui";
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
@@ -22,6 +22,7 @@ export function Gallery() {
   const [saved, setSaved] = createSignal(0);
   const [lang, setLang] = createSignal<string | undefined>(undefined);
   const [toast, setToast] = createSignal(false);
+  const [city, setCity] = createSignal("");
   return (
     <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 16, backgroundColor: "#ffffff" }}>
       <Text style={{ fontSize: 20, fontWeight: 700, color: "#111827" }}>Components</Text>
@@ -58,6 +59,10 @@ export function Gallery() {
                 <Section title="Select">
                   <Select value={lang()} onChange={(v) => (setLang(v), setToast(true))} placeholder="Language" options={[{ value: "en", label: "English" }, { value: "vi", label: "Tiếng Việt" }, { value: "ja", label: "日本語" }]} />
                 </Section>
+                <Section title="Menu and Combobox">
+                  <Menu items={[{ id: "rename", label: "Rename" }, { id: "-", label: "", separator: true }, { id: "del", label: "Delete" }]}>Actions</Menu>
+                  <Combobox value={city()} onChange={setCity} placeholder="City" options={["Hanoi", "Ho Chi Minh City", "Hue", "Da Nang", "Tokyo", "Osaka"]} />
+                </Section>
                 <Section title="Progress">
                   <Progress value={volume() / 100} />
                   <Spinner />
@@ -70,12 +75,15 @@ export function Gallery() {
               </View>
             </View>
           ) : (
+            <View style={{ gap: 16, flexGrow: 1, minHeight: 0 }}>
+            <Table style={{ height: 130 }} columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }, { key: "size", header: "Size", width: 80, align: "end" }]} rows={Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `File ${i + 1}.txt`, size: `${(i * 37) % 900} KB` }))} sort={{ key: "id" }} onSort={() => {}} />
             <Splitter size={pane()} onResize={setPane} min={80} max={400} style={{ borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8 }}>
               {[
                 <View style={{ padding: 12, backgroundColor: "#f9fafb", flexGrow: 1 }}><Text style={{ color: "#374151" }}>Drag the bar →</Text></View>,
                 <View style={{ padding: 12, flexGrow: 1 }}><Text style={{ color: "#374151" }}>{`The left pane is ${Math.round(pane())} px wide.`}</Text></View>,
               ]}
             </Splitter>
+            </View>
           )
         }
       </Tabs>

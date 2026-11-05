@@ -109,7 +109,7 @@ Coordinates are logical px from the canvas's top left; shapes are cut to its box
 Built on the primitives above, accessible and keyboard-friendly, with a plain default look ([#22](https://github.com/dunkbing/mantou/issues/22)). `bun run gallery` shows them all.
 
 ```tsx
-import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Tabs, Toast, Toggle, Tooltip } from "mantou-ui";
+import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Table, Tabs, Toast, Toggle, Tooltip } from "mantou-ui";
 
 <Button onPress={save}>Save</Button>                       // variant: "primary" | "secondary" | "ghost"; disabled
 <Checkbox checked={news()} onChange={setNews}>Send me news</Checkbox>
@@ -120,6 +120,9 @@ import { Button, Checkbox, Dialog, Progress, RadioGroup, Select, Slider, Spinner
 <Dialog open={open()} onClose={() => setOpen(false)} title="Discard the draft?">…</Dialog>
 <Tooltip text="Copies the link">…</Tooltip>
 <Select value={lang()} onChange={setLang} placeholder="Language" options={[{ value: "en", label: "English" }, { value: "vi", label: "Tiếng Việt" }]} />
+<Menu items={[{ id: "rename", label: "Rename" }, { id: "-", label: "", separator: true }, { id: "del", label: "Delete" }]} onSelect={run}>Actions</Menu>  // a popover under its trigger
+<Combobox value={city()} onChange={setCity} options={cities} onSelect={go} placeholder="City" />   // suggestions narrow as you type
+<Table columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }]} rows={rows()} sort={sort()} onSort={toggleSort} onRowPress={open} />
 <Progress value={done() / total()} />                       // 0 to 1
 <Spinner size={20} />                                       // turns while it's on screen
 <Toast open={saved()} onClose={() => setSaved(false)}>Saved</Toast>  // closes itself after `duration` (4000 ms)

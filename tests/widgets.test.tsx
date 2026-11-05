@@ -2,7 +2,7 @@
 // one's pointer and keyboard behaviour, and the gallery as reference images.
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Button, Checkbox, Dialog, Input, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, dumpTree, mount, type JSX, type Node } from "mantou-ui";
+import { Button, Checkbox, Combobox, Dialog, Input, Menu, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Table, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, dumpTree, mount, type JSX, type Node } from "mantou-ui";
 import { Gallery } from "../examples/gallery/Gallery";
 import { HeadlessCore } from "../runtime/headless";
 
@@ -271,4 +271,81 @@ test("Spinner turns: its rotate animation runs in the core", () => {
   h.step(200);
   expect(h.scene()).not.toBe(before);
   expect(h.scene()).toContain("rotate");
+});
+
+test("Menu: opens under its trigger, the arrows skip separators and disabled items, Enter chooses", () => {
+  let box!: Node;
+  const picked: string[] = [];
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View ref={box}>
+        <Menu onSelect={(id) => picked.push(id)} items={[{ id: "a", label: "Rename" }, { id: "-", label: "", separator: true }, { id: "b", label: "Archive", disabled: true }, { id: "c", label: "Delete" }]}>Actions</Menu>
+      </View>
+    </View>
+  ));
+  const trigger = box.elements[0].elements[0];
+  const shown = () => dumpTree().includes("Delete");
+  expect(shown()).toBe(false);
+  h.press(trigger);
+  expect(shown()).toBe(true);
+  h.key("ArrowDown"); // Rename -> Delete (the separator and the disabled item are skipped)
+  h.key("Enter");
+  expect(picked).toEqual(["c"]);
+  expect(shown()).toBe(false);
+  h.press(trigger);
+  h.key("Escape");
+  expect(shown()).toBe(false);
+  h.press(trigger);
+  h.press([380, 280]);
+  expect(shown()).toBe(false);
+  expect(picked).toEqual(["c"]);
+});
+
+test("Table: headers sort, rows press, only the visible rows exist", () => {
+  const rows = Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `Item ${i}` }));
+  const sorted: string[] = [];
+  const pressed: number[] = [];
+  const h = app(() => (
+    <View style={{ width: 400, height: 200, padding: 10 }}>
+      <Table columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }]} rows={rows} sort={{ key: "id" }} onSort={(k) => sorted.push(k)} onRowPress={(r) => pressed.push(r.id)} />
+    </View>
+  ));
+  const tree = dumpTree();
+  expect(tree).toContain("Item 0");
+  expect(tree).not.toContain("Item 999");
+  expect(tree).toContain("▲");
+  h.press([100, 20]); // the Name header
+  expect(sorted).toEqual(["name"]);
+  h.press([100, 60]); // the first row
+  expect(pressed).toEqual([0]);
+});
+
+test("Combobox: typing narrows the suggestions, the arrows and Enter take one, Escape closes", () => {
+  let box!: Node;
+  const [text, setText] = createSignal("");
+  const taken: string[] = [];
+  const submitted: string[] = [];
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View ref={box}><Combobox value={text()} onChange={setText} onSelect={(o) => taken.push(o)} onSubmit={(t) => submitted.push(t)} options={["Apple", "Apricot", "Banana", "Blueberry"]} /></View>
+    </View>
+  ));
+  const input = box.elements[0].elements[0];
+  const listed = () => dumpTree().includes("Apricot");
+  h.press(input);
+  h.type("ap");
+  expect(text()).toBe("ap");
+  expect(listed()).toBe(true);
+  expect(dumpTree()).not.toContain("Banana");
+  h.key("ArrowDown");
+  h.key("ArrowDown"); // Apricot
+  h.key("Enter");
+  expect(taken).toEqual(["Apricot"]);
+  expect(text()).toBe("Apricot");
+  expect(listed()).toBe(false);
+  h.key("Enter"); // nothing highlighted: an ordinary submit
+  expect(submitted).toEqual(["Apricot"]);
+  h.type("x");
+  h.key("Escape");
+  expect(text()).toBe("Apricotx");
 });
