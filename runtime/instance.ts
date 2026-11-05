@@ -39,7 +39,7 @@ export async function singleInstance(onLaunch?: Launch): Promise<boolean> {
         port,
         socket: {
           open: (s) => void s.write(JSON.stringify({ token, args, cwd })),
-          data: (s) => (resolve(true), s.end()),
+          data: (s) => void (resolve(true), s.end()),
           close: () => resolve(false),
           error: () => resolve(false),
           connectError: () => resolve(false),
