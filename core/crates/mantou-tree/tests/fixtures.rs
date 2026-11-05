@@ -53,6 +53,7 @@ fn op_json(o: &Op) -> J {
         Op::Transition { id, prop, duration, easing } => json!({"op": "TRANSITION", "id": id, "prop": prop.name(), "duration": *duration as f64, "easing": easing}),
         Op::Select { id, anchor, focus } => json!({"op": "SELECT", "id": id, "anchor": anchor, "focus": focus}),
         Op::Focusable { id, flags, order } => json!({"op": "FOCUSABLE", "id": id, "flags": flags, "order": order}),
+        Op::FollowPointer { id, x, y } => json!({"op": "FOLLOW_POINTER", "id": id, "x": *x as f64, "y": *y as f64}),
         Op::TextRuns { id, runs } => json!({"op": "TEXT_RUNS", "id": id, "runs": runs.iter().map(|(len, spans)| json!({"length": len, "spans": spans})).collect::<Vec<_>>()}),
         Op::Canvas { id, commands } => json!({"op": "CANVAS", "id": id, "commands": commands}),
         Op::Keyframes { id, animation, values } => json!({"op": "KEYFRAMES", "id": id, "animation": animation, "values": values}),
