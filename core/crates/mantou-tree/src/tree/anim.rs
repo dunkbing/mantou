@@ -27,12 +27,12 @@ fn pack(c: [f32; 4]) -> u32 {
 
 /// Whether a property can be animated.
 pub(super) fn animatable(p: Prop) -> bool {
-    matches!(p, Prop::Opacity | Prop::TranslateX | Prop::TranslateY | Prop::Scale | Prop::BackgroundColor | Prop::BorderColor | Prop::Color)
+    matches!(p, Prop::Opacity | Prop::TranslateX | Prop::TranslateY | Prop::Scale | Prop::Rotate | Prop::BackgroundColor | Prop::BorderColor | Prop::Color)
 }
 
 /// Whether animating it moves boxes (so they're placed again), rather than only changing how they're drawn.
 fn moves(p: Prop) -> bool {
-    matches!(p, Prop::TranslateX | Prop::TranslateY | Prop::Scale)
+    matches!(p, Prop::TranslateX | Prop::TranslateY | Prop::Scale | Prop::Rotate)
 }
 
 fn get(v: &Visual, p: Prop) -> Val {
@@ -41,6 +41,7 @@ fn get(v: &Visual, p: Prop) -> Val {
         Prop::TranslateX => Val::F(v.translate[0]),
         Prop::TranslateY => Val::F(v.translate[1]),
         Prop::Scale => Val::F(v.scale),
+        Prop::Rotate => Val::F(v.rotate),
         Prop::BackgroundColor => Val::C(unpack(v.background)),
         Prop::BorderColor => Val::C(unpack(v.border_color)),
         _ => Val::C(unpack(v.color)),
@@ -53,6 +54,7 @@ fn set(v: &mut Visual, p: Prop, val: Val) {
         (Prop::TranslateX, Val::F(f)) => v.translate[0] = f,
         (Prop::TranslateY, Val::F(f)) => v.translate[1] = f,
         (Prop::Scale, Val::F(f)) => v.scale = f.max(0.0),
+        (Prop::Rotate, Val::F(f)) => v.rotate = f,
         (Prop::BackgroundColor, Val::C(c)) => v.background = pack(c),
         (Prop::BorderColor, Val::C(c)) => v.border_color = pack(c),
         (Prop::Color, Val::C(c)) => v.color = pack(c),

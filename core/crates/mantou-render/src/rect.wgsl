@@ -30,6 +30,7 @@ struct VsOut {
     @location(8) @interpolate(flat) widths: vec4<f32>,
     @location(9) @interpolate(flat) color2: vec4<f32>,
     @location(10) @interpolate(flat) grad: vec4<f32>,
+    @location(11) @interpolate(flat) uvr: vec4<f32>,
 };
 
 @group(0) @binding(0) var atlas: texture_2d<f32>;
@@ -56,6 +57,7 @@ fn vs(@builtin(vertex_index) vi: u32, inst: Instance) -> VsOut {
     out.widths = inst.widths;
     out.color2 = inst.color2;
     out.grad = inst.grad;
+    out.uvr = inst.uv;
     return out;
 }
 
@@ -104,8 +106,33 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
         let cs = cos(in.grad.z);
         p = c + vec2<f32>(d.x * cs + d.y * sn, -d.x * sn + d.y * cs);
     }
+    var uv = in.uv;
+    var turned = false;
+    if (in.grad.z != 0.0 && in.uvr.z > in.uvr.x) {
+        // A turned glyph or image: its texels come from where the pixel is in the quad's own frame.
+        let t = (p - in.rect_px.xy) / max(in.rect_px.zw - in.rect_px.xy, vec2<f32>(0.0001));
+        if (t.x < 0.0 || t.y < 0.0 || t.x > 1.0 || t.y > 1.0) {
+            discard;
+        }
+        uv = mix(in.uvr.xy, in.uvr.zw, t);
+        turned = true;
+    }
     if (in.glyph == 1u) {
-        let a = in.color.a * textureLoad(atlas, vec2<i32>(floor(in.uv)), 0).r;
+        var cover: f32;
+        if (turned) {
+            // Smoothed between texels, kept inside this glyph's own rectangle.
+            let q = clamp(uv, in.uvr.xy + vec2<f32>(0.5), in.uvr.zw - vec2<f32>(0.5)) - vec2<f32>(0.5);
+            let base = vec2<i32>(floor(q));
+            let f = q - floor(q);
+            let a00 = textureLoad(atlas, base, 0).r;
+            let a10 = textureLoad(atlas, base + vec2<i32>(1, 0), 0).r;
+            let a01 = textureLoad(atlas, base + vec2<i32>(0, 1), 0).r;
+            let a11 = textureLoad(atlas, base + vec2<i32>(1, 1), 0).r;
+            cover = mix(mix(a00, a10, f.x), mix(a01, a11, f.x), f.y);
+        } else {
+            cover = textureLoad(atlas, vec2<i32>(floor(uv)), 0).r;
+        }
+        let a = in.color.a * cover;
         return vec4<f32>(in.color.rgb * a, a);
     }
     let radius = in.params.x;
@@ -132,7 +159,7 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
         // filtering, cut to the quad's rounded corners; tinted, it's drawn as
         // its alpha in the quad's colour.
         let dims = vec2<f32>(textureDimensions(image));
-        let tex = textureSampleLevel(image, image_sampler, in.uv / dims, 0.0);
+        let tex = textureSampleLevel(image, image_sampler, uv / dims, 0.0);
         var mask = 1.0;
         if (radius > 0.0) {
             mask = clamp(0.5 - rounded_box(p, in.rect_px.xy, in.rect_px.zw, radius), 0.0, 1.0);

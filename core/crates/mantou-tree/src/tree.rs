@@ -356,6 +356,8 @@ struct Visual {
     /// The transform: a translation (logical px) and a scale about the box's centre.
     translate: [f32; 2],
     scale: f32,
+    /// Degrees clockwise, about the box's centre.
+    rotate: f32,
     /// The `cursor` style (protocol::cursor; AUTO = whatever's below).
     cursor: u32,
 }
@@ -412,6 +414,40 @@ struct LaidOut {
     /// `rect` and `content` are already transformed, but sizes inside (text,
     /// borders, editor coordinates) are multiplied by it.
     k: f32,
+    /// `rotate`: its box and everything inside it (boxes up to `end` in this list) turn about `pivot`.
+    spin: Option<Spin>,
+}
+
+/// A rotation of a subtree: clockwise `angle` (radians) about `pivot` (logical px, in the frame its ancestors'
+/// own rotations then turn in), over the boxes from this one to `end` (exclusive).
+#[derive(Clone, Copy)]
+struct Spin {
+    angle: f32,
+    pivot: [f32; 2],
+    end: usize,
+}
+
+/// Turns a quad about a pivot (device px): its centre moves round it and the quad itself turns.
+fn spin_quad(q: &mut Quad, sp: &Spin, s: f32) {
+    let (sn, cs) = sp.angle.sin_cos();
+    let (px, py) = (sp.pivot[0] * s, sp.pivot[1] * s);
+    let rot = |x: f32, y: f32| (px + (x - px) * cs - (y - py) * sn, py + (x - px) * sn + (y - py) * cs);
+    let (cx, cy) = ((q.rect[0] + q.rect[2]) / 2.0, (q.rect[1] + q.rect[3]) / 2.0);
+    let (nx, ny) = rot(cx, cy);
+    let (dx, dy) = (nx - cx, ny - cy);
+    q.rect = [q.rect[0] + dx, q.rect[1] + dy, q.rect[2] + dx, q.rect[3] + dy];
+    if let Some(t) = &mut q.extra.trap {
+        *t = [t[0] + dy, t[1] + dy, t[2] + dy]; // a strip's heights are in the quad's own frame
+    }
+    q.extra.rotation += sp.angle;
+    // The clip stays a rectangle: the box around the turned one (looser than the real shape).
+    if q.clip != NO_CLIP {
+        let c = q.clip;
+        let corners = [rot(c[0], c[1]), rot(c[2], c[1]), rot(c[2], c[3]), rot(c[0], c[3])];
+        let xs = corners.map(|p| p.0);
+        let ys = corners.map(|p| p.1);
+        q.clip = [xs.into_iter().fold(f32::INFINITY, f32::min), ys.into_iter().fold(f32::INFINITY, f32::min), xs.into_iter().fold(f32::NEG_INFINITY, f32::max), ys.into_iter().fold(f32::NEG_INFINITY, f32::max)];
+    }
 }
 
 pub struct Tree {
@@ -1192,7 +1228,11 @@ impl Tree {
         } else {
             xf
         };
-        let laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k };
+        let mut laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k, spin: None };
+        if v.rotate % 360.0 != 0.0 {
+            laid.spin = Some(Spin { angle: v.rotate.to_radians(), pivot: [(laid.rect[0] + laid.rect[2]) / 2.0, (laid.rect[1] + laid.rect[3]) / 2.0], end: 0 });
+        }
+        let at_box = self.boxes.len();
         self.boxes.push(laid);
         self.nodes.get_mut(&id).expect("exists").placed = true;
         let node = &self.nodes[&id];
@@ -1229,6 +1269,10 @@ impl Tree {
         }
         for c in kids {
             self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf, child_view, child_box);
+        }
+        let end = self.boxes.len();
+        if let Some(sp) = &mut self.boxes[at_box].spin {
+            sp.end = end;
         }
         let node = &self.nodes[&id];
         if let Some(st) = node.scroll
@@ -1287,11 +1331,24 @@ impl Tree {
             }
         };
         let mut thumbs = self.thumbs.iter().peekable();
+        // `rotate`: the quads a box makes are turned by every spin around it, innermost first.
+        let mut spins: Vec<Spin> = Vec::new();
+        let mut from = 0;
         for (i, b) in self.boxes.iter().enumerate() {
+            for q in &mut quads[from..] {
+                for sp in spins.iter().rev() {
+                    spin_quad(q, sp, s);
+                }
+            }
+            while spins.last().is_some_and(|sp| sp.end <= i) {
+                spins.pop();
+            }
+            spins.extend(b.spin);
             // A scroll view's thumb goes over its content, before whatever comes after it.
             while let Some(t) = thumbs.next_if(|t| t.at <= i) {
                 quads.push(thumb_quad(t, &self.nodes));
             }
+            from = quads.len();
             let node = &self.nodes[&b.id];
             // What's drawn now: the style, with animated values over it.
             let v = node.vis();
@@ -1480,6 +1537,11 @@ impl Tree {
                 }
             }
         }
+        for q in &mut quads[from..] {
+            for sp in spins.iter().rev() {
+                spin_quad(q, sp, s);
+            }
+        }
         for t in thumbs {
             quads.push(thumb_quad(t, &self.nodes));
         }
@@ -1499,8 +1561,26 @@ impl Tree {
 
     /// The topmost node under a point (logical px), ignoring what its ancestors clip away.
     pub fn hit(&self, x: f32, y: f32) -> Option<u32> {
-        let inside = |r: &[f32; 4]| x >= r[0] && x < r[2] && y >= r[1] && y < r[3];
-        self.boxes.iter().rev().find(|b| inside(&b.rect) && inside(&b.clip) && !self.nodes[&b.id].v.no_pointer).map(|b| b.id)
+        // A rotated subtree is tested with the point turned back: undo the outermost spin first.
+        let mut spins: Vec<Spin> = Vec::new();
+        let mut found = None;
+        for (i, b) in self.boxes.iter().enumerate() {
+            while spins.last().is_some_and(|sp| sp.end <= i) {
+                spins.pop();
+            }
+            spins.extend(b.spin);
+            let (mut px, mut py) = (x, y);
+            for sp in &spins {
+                let (sn, cs) = (-sp.angle).sin_cos();
+                let (dx, dy) = (px - sp.pivot[0], py - sp.pivot[1]);
+                (px, py) = (sp.pivot[0] + dx * cs - dy * sn, sp.pivot[1] + dx * sn + dy * cs);
+            }
+            let inside = |r: &[f32; 4]| px >= r[0] && px < r[2] && py >= r[1] && py < r[3];
+            if inside(&b.rect) && inside(&b.clip) && !self.nodes[&b.id].v.no_pointer {
+                found = Some(b.id);
+            }
+        }
+        found
     }
 
     /// The text of a text node (for tests and debugging).
@@ -1813,6 +1893,7 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::TranslateX => v.translate[0] = finite(num(), 0.0),
         Prop::TranslateY => v.translate[1] = finite(num(), 0.0),
         Prop::Scale => v.scale = finite(num(), 1.0).max(0.0),
+        Prop::Rotate => v.rotate = finite(num(), 0.0),
         Prop::FontSize => v.text.size = num().clamp(1.0, 1000.0),
         Prop::FontWeight => v.text.weight = num().clamp(1.0, 1000.0),
         Prop::LineHeight => v.text.line_height = num().clamp(0.0, 10.0),

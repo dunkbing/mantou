@@ -212,7 +212,7 @@ impl Renderer {
             let [mut x0, mut y0, mut x1, mut y1] = [q.rect[0] - grow, q.rect[1] - grow, q.rect[2] + grow, q.rect[3] + grow];
             if q.extra.rotation != 0.0 {
                 // The corners of the turned rectangle: the quad covers their bounding box, and the shader turns back.
-                let (cx, cy, hx, hy) = ((q.rect[0] + q.rect[2]) / 2.0, (q.rect[1] + q.rect[3]) / 2.0, (q.rect[2] - q.rect[0]) / 2.0, (q.rect[3] - q.rect[1]) / 2.0);
+                let (cx, cy, hx, hy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0, (x1 - x0) / 2.0, (y1 - y0) / 2.0);
                 let (sn, cs) = q.extra.rotation.sin_cos();
                 let (ex, ey) = (hx * cs.abs() + hy * sn.abs() + 1.0, hx * sn.abs() + hy * cs.abs() + 1.0);
                 (x0, y0, x1, y1) = (cx - ex, cy - ey, cx + ex, cy + ey);

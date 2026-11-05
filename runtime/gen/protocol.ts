@@ -241,10 +241,11 @@ export const StyleProp = {
   borderLeftWidth: { code: 83, kind: "f32" },
   focusRingColor: { code: 85, kind: "color" },
   focusRingOffset: { code: 86, kind: "f32" },
+  rotate: { code: 87, kind: "f32" },
   zIndex: { code: 84, kind: "f32" },
 } as const;
 export type StylePropName = keyof typeof StyleProp;
-export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents", 74: "gradientColor", 75: "gradientAngle", 76: "borderTopLeftRadius", 77: "borderTopRightRadius", 78: "borderBottomRightRadius", 79: "borderBottomLeftRadius", 80: "borderTopWidth", 81: "borderRightWidth", 82: "borderBottomWidth", 83: "borderLeftWidth", 85: "focusRingColor", 86: "focusRingOffset", 84: "zIndex" };
+export const StylePropByCode: Record<number, StylePropName> = { 1: "display", 2: "flexDirection", 3: "flexWrap", 4: "justifyContent", 5: "alignItems", 6: "alignSelf", 7: "flexGrow", 8: "flexShrink", 9: "flexBasis", 10: "width", 11: "height", 12: "minWidth", 13: "minHeight", 14: "maxWidth", 15: "maxHeight", 16: "paddingTop", 17: "paddingRight", 18: "paddingBottom", 19: "paddingLeft", 20: "marginTop", 21: "marginRight", 22: "marginBottom", 23: "marginLeft", 24: "rowGap", 25: "columnGap", 26: "position", 27: "top", 28: "right", 29: "bottom", 30: "left", 31: "backgroundColor", 32: "opacity", 33: "alignContent", 34: "color", 35: "fontSize", 36: "fontWeight", 37: "lineHeight", 38: "textAlign", 39: "maxLines", 40: "fontStyle", 41: "overflow", 42: "borderRadius", 43: "borderWidth", 44: "borderColor", 45: "placeholderColor", 46: "caretColor", 47: "selectionColor", 48: "scrollbar", 49: "scrollbarColor", 50: "fontFamily", 51: "shadowX", 52: "shadowY", 53: "shadowBlur", 54: "shadowSpread", 55: "shadowColor", 56: "objectFit", 57: "translateX", 58: "translateY", 59: "scale", 60: "cursor", 61: "textDecoration", 62: "letterSpacing", 63: "textTransform", 64: "whiteSpace", 65: "textOverflow", 66: "wordBreak", 67: "userSelect", 68: "gridColumns", 69: "gridMinColumnWidth", 70: "gridColumnSpan", 71: "gridRowSpan", 72: "aspectRatio", 73: "pointerEvents", 74: "gradientColor", 75: "gradientAngle", 76: "borderTopLeftRadius", 77: "borderTopRightRadius", 78: "borderBottomRightRadius", 79: "borderBottomLeftRadius", 80: "borderTopWidth", 81: "borderRightWidth", 82: "borderBottomWidth", 83: "borderLeftWidth", 85: "focusRingColor", 86: "focusRingOffset", 87: "rotate", 84: "zIndex" };
 
 /** A length: logical pixels, a percentage string, or "auto". */
 export type Length = number | `${number}%` | "auto";
@@ -423,6 +424,8 @@ export interface WireStyle {
   focusRingColor?: Color;
   /** Default: 2. */
   focusRingOffset?: number;
+  /** Default: 0: degrees clockwise about the centre, with what's inside it (a view's clip and pointer follow; text fields inside it don't place the caret right). */
+  rotate?: number;
   /** Default: 0: among its siblings, higher is painted (and hit) on top; ties keep tree order. */
   zIndex?: number;
 }

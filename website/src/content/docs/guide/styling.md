@@ -57,9 +57,11 @@ Two things catch people out:
 | Stacking | `zIndex`: higher is painted and hit on top of its siblings |
 | Shadow | `shadowX`, `shadowY`, `shadowBlur`, `shadowSpread`, `shadowColor` |
 | Clipping | `overflow: "visible" \| "hidden" \| "scroll"` |
-| Transform | `translateX`, `translateY`, `scale` (they move what is drawn, not the layout) |
+| Transform | `translateX`, `translateY`, `scale`, `rotate` in degrees clockwise (they move what is drawn, not the layout) |
 | Pointer | `cursor` (`"pointer"`, `"text"`, `"grab"`…) |
 | Images | `objectFit` |
+
+`rotate` turns a view and everything inside it about its centre, and the pointer follows. For now `overflow` clips to the box around the turned view, a click in a text field inside it puts the caret in the wrong place, and scroll bars stay upright.
 
 ## Text
 
@@ -104,7 +106,7 @@ Animation runs in the core, not in your code. Say which properties animate and s
 />
 ```
 
-Animatable: `opacity`, `translateX`, `translateY`, `scale`, `backgroundColor`, `borderColor`, `color`. A spring instead of a duration: `transition={{ translateY: { spring: { stiffness: 300, damping: 20 } } }}`. It overshoots when `damping` is under about `2 × √stiffness` and settles at the end; the duration comes from the spring.
+Animatable: `opacity`, `translateX`, `translateY`, `scale`, `rotate`, `backgroundColor`, `borderColor`, `color`. A spring instead of a duration: `transition={{ translateY: { spring: { stiffness: 300, damping: 20 } } }}`. It overshoots when `damping` is under about `2 × √stiffness` and settles at the end; the duration comes from the spring.
 
 For a one-off, call `node.animate` with a property and options. It returns `{ finished, stop }`:
 
@@ -112,6 +114,7 @@ For a one-off, call `node.animate` with a property and options. It returns `{ fi
 node.animate("opacity", { from: 0, to: 1, duration: 300, easing: "ease-out" });
 node.animate("scale", { keyframes: [1, 1.2, 0.95, 1], duration: 400 });   // evenly spaced steps
 node.animate("translateY", { from: 40, to: 0, spring: { stiffness: 250, damping: 18 } });
+node.animate("rotate", { from: 0, to: 360, duration: 900, easing: "linear", iterations: Infinity }); // a spinner
 ```
 
 ## Light and dark

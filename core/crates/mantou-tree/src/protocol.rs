@@ -573,11 +573,12 @@ pub enum Prop {
     BorderLeftWidth = 83,
     FocusRingColor = 85,
     FocusRingOffset = 86,
+    Rotate = 87,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 86;
+    pub const COUNT: usize = 87;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -666,6 +667,7 @@ impl Prop {
             83 => Prop::BorderLeftWidth,
             85 => Prop::FocusRingColor,
             86 => Prop::FocusRingOffset,
+            87 => Prop::Rotate,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -758,6 +760,7 @@ impl Prop {
             Prop::BorderLeftWidth => "borderLeftWidth",
             Prop::FocusRingColor => "focusRingColor",
             Prop::FocusRingOffset => "focusRingOffset",
+            Prop::Rotate => "rotate",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -849,6 +852,7 @@ impl Prop {
             Prop::BorderLeftWidth => ValueKind::F32,
             Prop::FocusRingColor => ValueKind::Color,
             Prop::FocusRingOffset => ValueKind::F32,
+            Prop::Rotate => ValueKind::F32,
             Prop::ZIndex => ValueKind::F32,
         }
     }

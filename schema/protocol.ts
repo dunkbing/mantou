@@ -213,6 +213,7 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   // The ring the core draws around a focused view when the focus came from the keyboard (2 px, `offset` outside its border box). Transparent: none.
   { name: "focusRingColor", code: 85, type: "color", default: "#3b82f6" },
   { name: "focusRingOffset", code: 86, type: "f32", default: "2" },
+  { name: "rotate", code: 87, type: "f32", default: "0: degrees clockwise about the centre, with what's inside it (a view's clip and pointer follow; text fields inside it don't place the caret right)" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 
