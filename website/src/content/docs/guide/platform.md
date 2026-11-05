@@ -82,6 +82,13 @@ await Bun.write(`${paths.config}/settings.json`, JSON.stringify(settings));
 
 Each is the user's folder for the app (`~/Library/Application Support/<app>` on macOS, `%APPDATA%` or `%LOCALAPPDATA%` on Windows, XDG folders on Linux), created when you read it. The app's name is the `name` in the package.json in the working directory, or `MANTOU_APP`, or `paths.setApp("Notes")`.
 
+For tokens and passwords use Bun's `Bun.secrets` (the system's Keychain, Credential Manager or libsecret) instead of a file:
+
+```tsx
+await Bun.secrets.set({ service: "my-app", name: "imap-token", value: token });
+const token = await Bun.secrets.get({ service: "my-app", name: "imap-token" }); // null when missing
+```
+
 ## The window
 
 Open it the way you want with `run`:
