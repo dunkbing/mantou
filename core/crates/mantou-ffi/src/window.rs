@@ -385,7 +385,11 @@ impl App {
             attrs = attrs.with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
         }
         if let Some((x, y)) = config.position {
-            attrs = attrs.with_position(winit::dpi::LogicalPosition::new(x, y));
+            if on_a_display(el, x as f64, y as f64, config.width as f64) {
+                attrs = attrs.with_position(winit::dpi::LogicalPosition::new(x, y));
+            } else {
+                log!("the window's position ({x}, {y}) is on no display; the system places it");
+            }
         }
         let window = match el.create_window(attrs) {
             Ok(w) => {
@@ -705,4 +709,19 @@ impl Drop for App {
             secure_keys::set(false);
         }
     }
+}
+
+/// Whether a window at logical (x, y), `width` wide, would have its title bar on a display: at least 40 px
+/// of its top edge inside one, so the user can grab it. Unknown displays (none listed): yes.
+fn on_a_display(el: &ActiveEventLoop, x: f64, y: f64, width: f64) -> bool {
+    let mut any = false;
+    for m in el.available_monitors() {
+        any = true;
+        let [mx, my, mw, mh] = crate::platform::logical_rect(&m);
+        let overlap = (x + width).min(mx + mw) - x.max(mx);
+        if overlap >= 40.0_f64.min(width) && y >= my - 8.0 && y + 20.0 <= my + mh {
+            return true;
+        }
+    }
+    !any
 }

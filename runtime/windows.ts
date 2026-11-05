@@ -7,10 +7,13 @@ import type { WindowOptions } from "./main";
 import { activeUi, setActiveUi } from "./platform";
 import { mount } from "./solid/mount";
 import type { Ui } from "./ui";
+import { rememberWindow, restoredOptions } from "./winstate";
 import { encodeWindowConfig } from "./winconfig";
 
 export interface OpenWindowOptions extends WindowOptions {
   title?: string;
+  /** Open as this window was last time, and keep its state saved: the name of its entry (see `run`'s `restoreState`). */
+  restoreState?: string;
 }
 
 /** Another window, from `openWindow`. */
@@ -38,7 +41,8 @@ export interface WindowHandle {
  * own tree: signals shared with the first window update both.
  */
 export function openWindow(app: () => JSX.Element, options: OpenWindowOptions = {}): WindowHandle {
-  const { title = "Mantou", width = 480, height = 360, ...rest } = options;
+  const restored = options.restoreState ? restoredOptions(options.restoreState, options) : null;
+  const { title = "Mantou", width = 480, height = 360, restoreState, ...rest } = restored?.options ?? options;
   const cfg = encodeWindowConfig({ ...rest, width, height }, title);
   const handle = openCore().symbols.mt_window_open(cfg, cfg.byteLength);
   if (!handle) throw new Error("mantou: openWindow needs the app's window to be open first (call it after run())");
@@ -46,6 +50,7 @@ export function openWindow(app: () => JSX.Element, options: OpenWindowOptions = 
   core.ui.title(title);
   // Platform services (dialogs, `win`) keep going to the window they went to.
   const before = activeUi();
+  const remember = restoreState ? rememberWindow(core.ui, restoreState, restored!.saved) : null;
   const dispose = mount(core.ui, app);
   setActiveUi(before);
   const closers: (() => boolean | void)[] = [];
@@ -53,6 +58,7 @@ export function openWindow(app: () => JSX.Element, options: OpenWindowOptions = 
   const close = () => {
     if (closed) return;
     closed = true;
+    remember?.stop();
     dispose();
     core.ui.flush();
     core.detach();
@@ -62,7 +68,9 @@ export function openWindow(app: () => JSX.Element, options: OpenWindowOptions = 
     if (e.type !== "closeRequested") return;
     let keep = false;
     for (const f of [...closers]) keep = f() === false || keep;
-    if (!keep) close();
+    if (keep) return;
+    if (remember) void remember.save().finally(close);
+    else close();
   };
   return {
     ui: core.ui,

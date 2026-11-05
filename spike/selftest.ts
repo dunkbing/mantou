@@ -11,6 +11,7 @@ import { openWindow } from "../runtime/windows";
 import { View } from "../runtime/solid/components";
 import { STAT_NAMES, statsFrom } from "../runtime/events";
 import { onError, type AppError } from "../runtime/errors";
+import { monitors, type WindowInfo } from "../runtime/platform";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -332,6 +333,23 @@ async function main() {
     core.onEvent = onEvent;
     off();
     rmSync(dir, { recursive: true, force: true });
+  }
+
+  // 14. Displays: the window is on one of them, and a window asked to open off every display opens on one.
+  {
+    const list = await monitors();
+    const current = list.filter((m) => m.current);
+    let ready2 = false;
+    const lost = openWindow(() => View({ style: { flexGrow: 1 } }), { title: "Lost", width: 200, height: 120, x: -20000, y: -20000 });
+    lost.ui.onResize(() => (ready2 = true));
+    await until("the window asked to open off-screen opened", () => ready2, 10_000);
+    const s = await lost.ui.service<WindowInfo>({ kind: "window", op: "state" });
+    lost.close();
+    const onOne = !!s && list.some((m) => s.x + 40 > m.x && s.x < m.x + m.width && s.y >= m.y - 8 && s.y < m.y + m.height);
+    check("displays", list.length >= 1 && current.length === 1 && list.every((m) => m.width > 0 && m.height > 0 && m.scale > 0) && onOne, {
+      displays: list.map((m) => `${m.name || "?"} ${m.width}x${m.height}@${m.scale} at ${m.x},${m.y}${m.primary ? " primary" : ""}${m.current ? " current" : ""}`),
+      offScreenWindowAt: s && [s.x, s.y],
+    });
   }
 }
 

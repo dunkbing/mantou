@@ -60,3 +60,15 @@ Checked on an Apple M4 by posting real key events to the running to-do example a
 ### A bug the check found
 
 The first version used `muda`'s predefined Edit items (`copy:`, `paste:`…). Nothing in the window's view answers those selectors, and the menu still consumed Cmd+C before the input saw it: with the menu installed Cmd+A, Cmd+C and Cmd+X did nothing, and without it they worked. The Edit items (the roles `undo`, `redo`, `cut`, `copy`, `paste`, `selectAll`) are now ordinary items that press the same keys in the core, so there is one editing path and the menu items and shortcuts both work.
+
+## Displays and window state
+
+[#70](https://github.com/dunkbing/mantou/issues/70), [#67](https://github.com/dunkbing/mantou/issues/67). `monitors()` is a `monitors` service answered from winit's monitor list; `restoreState` is TypeScript (`runtime/winstate.ts`) over `win.state()`, `onResize`, `onState` and `paths.config`. The core drops an opening position that has no display under the window's top edge.
+
+| What | Where it's tested |
+|---|---|
+| `monitors()` and `win.monitor()` from the core's answer | `tests/winstate.test.tsx` |
+| Saved state replaces `run`'s options; other windows' entries are kept; a broken file is ignored | `tests/winstate.test.tsx` |
+| Maximized keeps the normal box; minimized saves nothing; a resize saves a moment later | `tests/winstate.test.tsx` |
+| Real displays listed, one current; a window opened at (-20000, -20000) lands on a display | self-test, check 14 |
+| Move and resize, close, launch again: same place and size | by hand under Xvfb |

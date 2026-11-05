@@ -156,7 +156,30 @@ export const win = {
   state: () => windowOp("state"),
   /** Hears focus, moves, minimize, maximize and full screen changes; returns a function that stops. */
   onState: (handler: (s: WindowState) => void) => ui().onWindowState(handler),
+  /** The display the window is on, or null. */
+  monitor: async (): Promise<Monitor | null> => (await monitors()).find((m) => m.current) ?? null,
 };
+
+/** A display, in logical px (the coordinates windows are placed with). */
+export interface Monitor {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Device pixels per logical px. */
+  scale: number;
+  /** In Hz, when the system says. */
+  refreshRate: number | null;
+  primary: boolean;
+  /** The window is on it. */
+  current: boolean;
+}
+
+/** The displays. Empty with no window (a headless instance answers what its test queued). */
+export async function monitors(): Promise<Monitor[]> {
+  return (await ui().service<Monitor[]>({ kind: "monitors" })) ?? [];
+}
 
 /** Opens a URL (or a file) in the default app. Resolves whether it could be started. */
 export async function openExternal(url: string): Promise<boolean> {

@@ -4,7 +4,7 @@ export { mount } from "./solid/mount";
 export { openWindow, type OpenWindowOptions, type WindowHandle } from "./windows";
 export { Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter, Select, Combobox, Menu, Table, Toast, Progress, Spinner, type ComboboxProps, type MenuProps, type MenuEntry, type TableProps, type TableColumn, type SpinnerProps, type SelectProps, type SelectOption, type ToastProps, type ProgressProps, type WidgetState, type WidgetStyle, type ButtonProps, type CheckboxProps, type ToggleProps, type RadioGroupProps, type RadioOption, type SliderProps, type TabsProps, type DialogProps, type TooltipProps, type SplitterProps } from "./widgets";
 export {
-  clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, onFileDrop, win, type WindowInfo, openExternal, reveal, notify, setBadge, createTray, removeTray, type NotifyOptions, type TrayOptions,
+  clipboard, openFile, saveFile, message, showMenu, setMenu, onMenu, onFileDrop, win, type WindowInfo, monitors, type Monitor, openExternal, reveal, notify, setBadge, createTray, removeTray, type NotifyOptions, type TrayOptions,
   type OpenFileOptions, type SaveFileOptions, type MessageOptions, type MenuItem, type FileFilter,
 } from "./platform";
 export { useColorScheme, setColorScheme, defineTheme, type ColorScheme } from "./theme";

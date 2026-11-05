@@ -24,6 +24,7 @@ pub fn handle(inst: &Instance, window: Option<&Arc<Window>>, menus: &mut Menus, 
         Some("saveFile") => save_file(&v, window),
         Some("message") => message(&v, window),
         Some("window") => window_op(&v, window, inst),
+        Some("monitors") => window.map(|w| monitors(w)),
         Some("openExternal") => v["url"].as_str().map(|u| json!(open_external(u))),
         Some("reveal") => v["path"].as_str().map(|p| json!(reveal(p))),
         Some("notify") => Some(json!(notify(&v))),
@@ -118,6 +119,34 @@ pub fn window_state(w: &Window) -> (u32, i32, i32) {
         | ((w.theme() == Some(winit::window::Theme::Dark)) as u32 * f::DARK);
     let (x, y) = w.outer_position().map(|p| p.to_logical::<f64>(w.scale_factor())).map_or((0, 0), |p| (p.x.round() as i32, p.y.round() as i32));
     (flags, x, y)
+}
+
+/// A display as logical px: its own scale turns its physical position and size into the coordinates
+/// windows are placed with (macOS: global points; elsewhere exact while the displays share a scale).
+pub fn logical_rect(m: &winit::monitor::MonitorHandle) -> [f64; 4] {
+    let (p, s, k) = (m.position(), m.size(), m.scale_factor());
+    [p.x as f64 / k, p.y as f64 / k, s.width as f64 / k, s.height as f64 / k]
+}
+
+/// The displays: `[{name, x, y, width, height, scale, refreshRate, primary, current}]` (logical px; `current`:
+/// the one the window is on).
+fn monitors(w: &Window) -> Value {
+    let (primary, current) = (w.primary_monitor(), w.current_monitor());
+    let list: Vec<Value> = w
+        .available_monitors()
+        .map(|m| {
+            let [x, y, width, height] = logical_rect(&m);
+            json!({
+                "name": m.name().unwrap_or_default(),
+                "x": x.round(), "y": y.round(), "width": width.round(), "height": height.round(),
+                "scale": m.scale_factor(),
+                "refreshRate": m.refresh_rate_millihertz().map(|r| (r as f64 / 1000.0 * 100.0).round() / 100.0),
+                "primary": primary.as_ref() == Some(&m),
+                "current": current.as_ref() == Some(&m),
+            })
+        })
+        .collect();
+    json!(list)
 }
 
 /// A window request: `{kind: "window", op, value, x, y, width, height}`. Answers with the window's state,

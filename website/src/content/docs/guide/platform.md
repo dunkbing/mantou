@@ -131,6 +131,27 @@ On Windows and Linux `"overlay"` is the native title bar for now.
 
 Each call answers with the window's state right after asking; the OS may take a moment (full screen animates), so use `onState` for the result. A window without a title bar or a resizable frame doesn't report `maximized`. A transparent window and the window icon aren't supported yet.
 
+### Remember where it was
+
+```tsx
+run(App, { title: "Mail", width: 900, height: 600, restoreState: true });
+openWindow(Compose, { restoreState: "compose" });  // each window its own entry
+```
+
+The window opens where, how big and how it was when it last closed (maximized and full screen too; minimized isn't kept), instead of the size and position given. With nothing saved yet, those apply. The state is saved in `window-state.json` in `paths.config` a moment after each change, and when the window closes; while it's maximized, the size it goes back to is kept. If the saved position is on no display any more (a monitor was unplugged), the system places the window. That check applies to any `x`, `y`: a window has to have its top edge on a display.
+
+### Displays
+
+```tsx
+import { monitors, win } from "mantou-ui";
+
+const screens = await monitors();  // [{ name, x, y, width, height, scale, refreshRate, primary, current }]
+const here = await win.monitor();  // the one the window is on
+openWindow(Viewer, { x: screens[1].x + 40, y: screens[1].y + 40 });
+```
+
+Positions and sizes are logical px, the coordinates windows are placed with. On macOS that's exact with any mix of displays; on Windows and Linux, displays with different scales can be off by their scale's difference. There's no event when displays change yet, and no global cursor position (winit has neither); a headless instance answers what its test queued (`h.answer([...])`).
+
 ## More windows
 
 ```tsx
