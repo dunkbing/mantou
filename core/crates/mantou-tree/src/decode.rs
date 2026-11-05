@@ -53,6 +53,8 @@ pub enum Op {
     Canvas { id: u32, commands: Vec<u32> },
     Keyframes { id: u32, animation: u32, values: Vec<u32> },
     Focusable { id: u32, flags: u32, order: u32 },
+    /// The node drawn at the pointer minus (x, y); id 0 = none.
+    FollowPointer { id: u32, x: f32, y: f32 },
     /// A Text's runs: (UTF-8 byte length, span ids outermost first).
     TextRuns { id: u32, runs: Vec<(u32, Vec<u32>)> },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
@@ -259,6 +261,10 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
             op::FOCUSABLE => {
                 fixed(3)?;
                 Op::Focusable { id: a[0], flags: a[1], order: a[2] }
+            }
+            op::FOLLOW_POINTER => {
+                fixed(3)?;
+                Op::FollowPointer { id: a[0], x: f32::from_bits(a[1]), y: f32::from_bits(a[2]) }
             }
             op::TEXT_RUNS => {
                 if n < 1 {

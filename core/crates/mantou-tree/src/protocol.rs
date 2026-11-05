@@ -75,6 +75,8 @@ pub mod op {
     pub const TEXT_RUNS: u32 = 33;
     /// What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it).
     pub const ACCESS: u32 = 30;
+    /// The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none.
+    pub const FOLLOW_POINTER: u32 = 36;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -114,6 +116,7 @@ pub fn op_name(code: u32) -> &'static str {
         31 => "INPUT_ALLOW",
         33 => "TEXT_RUNS",
         30 => "ACCESS",
+        36 => "FOLLOW_POINTER",
         _ => "UNKNOWN",
     }
 }

@@ -335,7 +335,32 @@ async function main() {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  // 14. Displays: the window is on one of them, and a window asked to open off every display opens on one.
+  // 14. A drag's preview (FOLLOW_POINTER) moves with the pointer on the main thread while the Worker is blocked.
+  {
+    let root = core.ui.nodes.get(core.hit(...BOARD))!;
+    while (root.parent) root = root.parent;
+    const ghost = core.ui.view({ position: "fixed", left: 0, top: 0, width: 60, height: 30, pointerEvents: "none", backgroundColor: "#2563eb" });
+    root.append(ghost);
+    core.testPointer("move", 100, 100);
+    core.ui.enc.followPointer(ghost.id, 10, 10);
+    core.ui.flush();
+    await until("the preview is at the pointer", () => core.nodeRect(ghost.id)?.[0] === 90, 5_000);
+    const before = core.stats();
+    for (let i = 1; i <= 20; i++) core.testPointer("move", 100 + i * 10, 100 + i * 5);
+    const spinUntil = performance.now() + 600;
+    while (performance.now() < spinUntil) {}
+    const d = delta(before, core.stats());
+    const r = core.nodeRect(ghost.id);
+    check("a drag preview follows the pointer without JS", d.commits === 0 && d.frames >= 1 && r?.[0] === 290 && r?.[1] === 190, {
+      at: r && [r[0], r[1]], commitsWhileBlocked: d.commits, framesWhileBlocked: d.frames,
+    });
+    core.ui.enc.followPointer(0, 0, 0);
+    root.remove(ghost);
+    ghost.release();
+    core.ui.flush();
+  }
+
+  // 15. Displays: the window is on one of them, and a window asked to open off every display opens on one.
   {
     const list = await monitors();
     const current = list.filter((m) => m.current);

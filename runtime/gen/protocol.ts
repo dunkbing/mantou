@@ -73,9 +73,11 @@ export const Op = {
   TEXT_RUNS: 33,
   /** What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it). */
   ACCESS: 30,
+  /** The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none. */
+  FOLLOW_POINTER: 36,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS", 36: "FOLLOW_POINTER" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16,"Drop":32,"Select":64} as const;

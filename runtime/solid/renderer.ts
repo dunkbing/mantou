@@ -3,7 +3,8 @@
 // ("mantou-ui/solid"). Nodes are released when the Solid owner that created
 // them is disposed (design §7.4).
 import { createRenderer } from "solid-js/universal";
-import { createContext, getOwner, onCleanup, useContext } from "./solid";
+import { createContext, createRoot, getOwner, onCleanup, useContext } from "./solid";
+import type { JSX } from "../jsx-runtime";
 import { Node, SharedStyle, TextLeaf, type AccessInfo, type AccessRoleName, type Child, type DropEvent, type EnterSpec, type ExitSpec, type KeyEvent, type PointerEvent, type PressEvent, type Rect, type ScrollOffset, type Style, type Transitions, type Ui, type WheelEvent } from "../ui";
 
 /** The Ui that elements are created in, provided by mount(). */
@@ -135,6 +136,23 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "draggable":
       node.draggable(value);
       return;
+    case "dragPreview": {
+      // Made when a drag starts, in a root of its own under this component's owner (for its context),
+      // and disposed when the drag ends, which releases its nodes.
+      const owner = getOwner();
+      const make = value as (() => JSX.Element) | undefined;
+      node.setDragPreview(
+        make
+          ? () =>
+              createRoot((dispose) => {
+                const view = createElement("view") as Node;
+                insert(view, make);
+                return { node: view, dispose };
+              }, owner ?? undefined)
+          : undefined,
+      );
+      return;
+    }
     case "onDrop":
       setHandler(node, name, value, (f: (e: DropEvent) => void) => node.onDrop(f));
       return;

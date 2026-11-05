@@ -42,6 +42,8 @@ export interface PointerProps {
   dragRegion?: boolean;
   /** Makes the view draggable inside the app, carrying this value: views under it get `onDragOver` and `onDrop` events with `data` set to it. */
   draggable?: unknown;
+  /** Drawn under the pointer while the view is dragged, held where it was grabbed (made when the drag starts). Style its root to size it. */
+  dragPreview?: () => JSX.Element;
   /** Files (or a dragged view) were dropped on the node or inside it. Needs the OS to report the pointer's position, so the target is where it last was. */
   onDrop?: (e: DropEvent) => void;
   /** Files are held over the node (the event), or left it or the window (null): the place for a highlight. */

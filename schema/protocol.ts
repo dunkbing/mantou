@@ -55,6 +55,7 @@ export const ops: OpDef[] = [
   { name: "INPUT_ALLOW", code: 31, operands: [["id", "id"], ["allow", "string"]], doc: "The characters an Input accepts from typing and pasting: a set like `0-9.` (single characters and `a-z` ranges; a leading `^` allows everything but the set). Empty = anything. Text set by the app isn't filtered." },
   { name: "TEXT_RUNS", code: 33, operands: [["id", "id"], ["runs", "u32"]], doc: "Splits a Text's text into runs set in spans (nested Texts): for each run, in order, its UTF-8 byte length, how many spans it's in, and their ids, outermost first. The lengths add up to the text's. No runs: all of it in the Text's own style. A span is a Text node that is never inserted; its own style's text properties apply to its runs, and presses and the cursor over them go to it." },
   { name: "ACCESS", code: 30, operands: [["id", "id"], ["role", "u32"], ["flags", "u32"], ["label", "string"]], doc: "What assistive technology (screen readers) is told about the node: its AccessRole (0 = the default for its kind), AccessFlag bits, and its name (empty = taken from the text inside it)." },
+  { name: "FOLLOW_POINTER", code: 36, operands: [["id", "id"], ["x", "f32"], ["y", "f32"]], doc: "The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none." },
 ];
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4 } as const;

@@ -637,6 +637,8 @@ pub struct Tree {
     animating: usize,
     /// Where the pointer is (logical px; None = outside the window), and the nodes under it, outermost first.
     pointer: Option<(f32, f32)>,
+    /// FOLLOW_POINTER: the node drawn at the pointer, and the grab point inside it.
+    follow: Option<(u32, f32, f32)>,
     hovered: Vec<u32>,
 }
 
@@ -706,6 +708,7 @@ impl Tree {
             now: 0.0,
             animating: 0,
             pointer: None,
+            follow: None,
             hovered: Vec::new(),
         }
     }
@@ -841,6 +844,9 @@ impl Tree {
                 }
                 if self.drag == Some(id) {
                     self.drag = None;
+                }
+                if self.follow.is_some_and(|f| f.0 == id) {
+                    self.follow = None;
                 }
                 if self.tsel.as_ref().is_some_and(|t| t.root == id || t.anchor == id || t.editors.contains_key(&id)) {
                     self.tsel = None;
@@ -1029,6 +1035,14 @@ impl Tree {
                 self.set_focus((id != 0).then_some(id));
                 // As browsers do for focus(): a ring if the user was last using the keyboard.
                 self.focus_visible = self.keyboard_mode;
+            }
+            Op::FollowPointer { id, x, y } => {
+                if id != 0 {
+                    self.node(id)?;
+                }
+                let (x, y) = (if x.is_finite() { x } else { 0.0 }, if y.is_finite() { y } else { 0.0 });
+                self.follow = (id != 0).then_some((id, x, y));
+                self.boxes_dirty = true;
             }
             Op::Focusable { id, flags, order } => {
                 self.node(id)?.focusable = (flags, order);
@@ -1320,7 +1334,16 @@ impl Tree {
         let (mut x, mut y) = (px + l.location.x, py + l.location.y);
         let (mut clip, mut xf, mut clip_r) = (clip, xf, clip_r);
         let [it, ir, ib, il] = node.v.inset;
+        let followed = self.follow.filter(|f| f.0 == id).zip(self.pointer);
         match node.v.position {
+            _ if followed.is_some() => {
+                // FOLLOW_POINTER: against the window, at the pointer minus the grab point.
+                let ((_, gx, gy), (px, py)) = followed.expect("checked");
+                (x, y) = (px - gx, py - gy);
+                clip = [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY];
+                clip_r = 0.0;
+                xf = Xf { k: 1.0, o: [0.0; 2] };
+            }
             2 => {
                 // Fixed: against the window, whatever the ancestors scroll, clip or transform.
                 let (vw, vh) = self.viewport_logical();
@@ -1761,11 +1784,24 @@ impl Tree {
                 (px, py) = (sp.pivot[0] + dx * cs - dy * sn, sp.pivot[1] + dx * sn + dy * cs);
             }
             let inside = |r: &[f32; 4]| px >= r[0] && px < r[2] && py >= r[1] && py < r[3];
-            if inside(&b.rect) && inside(&b.clip) && !self.nodes[&b.id].v.no_pointer {
+            if inside(&b.rect) && inside(&b.clip) && !self.nodes[&b.id].v.no_pointer && !self.follows(b.id) {
                 found = Some(b.id);
             }
         }
         found
+    }
+
+    /// Whether the node is the FOLLOW_POINTER node or inside it: the pointer goes through those.
+    fn follows(&self, id: u32) -> bool {
+        let Some((f, ..)) = self.follow else { return false };
+        let mut at = Some(id);
+        while let Some(i) = at {
+            if i == f {
+                return true;
+            }
+            at = self.nodes.get(&i).and_then(|n| n.parent);
+        }
+        false
     }
 
     /// The text of a text node (for tests and debugging).

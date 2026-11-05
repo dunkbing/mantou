@@ -478,7 +478,11 @@ impl Instance {
             self.hover(None);
             return false;
         }
-        self.hover(Some((x, y)));
+        let followed = self.hover(Some((x, y)));
+        self.pointer_input(kind, x, y) || followed
+    }
+
+    fn pointer_input(&self, kind: u32, x: f32, y: f32) -> bool {
         let mut p = lock(&self.pointer);
         p.position = (x, y);
         match kind {
@@ -523,7 +527,7 @@ impl Instance {
     /// A button other than the primary one went down (`kind` 0) or up (1) at (x, y): nodes with pointer
     /// handlers hear it. The primary button comes through `pointer`.
     pub fn pointer_button(&self, kind: u32, button: u32, x: f32, y: f32) {
-        self.hover(Some((x, y)));
+        let _ = self.hover(Some((x, y)));
         lock(&self.pointer).position = (x, y);
         self.node_pointer(kind, button, x, y, 1);
     }
@@ -579,10 +583,15 @@ impl Instance {
     }
 
     /// The pointer is at (x, y), or left the window: hover listeners hear what it came over and left.
-    fn hover(&self, at: Option<(f32, f32)>) {
+    /// Returns whether the scene changed (a node follows the pointer).
+    fn hover(&self, at: Option<(f32, f32)>) -> bool {
         let mut tree = lock(&self.tree);
-        tree.pointer_at(at);
+        if tree.pointer_at(at) {
+            self.publish(&mut tree);
+            return true;
+        }
         self.flush_events(&mut tree);
+        false
     }
 
     /// The cursor the pointer should show (protocol `cursor`).

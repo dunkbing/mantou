@@ -70,7 +70,7 @@ The first version used `muda`'s predefined Edit items (`copy:`, `paste:`…). No
 | `monitors()` and `win.monitor()` from the core's answer | `tests/winstate.test.tsx` |
 | Saved state replaces `run`'s options; other windows' entries are kept; a broken file is ignored | `tests/winstate.test.tsx` |
 | Maximized keeps the normal box; minimized saves nothing; a resize saves a moment later | `tests/winstate.test.tsx` |
-| Real displays listed, one current; a window opened at (-20000, -20000) lands on a display | self-test, check 14 |
+| Real displays listed, one current; a window opened at (-20000, -20000) lands on a display | self-test, check 15 |
 | Move and resize, close, launch again: same place and size | by hand under Xvfb |
 
 ## When no dialog can be shown

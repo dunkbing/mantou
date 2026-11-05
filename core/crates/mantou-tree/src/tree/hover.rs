@@ -9,10 +9,17 @@ use super::{Tree, TreeEvent};
 use crate::protocol::{cursor, event_mask};
 
 impl Tree {
-    /// The pointer is at (x, y) logical px, or left the window (`None`).
-    pub fn pointer_at(&mut self, at: Option<(f32, f32)>) {
+    /// The pointer is at (x, y) logical px, or left the window (`None`). Returns whether boxes must be
+    /// placed again: a FOLLOW_POINTER node moves with it.
+    pub fn pointer_at(&mut self, at: Option<(f32, f32)>) -> bool {
+        let moved = self.pointer != at;
         self.pointer = at;
+        if moved && self.follow.is_some() && at.is_some() {
+            self.boxes_dirty = true;
+            return true;
+        }
         self.update_hover();
+        false
     }
 
     /// Works out the hovered path again; queues POINTER_LEAVE for listening

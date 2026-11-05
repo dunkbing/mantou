@@ -203,6 +203,9 @@ export interface WindowState {
   y: number;
 }
 
+/** A drag's preview: a view (or a view and how to dispose of it), made when the drag starts. */
+export type DragPreview = () => Node | { node: Node; dispose?: () => void } | null | undefined;
+
 /** Files dragged over the window or dropped on it. */
 export interface DropEvent {
   /** The node under the pointer with a drop handler (the innermost, or the one bubbled to). */
@@ -1142,6 +1145,18 @@ export class Node {
 
   private dragData: { value: unknown } | null = null;
   private dragOff: (() => void)[] = [];
+  /** @internal What `dragPreview` makes: the view shown under the pointer while this one is dragged. */
+  dragPreview: DragPreview | undefined;
+
+  /**
+   * What is drawn under the pointer while this view is dragged (see `draggable`): `make` returns a view, made when
+   * the drag starts and released when it ends (`dispose` then runs, if given). The core moves it with the pointer,
+   * held where the view was grabbed. Undefined: nothing is drawn.
+   */
+  setDragPreview(make: DragPreview | undefined): this {
+    this.dragPreview = make;
+    return this;
+  }
 
   /**
    * Makes the node draggable inside the app: after the pointer moves a few px with the primary button held,
@@ -1164,7 +1179,10 @@ export class Node {
       }),
       this.onPointerMove((e) => {
         if (!from || !(e.buttons & 1)) return;
-        if (!this.ui.dragging && Math.hypot(e.x - from.x, e.y - from.y) < 4) return;
+        if (!this.ui.dragging) {
+          if (Math.hypot(e.x - from.x, e.y - from.y) < 4) return;
+          this.ui.dragStart(this, from.x, from.y, () => (from = null)); // cancelled: not again until the next press
+        }
         this.ui.dragMove(this, this.dragData!.value, e.x, e.y, 0);
       }),
       this.onPointerUp((e) => {
@@ -1359,9 +1377,59 @@ export class Ui {
   /** True while a view of the app is being dragged. */
   dragging = false;
 
+  private preview: { node: Node; dispose?: () => void } | null = null;
+  private dragCancelled: (() => void) | null = null;
+
+  /** Ends the drag in progress, if any, with no drop: the view it was over hears it leave. */
+  cancelDrag() {
+    if (!this.dragging) return;
+    this.dragging = false;
+    this.endPreview();
+    const was = this.dragOver;
+    this.dragOver = null;
+    if (was) for (let n: Node | null = was; n; n = n.parent) n.handleDrop(1, null);
+    this.dragCancelled?.();
+    this.dragCancelled = null;
+  }
+
+  /** @internal A drag of `source` starts, grabbed at (x, y): its preview (if any) goes under the pointer. */
+  dragStart(source: Node, x: number, y: number, cancelled?: () => void) {
+    this.dragging = true;
+    this.dragCancelled = cancelled ?? null;
+    const make = source.dragPreview;
+    if (!make || !this.root) return;
+    const made = make();
+    if (!made) return;
+    const p = made instanceof Node ? { node: made } : made;
+    const r = this.sink.rect?.(source.id);
+    p.node.style({ position: "fixed", left: 0, top: 0, pointerEvents: "none", zIndex: 1e6 });
+    this.root.append(p.node);
+    this.enc.followPointer(p.node.id, r ? x - r[0] : 0, r ? y - r[1] : 0);
+    this.preview = p;
+    this.schedule();
+  }
+
+  private endPreview() {
+    const p = this.preview;
+    if (!p) return;
+    this.preview = null;
+    this.enc.followPointer(0, 0, 0);
+    p.node.parent?.remove(p.node);
+    if (p.dispose) p.dispose();
+    else {
+      const all = (n: Node): Node[] => [n, ...n.children.flatMap((c) => (c instanceof Node ? all(c) : []))];
+      for (const n of all(p.node).reverse()) n.release();
+    }
+    this.schedule();
+  }
+
   /** @internal The dragged view moved (kind 0) or was released (2) at (x, y). */
   dragMove(source: Node, data: unknown, x: number, y: number, kind: 0 | 2) {
     this.dragging = kind === 0;
+    if (kind === 2) {
+      this.endPreview();
+      this.dragCancelled = null;
+    }
     const id = this.sink.hit?.(x, y) ?? 0;
     let target = this.nodes.get(id) ?? null;
     if (target === source) target = null; // the dragged view itself isn't a target (nor is its inside)
@@ -1519,6 +1587,8 @@ export class Ui {
 
   /** Delivers a key event to the focused node and up through its ancestors, then to every window key listener. */
   dispatchKey(e: KeyEvent) {
+    // Escape drops a drag in progress where it started: no drop, and targets hear it leave.
+    if (this.dragging && e.type === "keyDown" && e.key === "Escape") return this.cancelDrag();
     let stopped = false;
     const target = this.focused && !this.focused.released ? this.focused : null;
     const ev: KeyEvent = { ...e, target, stopPropagation: () => void (stopped = true) };

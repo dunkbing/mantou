@@ -183,6 +183,9 @@ impl Ops {
     pub fn focusable(&mut self, id: u32, flags: u32, order: u32) -> &mut Self {
         self.op(op::FOCUSABLE, &[id, flags, order])
     }
+    pub fn follow_pointer(&mut self, id: u32, x: f32, y: f32) -> &mut Self {
+        self.op(op::FOLLOW_POINTER, &[id, x.to_bits(), y.to_bits()])
+    }
     pub fn focus_scope(&mut self, id: u32, flags: u32) -> &mut Self {
         self.op(op::FOCUS_SCOPE, &[id, flags])
     }

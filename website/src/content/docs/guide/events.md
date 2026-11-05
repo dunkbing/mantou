@@ -75,3 +75,12 @@ Files dropped on the window, and views dragged inside the app, use the same two 
 
 onFileDrop((kind, e) => {}); // files nobody took: 0 over, 1 left, 2 dropped
 ```
+
+To show something under the pointer while a view is dragged, give it a `dragPreview`. It's made when the drag starts, held where the view was grabbed, and moved by the core with no JS. The pointer goes through it to the targets underneath, and it's released when the drag ends. Escape cancels a drag: the target hears it leave and nothing drops.
+
+```tsx
+<View
+  draggable={{ id: mail.id }}
+  dragPreview={() => <View style={{ padding: 8, borderRadius: 8, backgroundColor: "#2563eb" }}><Text style={{ color: "#fff" }}>{mail.subject}</Text></View>}
+/>
+```
