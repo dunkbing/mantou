@@ -25,4 +25,5 @@ export {
 export { dumpTree } from "./debug";
 export { CanvasContext, Path } from "./canvas";
 export { paths } from "./paths";
+export { singleInstance, onOpen } from "./instance";
 export { onError, type AppError, type ErrorHandler } from "./errors";

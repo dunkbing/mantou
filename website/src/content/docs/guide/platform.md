@@ -56,6 +56,21 @@ onMenu((id) => id === "open" && show());                // tray items arrive her
 
 `setBadge` and `createTray` work on macOS only for now (they resolve `false` elsewhere). A notification can't tell you it was clicked yet. Notifications from a program that isn't an app bundle show up under another name on macOS; `mantou package` apps use their own.
 
+## One copy, and what it's opened with
+
+```tsx
+import { singleInstance, onOpen, run } from "mantou-ui";
+
+if (!(await singleInstance((args) => console.log("launched again with", args)))) process.exit(0);
+onOpen(({ url, file }) => (url ? route(url) : open(file!)));
+run(App);
+```
+
+- **`singleInstance(onLaunch?)`** resolves `true` for the first copy and `false` for a later one, which has handed its arguments to the first (that window is focused) and should exit. Call it before `run`.
+- **`onOpen`** hears the URLs (`scheme://…`, `mailto:`) and existing files among the launch arguments, both this copy's own and those of later launches.
+- The copies talk over a local socket with a token kept in `paths.temp`.
+- Arguments only: macOS "Open with" and URL-scheme launches arrive as system events, not arguments, and aren't delivered yet ([#66](https://github.com/dunkbing/mantou/issues/66)).
+
 ## Where to keep files
 
 ```tsx
