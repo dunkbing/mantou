@@ -88,6 +88,31 @@ PNG, JPEG, WebP and SVG, from a path or bytes. SVGs can be tinted with `color`.
 
 `itemHeight` can be a function for rows of different heights. A `ref` gives `scrollToIndex(i)`.
 
+## Base components
+
+Built on the primitives above, accessible and keyboard-friendly, with a plain default look ([#22](https://github.com/dunkbing/mantou/issues/22)). `bun run gallery` shows them all.
+
+```tsx
+import { Button, Checkbox, Dialog, RadioGroup, Slider, Splitter, Tabs, Toggle, Tooltip } from "mantou-ui";
+
+<Button onPress={save}>Save</Button>                       // variant: "primary" | "secondary" | "ghost"; disabled
+<Checkbox checked={news()} onChange={setNews}>Send me news</Checkbox>
+<Toggle checked={wifi()} onChange={setWifi}>Wi-Fi</Toggle>  // a switch (Switch is Solid's control flow)
+<RadioGroup value={theme()} onChange={setTheme} options={[{ value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+<Slider value={volume()} onChange={setVolume} min={0} max={100} step={5} />
+<Tabs tabs={[{ id: "inbox", label: "Inbox" }, { id: "sent", label: "Sent" }]} value={tab()} onChange={setTab}>{(id) => <Panel id={id} />}</Tabs>
+<Dialog open={open()} onClose={() => setOpen(false)} title="Discard the draft?">…</Dialog>
+<Tooltip text="Copies the link">…</Tooltip>
+<Splitter size={width()} onResize={setWidth} min={120} max={400}>{[<Sidebar />, <Main />]}</Splitter>
+```
+
+- **State is the app's:** each takes its value and an `onChange` (or `onPress`), and draws what it's given.
+- **Keyboard:** they're focusable, with the focus ring when reached by Tab. Enter and Space press buttons and toggle checkboxes and toggles. Tab reaches a radio group or a tab list once (its chosen item), and the arrows move the choice. A slider moves with the arrows, Page Up and Down and Home and End. A focused splitter handle moves with the arrows. A dialog keeps Tab inside it, closes on Escape or a press on its backdrop, and gives the focus back when it closes.
+- **Pointer:** hover and pressed looks, a slider you press or drag anywhere on, a splitter handle you drag. A tooltip shows after the pointer rests (`delay`, default 500 ms).
+- **Styles:** `style` is laid over the default look. It can be a function of the state: `style={(s) => ({ backgroundColor: s.pressed ? "#000" : s.hovered ? "#333" : "#555" })}`, where `s` has `hovered`, `pressed`, `focused` and `disabled` (and `checked` or `value` where they apply).
+
+Not yet: Select and Combobox (they need native menus, #21), Popover.
+
 ## Control flow
 
 `For`, `Index`, `Show`, `Switch` and `Match` work as in Solid; use them instead of `.map` and `?:` so only what changed updates.

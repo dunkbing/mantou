@@ -22,6 +22,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/counter` | `Counter.tsx`, a Solid component; `main.tsx` runs it; `Counter.test.tsx` tests it on the mock core |
 | `examples/todos` | A to-do list with `<Input>`s; `Todos.test.tsx` tests it headless |
 | `examples/showcase` | A screen showing what Mantou draws (list, inputs, shadows, an app font); the README's screenshot |
+| `examples/gallery` | The base components (`runtime/widgets.tsx`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `app.ts` (threading demo) |
 | `scripts/` | `npm.ts` (stages the npm packages of a release), `smoke.ts` (installs them into a fresh app and tests it), `screenshots.tsx` (renders `docs/images/` at 2×: `bun run screenshots`) |
@@ -42,6 +43,7 @@ bun run selftest            # window self-test; on headless Linux: xvfb-run -a b
 bun run counter             # the counter in a window (bun runtime/main.ts <entry.tsx> runs any app)
 bun run todos               # the to-do list (text input) in a window
 bun run showcase            # the showcase screen in a window
+bun run gallery             # the base components in a window
 bun run screenshots         # re-render the README's images (docs/images/) after a visible change
 cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)
