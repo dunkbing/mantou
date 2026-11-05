@@ -98,8 +98,7 @@ fn erf(x: f32) -> f32 {
     return sign(x) * y;
 }
 
-@fragment
-fn fs(in: VsOut) -> @location(0) vec4<f32> {
+fn shade(in: VsOut) -> vec4<f32> {
     var p = in.position.xy;
     if (p.x < in.clip.x || p.y < in.clip.y || p.x >= in.clip.z || p.y >= in.clip.w) {
         discard;
@@ -247,4 +246,24 @@ fn fs(in: VsOut) -> @location(0) vec4<f32> {
     let ring = in.border_color.a * (outer - inner);
     let a = fill + ring;
     return vec4<f32>(color.rgb * fill + in.border_color.rgb * ring, a);
+}
+
+@fragment
+fn fs(in: VsOut) -> @location(0) vec4<f32> {
+    var out = shade(in);
+    // A clip with rounded corners (grad2.z): smooth coverage at its edge.
+    if (in.grad2.z > 0.0) {
+        let d = rounded_box(in.position.xy, in.clip.xy, in.clip.zw, in.grad2.z);
+        out = out * clamp(0.5 - d, 0.0, 1.0);
+    }
+    // Brightness (grad.w) and saturation (grad2.w), applied to the colour as it looks (sRGB), not as blended (linear).
+    if (in.grad.w != 1.0 || in.grad2.w != 1.0) {
+        if (out.a > 0.0) {
+            var c = pow(max(out.rgb / out.a, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)) * in.grad.w;
+            let gray = dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
+            c = clamp(mix(vec3<f32>(gray), c, in.grad2.w), vec3<f32>(0.0), vec3<f32>(1.0));
+            out = vec4<f32>(pow(c, vec3<f32>(2.2)) * out.a, out.a);
+        }
+    }
+    return out;
 }

@@ -82,6 +82,18 @@ export class CanvasContext {
     return this;
   }
 
+  /**
+   * One line of text with its top left at (x, y), in the view's font (`fontFamily`, set on the canvas's style).
+   * It doesn't wrap; put longer text in a `<Text>` over the canvas.
+   */
+  text(text: string, x: number, y: number, color: Color, size = 14, weight = 400) {
+    if (![x, y, size, weight].every(Number.isFinite) || !text) return this;
+    const bytes = new TextEncoder().encode(text);
+    this.words.push(CanvasCmd.Text, f32bits(x), f32bits(y), parseColor(color), f32bits(size), Math.round(weight) >>> 0, bytes.length);
+    for (let i = 0; i < bytes.length; i += 4) this.words.push(((bytes[i] | ((bytes[i + 1] ?? 0) << 8) | ((bytes[i + 2] ?? 0) << 16) | ((bytes[i + 3] ?? 0) << 24)) >>> 0));
+    return this;
+  }
+
   /** Lines through the points, one after the other (square joins: round them with small circles if the width is large). */
   polyline(points: readonly (readonly [number, number])[], color: Color, width = 1) {
     for (let i = 1; i < points.length; i++) this.line(points[i - 1][0], points[i - 1][1], points[i][0], points[i][1], color, width);

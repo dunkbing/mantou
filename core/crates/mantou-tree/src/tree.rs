@@ -91,16 +91,20 @@ pub struct Extra {
     pub trap: Option<[f32; 3]>,
     /// One pixel row of a filled shape: where its left and right edges are at the row's top and bottom (x, device px).
     pub span: Option<[f32; 4]>,
+    /// The corner radius of the clip, in device px (0 = a plain rectangle).
+    pub clip_radius: f32,
+    /// Brightness and saturation the quad's colours are put through.
+    pub filter: [f32; 2],
 }
 
 impl Extra {
-    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: None };
+    pub const NONE: Extra = Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: None, clip_radius: 0.0, filter: [1.0, 1.0] };
 }
 
 /// The quads of a CANVAS command list. Coordinates are logical px from `origin` (the content box's top left, in
 /// the window's logical px), multiplied by `k` (the node's transform scale), then by `s` (device px per logical px).
 /// Stops at a command it doesn't know or one that is cut short.
-fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn(u32) -> [f32; 4], clip: [f32; 4], out: &mut Vec<Quad>) {
+fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn(u32) -> [f32; 4], clip: [f32; 4], out: &mut Vec<Quad>, mut text: Option<&mut TextEngine>, base: &TextStyle, glyphs: &mut bool) {
     use crate::protocol::canvas_cmd as cmd;
     let dev = |x: f32, y: f32| ((origin.0 + x * k) * s, (origin.1 + y * k) * s);
     let len = |v: f32| (v * k * s).max(0.0);
@@ -110,7 +114,7 @@ fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn
     };
     let push = |out: &mut Vec<Quad>, rect: [f32; 4], color: [f32; 4], radius: f32, border: f32, border_color: [f32; 4], rotation: f32, trap: Option<[f32; 3]>| {
         if color[3] > 0.0 || (border > 0.0 && border_color[3] > 0.0) {
-            out.push(Quad { rect, color, uv: [0.0; 4], clip, radius, border, border_color, shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation, trap, span: None } });
+            out.push(Quad { rect, color, uv: [0.0; 4], clip, radius, border, border_color, shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation, trap, span: None, ..Extra::NONE } });
         }
     };
     let clear = [0.0; 4];
@@ -197,11 +201,37 @@ fn canvas_quads(words: &[u32], origin: (f32, f32), k: f32, s: f32, rgba: impl Fn
                     let x0 = edges[0].min(edges[1]).floor() - 1.0;
                     let x1 = edges[2].max(edges[3]).ceil() + 1.0;
                     if x1 > x0 && x1 > clip[0] && x0 < clip[2] {
-                        out.push(Quad { rect: [x0, row, x1, row + 1.0], color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: Some(edges) } });
+                        out.push(Quad { rect: [x0, row, x1, row + 1.0], color, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra { radii: [-1.0; 4], widths: [-1.0; 4], gradient: None, rotation: 0.0, trap: None, span: Some(edges), ..Extra::NONE } });
                     }
                 }
                 row += 1.0;
             }
+            continue;
+        }
+        if words[i] == cmd::TEXT {
+            // Text x y colour size weight nbytes, then the bytes: one line from its top left.
+            if i + 7 > words.len() {
+                return;
+            }
+            let nbytes = words[i + 6] as usize;
+            let need = 7 + nbytes.div_ceil(4);
+            if need > words.len() - i {
+                return;
+            }
+            let a = |n: usize| f32::from_bits(words[i + n]);
+            let bytes: Vec<u8> = words[i + 7..i + need].iter().flat_map(|w| w.to_le_bytes()).take(nbytes).collect();
+            let color = rgba(words[i + 3]);
+            if let Some(engine) = text.as_deref_mut()
+                && a(1).is_finite()
+                && a(2).is_finite()
+                && a(4).is_finite()
+                && color[3] > 0.0
+            {
+                let style = TextStyle { size: a(4).clamp(1.0, 1000.0), weight: words[i + 5] as f32, nowrap: true, max_lines: 0, ..*base };
+                let layout = engine.layout(&String::from_utf8_lossy(&bytes), &style, None);
+                *glyphs |= push_glyphs(out, engine, &layout.glyphs, (origin.0 + a(1) * k, origin.1 + a(2) * k), k, s, &[color], clip);
+            }
+            i += need;
             continue;
         }
         let need = match words[i] {
@@ -430,6 +460,9 @@ struct Visual {
     scale: f32,
     /// Degrees clockwise, about the box's centre.
     rotate: f32,
+    /// `brightness` and `saturate` (1 = unchanged).
+    brightness: f32,
+    saturate: f32,
     /// The `cursor` style (protocol::cursor; AUTO = whatever's below).
     cursor: u32,
 }
@@ -488,6 +521,10 @@ struct LaidOut {
     k: f32,
     /// `rotate`: its box and everything inside it (boxes up to `end` in this list) turn about `pivot`.
     spin: Option<Spin>,
+    /// The corner radius of the clip its ancestors put on it (logical px, scaled like `rect`).
+    clip_r: f32,
+    /// `brightness` and `saturate` on this box and the boxes up to `end` inside it.
+    filter: Option<([f32; 2], usize)>,
 }
 
 /// A rotation of a subtree: clockwise `angle` (radians) about `pivot` (logical px, in the frame its ancestors'
@@ -521,6 +558,7 @@ fn spin_quad(q: &mut Quad, sp: &Spin, s: f32) {
         let corners = [rot(c[0], c[1]), rot(c[2], c[1]), rot(c[2], c[3]), rot(c[0], c[3])];
         let xs = corners.map(|p| p.0);
         let ys = corners.map(|p| p.1);
+        q.extra.clip_radius = 0.0; // no longer the clip's own shape
         q.clip = [xs.into_iter().fold(f32::INFINITY, f32::min), ys.into_iter().fold(f32::INFINITY, f32::min), xs.into_iter().fold(f32::NEG_INFINITY, f32::max), ys.into_iter().fold(f32::NEG_INFINITY, f32::max)];
     }
 }
@@ -952,6 +990,9 @@ impl Tree {
                 self.fonts_changed();
             }
             Op::Canvas { id, commands } => {
+                if commands.contains(&p::canvas_cmd::TEXT) {
+                    self.text.get_or_insert_with(TextEngine::new); // (a false match on a number only makes the engine early)
+                }
                 self.node(id)?.canvas = commands;
                 self.scene_dirty = true;
             }
@@ -1048,7 +1089,7 @@ impl Tree {
         // absolutely positioned children (Taffy defaults to `static`, whose
         // boxes aren't; dunkbing/mantou#1).
         let mut style = Style { flex_direction: FlexDirection::Column, position: Position::Relative, ..Style::default() };
-        let mut v = Visual { opacity: 1.0, scale: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
+        let mut v = Visual { opacity: 1.0, scale: 1.0, brightness: 1.0, saturate: 1.0, color: 0xff_00_00_00, text: TextStyle::default(), ..Visual::default() };
         let shared = self.styles.get(&node.shared).map(|v| v.as_slice()).unwrap_or(&[]);
         for (prop, value) in shared.iter().copied().chain(node.own.iter().map(|(k, v)| (*k, *v))) {
             set_prop(&mut style, &mut v, prop, value);
@@ -1182,7 +1223,7 @@ impl Tree {
         self.thumbs.clear();
         if let Some(root) = self.root {
             let (vw, vh) = self.viewport_logical();
-            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY], Xf { k: 1.0, o: [0.0; 2] }, None, [0.0, 0.0, vw, vh]);
+            self.collect_boxes(root, 0.0, 0.0, [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY], 0.0, Xf { k: 1.0, o: [0.0; 2] }, None, [0.0, 0.0, vw, vh]);
         }
     }
 
@@ -1250,14 +1291,14 @@ impl Tree {
     /// `view`: the nearest scroll view's box and `pbox` the parent's content area, both in layout coordinates
     /// (for sticky nodes).
     #[allow(clippy::too_many_arguments)]
-    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4], xf: Xf, view: Option<[f32; 4]>, pbox: [f32; 4]) {
+    fn collect_boxes(&mut self, id: u32, px: f32, py: f32, clip: [f32; 4], clip_r: f32, xf: Xf, view: Option<[f32; 4]>, pbox: [f32; 4]) {
         let node = &self.nodes[&id];
         if node.v.hidden {
             return;
         }
         let Ok(l) = self.taffy.layout(node.taffy) else { return };
         let (mut x, mut y) = (px + l.location.x, py + l.location.y);
-        let (mut clip, mut xf) = (clip, xf);
+        let (mut clip, mut xf, mut clip_r) = (clip, xf, clip_r);
         let [it, ir, ib, il] = node.v.inset;
         match node.v.position {
             2 => {
@@ -1266,6 +1307,7 @@ impl Tree {
                 x = il.or(ir.map(|r| vw - r - l.size.width)).unwrap_or(x);
                 y = it.or(ib.map(|b| vh - b - l.size.height)).unwrap_or(y);
                 clip = [f32::NEG_INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::INFINITY];
+                clip_r = 0.0;
                 xf = Xf { k: 1.0, o: [0.0; 2] };
             }
             3 => {
@@ -1303,7 +1345,10 @@ impl Tree {
         } else {
             xf
         };
-        let mut laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k, spin: None };
+        let mut laid = LaidOut { id, rect: xf.rect(rect), content: xf.rect(content), clip, layout: rect, k: xf.k, spin: None, clip_r, filter: None };
+        if v.brightness != 1.0 || v.saturate != 1.0 {
+            laid.filter = Some(([v.brightness, v.saturate], 0));
+        }
         if v.rotate % 360.0 != 0.0 {
             laid.spin = Some(Spin { angle: v.rotate.to_radians(), pivot: [(laid.rect[0] + laid.rect[2]) / 2.0, (laid.rect[1] + laid.rect[3]) / 2.0], end: 0 });
         }
@@ -1312,6 +1357,8 @@ impl Tree {
         self.nodes.get_mut(&id).expect("exists").placed = true;
         let node = &self.nodes[&id];
         let inner = if node.v.clips { intersect(clip, laid.rect) } else { clip };
+        // A clip with rounded corners clips to them; one that doesn't shrink the clip leaves the one above in charge.
+        let inner_r = if node.v.clips && inner != clip { v.radius * xf.k } else { clip_r };
         let border = [bd.left, bd.top, bd.right, bd.bottom];
         // A scroll view: how far its content reaches (from its padding box), and so how far it scrolls.
         let mut extent = [0.0f32; 2];
@@ -1343,11 +1390,14 @@ impl Tree {
             kids.sort_by_key(|c| self.nodes[c].v.z); // stable: ties keep tree order
         }
         for c in kids {
-            self.collect_boxes(c, x - offset[0], y - offset[1], inner, xf, child_view, child_box);
+            self.collect_boxes(c, x - offset[0], y - offset[1], inner, inner_r, xf, child_view, child_box);
         }
         let end = self.boxes.len();
         if let Some(sp) = &mut self.boxes[at_box].spin {
             sp.end = end;
+        }
+        if let Some(f) = &mut self.boxes[at_box].filter {
+            f.1 = end;
         }
         let node = &self.nodes[&id];
         if let Some(st) = node.scroll
@@ -1374,7 +1424,7 @@ impl Tree {
         self.stats.scenes += 1;
         let s = self.scale;
         let snap = |v: f32| (v * s).round();
-        let mut quads = Vec::new();
+        let mut quads: Vec<Quad> = Vec::new();
         let rgba = |c: u32, alpha: f32| {
             let ch = |shift: u32| ((c >> shift) & 255) as f32 / 255.0;
             [ch(0), ch(8), ch(16), ch(24) * alpha]
@@ -1408,17 +1458,28 @@ impl Tree {
         let mut thumbs = self.thumbs.iter().peekable();
         // `rotate`: the quads a box makes are turned by every spin around it, innermost first.
         let mut spins: Vec<Spin> = Vec::new();
+        let mut filters: Vec<([f32; 2], usize)> = Vec::new();
         let mut from = 0;
+        let mut clip_r = 0.0;
         for (i, b) in self.boxes.iter().enumerate() {
             for q in &mut quads[from..] {
+                q.extra.clip_radius = clip_r * s;
                 for sp in spins.iter().rev() {
                     spin_quad(q, sp, s);
+                }
+                for f in &filters {
+                    q.extra.filter = [q.extra.filter[0] * f.0[0], q.extra.filter[1] * f.0[1]];
                 }
             }
             while spins.last().is_some_and(|sp| sp.end <= i) {
                 spins.pop();
             }
+            while filters.last().is_some_and(|f| f.1 <= i) {
+                filters.pop();
+            }
             spins.extend(b.spin);
+            filters.extend(b.filter);
+            clip_r = b.clip_r;
             // A scroll view's thumb goes over its content, before whatever comes after it.
             while let Some(t) = thumbs.next_if(|t| t.at <= i) {
                 quads.push(thumb_quad(t, &self.nodes));
@@ -1468,7 +1529,7 @@ impl Tree {
                 mid: (v.gradient_mid != 0).then(|| (rgba(v.gradient_mid, alpha), (v.gradient_mid_at + 0.5).clamp(0.0, 1.0))),
                 radial: v.gradient_radial,
             });
-            let extra = Extra { radii, widths, gradient, rotation: 0.0, trap: None, span: None };
+            let extra = Extra { radii, widths, gradient, ..Extra::NONE };
             if (bg[3] > 0.0 || gradient.is_some() || border > 0.0 || (own_sides && widths.iter().any(|w| *w > 0.0))) && rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
                 quads.push(Quad { rect, color: bg, uv: [0.0; 4], clip, radius: v.radius * k * s, border, border_color, shadow: None, image: None, extra });
             }
@@ -1487,7 +1548,7 @@ impl Tree {
                 let c = b.content;
                 let area = intersect(clip, [snap(c[0]), snap(c[1]), snap(c[2]), snap(c[3])]);
                 if area[2] > area[0] && area[3] > area[1] {
-                    canvas_quads(&node.canvas, (c[0], c[1]), k, s, |col| rgba(col, alpha), area, &mut quads);
+                    canvas_quads(&node.canvas, (c[0], c[1]), k, s, |col| rgba(col, alpha), area, &mut quads, self.text.as_mut(), &v.text, &mut glyphs);
                 }
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
@@ -1618,8 +1679,12 @@ impl Tree {
             }
         }
         for q in &mut quads[from..] {
+            q.extra.clip_radius = clip_r * s;
             for sp in spins.iter().rev() {
                 spin_quad(q, sp, s);
+            }
+            for f in &filters {
+                q.extra.filter = [q.extra.filter[0] * f.0[0], q.extra.filter[1] * f.0[1]];
             }
         }
         for t in thumbs {
@@ -1979,6 +2044,8 @@ fn set_prop(s: &mut Style, v: &mut Visual, prop: Prop, value: Value) {
         Prop::TranslateY => v.translate[1] = finite(num(), 0.0),
         Prop::Scale => v.scale = finite(num(), 1.0).max(0.0),
         Prop::Rotate => v.rotate = finite(num(), 0.0),
+        Prop::Brightness => v.brightness = finite(num(), 1.0).clamp(0.0, 10.0),
+        Prop::Saturate => v.saturate = finite(num(), 1.0).clamp(0.0, 10.0),
         Prop::FontSize => v.text.size = num().clamp(1.0, 1000.0),
         Prop::FontWeight => v.text.weight = num().clamp(1.0, 1000.0),
         Prop::LineHeight => v.text.line_height = num().clamp(0.0, 10.0),

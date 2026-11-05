@@ -56,12 +56,13 @@ Two things catch people out:
 | Gradient | `backgroundColor` to `gradientColor`, at `gradientAngle` degrees (180, the default, runs top to bottom; 90 left to right); `gradientMidColor` (at `gradientMidAt` percent, default 50) adds a third stop; `gradientShape: "radial"` runs from the centre to the corners. A see-through end colour (`"#ffffff00"`) fades out |
 | Stacking | `zIndex`: higher is painted and hit on top of its siblings |
 | Shadow | `shadowX`, `shadowY`, `shadowBlur`, `shadowSpread`, `shadowColor` |
-| Clipping | `overflow: "visible" \| "hidden" \| "scroll"` |
+| Clipping | `overflow: "visible" \| "hidden" \| "scroll"`; a clipping view with `borderRadius` clips to the rounded corners |
+| Filters | `brightness` and `saturate` (1 = unchanged, 0 = black or grayscale) on a view and what's inside it; nested ones multiply |
 | Transform | `translateX`, `translateY`, `scale`, `rotate` in degrees clockwise (they move what is drawn, not the layout) |
 | Pointer | `cursor` (`"pointer"`, `"text"`, `"grab"`…) |
 | Images | `objectFit` |
 
-`rotate` turns a view and everything inside it about its centre, and the pointer follows. For now `overflow` clips to the box around the turned view, a click in a text field inside it puts the caret in the wrong place, and scroll bars stay upright.
+`rotate` turns a view and everything inside it about its centre, and the pointer follows. For now `overflow` clips to the box around a turned view (not its rounded shape), a click in a text field inside it puts the caret in the wrong place, and scroll bars stay upright.
 
 ## Text
 

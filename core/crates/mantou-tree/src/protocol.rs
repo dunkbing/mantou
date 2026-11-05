@@ -178,6 +178,7 @@ pub mod canvas_cmd {
     pub const ROUND_RECT: u32 = 6;
     pub const AREA: u32 = 7;
     pub const FILL_POLY: u32 = 8;
+    pub const TEXT: u32 = 9;
 }
 
 pub mod window_state_flag {
@@ -583,11 +584,13 @@ pub enum Prop {
     GradientMidColor = 88,
     GradientMidAt = 89,
     GradientShape = 90,
+    Brightness = 91,
+    Saturate = 92,
     ZIndex = 84,
 }
 
 impl Prop {
-    pub const COUNT: usize = 90;
+    pub const COUNT: usize = 92;
 
     pub fn from_code(code: u32) -> Option<Prop> {
         Some(match code {
@@ -680,6 +683,8 @@ impl Prop {
             88 => Prop::GradientMidColor,
             89 => Prop::GradientMidAt,
             90 => Prop::GradientShape,
+            91 => Prop::Brightness,
+            92 => Prop::Saturate,
             84 => Prop::ZIndex,
             _ => return None,
         })
@@ -776,6 +781,8 @@ impl Prop {
             Prop::GradientMidColor => "gradientMidColor",
             Prop::GradientMidAt => "gradientMidAt",
             Prop::GradientShape => "gradientShape",
+            Prop::Brightness => "brightness",
+            Prop::Saturate => "saturate",
             Prop::ZIndex => "zIndex",
         }
     }
@@ -871,6 +878,8 @@ impl Prop {
             Prop::GradientMidColor => ValueKind::Color,
             Prop::GradientMidAt => ValueKind::F32,
             Prop::GradientShape => ValueKind::Enum(2),
+            Prop::Brightness => ValueKind::F32,
+            Prop::Saturate => ValueKind::F32,
             Prop::ZIndex => ValueKind::F32,
         }
     }

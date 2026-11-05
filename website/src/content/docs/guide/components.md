@@ -91,7 +91,7 @@ Coordinates are logical px from the canvas's top left; shapes are cut to its box
 g.fill(new Path().arc(75, 75, 65, a, b).arc(75, 75, 38, b, a).close(), "#2563eb");
 ```
 
-Gradients, images and text in the canvas (put a `<Text>` over it) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
+`g.text(string, x, y, colour, size = 14, weight = 400)` draws one line from its top left (it doesn't wrap: put longer text in a `<Text>` over the canvas). Gradients and images in the canvas (use views for those) and a GPU surface for video aren't there yet. A canvas is a view: it takes pointer handlers, so hit-testing shapes is yours to do from the pointer's position.
 
 ## Scroll and List
 

@@ -132,3 +132,53 @@ test("a path with a hole-free donut: arcs out and back, filled", () => {
   expect(pixel(h, 170, 70)).not.toEqual([0, 0, 255, 255]); // the missing quarter (up and right)
   expect(pixel(h, 30, 100)[2]).toBe(255); // the left of the ring
 });
+
+/** The box around the dark pixels of a white canvas. */
+function ink(h: HeadlessCore) {
+  const cap = h.capture();
+  let [x0, y0, x1, y1] = [1e9, 1e9, -1, -1];
+  for (let y = 0; y < cap.height; y++)
+    for (let x = 0; x < cap.width; x++) if (cap.pixels[(y * cap.width + x) * 4] < 128) [x0, y0, x1, y1] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x), Math.max(y1, y)];
+  return { x0, y0, x1, y1 };
+}
+
+test("text is drawn from its top left, in its size and colour, and in the order drawn", () => {
+  const h = new HeadlessCore({ width: 200, height: 200 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View style={{ backgroundColor: "#ffffff", width: 200, height: 200 }}>
+      <Canvas width={200} height={200} draw={(g) => g.text("Hello", 20, 30, "#000000", 40, 700)} />
+    </View>
+  ));
+  h.step();
+  const box = ink(h);
+  expect(box.x0).toBeGreaterThanOrEqual(18);
+  expect(box.x0).toBeLessThan(40);
+  expect(box.y0).toBeGreaterThanOrEqual(30); // the line's top, then the letter's own gap
+  expect(box.y1).toBeLessThan(30 + 60);
+  expect(box.x1 - box.x0).toBeGreaterThan(80); // "Hello" at 40px is wide
+});
+
+test("text keeps its place in the drawing order, and handles Unicode", () => {
+  const h = new HeadlessCore({ width: 200, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View style={{ backgroundColor: "#ffffff", width: 200, height: 100 }}>
+      <Canvas width={200} height={100} draw={(g) => g.text("Tiếng Việt 日本", 10, 10, "#000000", 24).fillRect(0, 0, 200, 100, "#ff0000")} />
+    </View>
+  ));
+  h.step();
+  expect(ink(h).x1).toBe(-1); // the rectangle drawn after covers the text: no dark pixels left
+});
+
+test("Unicode text draws", () => {
+  const h = new HeadlessCore({ width: 200, height: 100 });
+  open.push(h);
+  mount(h.ui, () => (
+    <View style={{ backgroundColor: "#ffffff", width: 200, height: 100 }}>
+      <Canvas width={200} height={100} draw={(g) => g.text("Tiếng Việt", 10, 10, "#000000", 24)} />
+    </View>
+  ));
+  h.step();
+  expect(ink(h).x1).toBeGreaterThan(80);
+});

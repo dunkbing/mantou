@@ -92,8 +92,8 @@ export const inputFlags = { Multiline: 1, Secure: 2, ReadOnly: 4 } as const;
 /** LISTEN bits: which events a node has handlers for. */
 export const eventMask = { Press: 1, Layout: 2, Scroll: 4, Hover: 8, Pointer: 16, Drop: 32, Select: 64 } as const;
 
-/** CANVAS commands, each followed by its operands: FillRect x y w h colour; StrokeRect x y w h width colour; Line x0 y0 x1 y1 width colour; Circle cx cy r colour; StrokeCircle cx cy r width colour; RoundRect x y w h radius colour; FillPoly colour n then n points x y: the polygon they make, filled even-odd; Area baseline colour n then n points x y: the region between the polyline and the horizontal line at `baseline`. */
-export const canvasCmds = { FillRect: 1, StrokeRect: 2, Line: 3, Circle: 4, StrokeCircle: 5, RoundRect: 6, Area: 7, FillPoly: 8 } as const;
+/** CANVAS commands, each followed by its operands: FillRect x y w h colour; StrokeRect x y w h width colour; Line x0 y0 x1 y1 width colour; Circle cx cy r colour; StrokeCircle cx cy r width colour; RoundRect x y w h radius colour; Text x y colour size weight nbytes then the UTF-8 bytes packed little-endian into words: one line from its top left; FillPoly colour n then n points x y: the polygon they make, filled even-odd; Area baseline colour n then n points x y: the region between the polyline and the horizontal line at `baseline`. */
+export const canvasCmds = { FillRect: 1, StrokeRect: 2, Line: 3, Circle: 4, StrokeCircle: 5, RoundRect: 6, Area: 7, FillPoly: 8, Text: 9 } as const;
 
 /** SCROLL_TO flags. */
 export const scrollFlags = { By: 1 } as const;
@@ -217,6 +217,8 @@ export const styleProps: { name: string; code: number; type: ValueType; default:
   { name: "gradientMidColor", code: 88, type: "color", default: "transparent (none): a colour between backgroundColor and gradientColor, for three stops" },
   { name: "gradientMidAt", code: 89, type: "f32", default: "50 (percent of the way along the gradient where gradientMidColor is)" },
   { name: "gradientShape", code: 90, type: { enum: ["linear", "radial"] }, default: "linear (radial: from the centre out to the corners; gradientAngle is ignored)" },
+  { name: "brightness", code: 91, type: "f32", default: "1: what's drawn in the view and inside it is made this many times brighter (0 black, 2 twice as bright)" },
+  { name: "saturate", code: 92, type: "f32", default: "1: colour strength of what's drawn in the view and inside it (0 is grayscale)" },
   { name: "zIndex", code: 84, type: "f32", default: "0: among its siblings, higher is painted (and hit) on top; ties keep tree order" },
 ];
 

@@ -245,14 +245,14 @@ impl Renderer {
             self.scratch.extend_from_slice(&widths);
             let (end, angle, on) = q.extra.gradient.map_or(([0.0; 4], 0.0, 0.0), |g| (self.color(g.end), g.angle, 1.0));
             self.scratch.extend_from_slice(&end);
-            self.scratch.extend_from_slice(&[angle, on, q.extra.rotation, 0.0]);
+            self.scratch.extend_from_slice(&[angle, on, q.extra.rotation, q.extra.filter[0]]);
             // The middle stop's colour; then (its position + 1, or 0 for none; 1 = radial).
             let (mid, at, radial) = match q.extra.gradient {
                 Some(g) => (g.mid.map_or([0.0; 4], |m| self.color(m.0)), g.mid.map_or(0.0, |m| m.1 + 1.0), if g.radial { 1.0 } else { 0.0 }),
                 None => ([0.0; 4], 0.0, 0.0),
             };
             self.scratch.extend_from_slice(&mid);
-            self.scratch.extend_from_slice(&[at, radial, 0.0, 0.0]);
+            self.scratch.extend_from_slice(&[at, radial, q.extra.clip_radius, q.extra.filter[1]]);
         }
         let count = scene.quads.len() as u64;
         if count > self.capacity {

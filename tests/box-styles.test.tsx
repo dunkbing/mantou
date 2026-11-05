@@ -103,3 +103,44 @@ test("a fade to see-through: the end colour may have no alpha", () => {
   expect(px(h, 1, 10)[0]).toBeGreaterThan(240); // red at the start
   expect(Math.abs(px(h, 198, 10)[0] - bg[0])).toBeLessThan(25); // the window's colour at the end
 });
+
+test("overflow clips to the rounded corners", () => {
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View style={{ width: 100, height: 100, overflow: "hidden", borderRadius: 40 }}>
+        <View style={{ width: 100, height: 100, backgroundColor: "#ff0000" }} />
+      </View>
+    </View>
+  ));
+  expect(near(px(h, 60, 60), [255, 0, 0], 4)).toBe(true); // the middle
+  expect(near(px(h, 12, 12), [255, 0, 0], 40)).toBe(false); // the square corner is cut away
+  expect(near(px(h, 60, 12), [255, 0, 0], 4)).toBe(true); // the straight top edge stays
+});
+
+test("a square clip stays square", () => {
+  const h = app(() => (
+    <View style={{ padding: 10 }}>
+      <View style={{ width: 100, height: 100, overflow: "hidden" }}>
+        <View style={{ width: 100, height: 100, backgroundColor: "#ff0000" }} />
+      </View>
+    </View>
+  ));
+  expect(near(px(h, 11, 11), [255, 0, 0], 4)).toBe(true);
+});
+
+test("brightness and saturate change what's drawn inside, nested ones multiply", () => {
+  const red = (style: any) => app(() => <View style={style}><View style={{ width: 50, height: 50, backgroundColor: "#ff0000" }} /></View>);
+  expect(near(px(red({ brightness: 0 }), 10, 10), [0, 0, 0], 3)).toBe(true);
+  const gray = px(red({ saturate: 0 }), 10, 10);
+  expect(Math.abs(gray[0] - gray[1]) < 3 && Math.abs(gray[1] - gray[2]) < 3).toBe(true);
+  const h = app(() => (
+    <View style={{ brightness: 0.5 }}>
+      <View style={{ brightness: 0.5 }}>
+        <View style={{ width: 50, height: 50, backgroundColor: "#ffffff" }} />
+      </View>
+    </View>
+  ));
+  const once = px(red({ brightness: 0.5 }), 10, 10)[0];
+  expect(px(h, 10, 10)[0]).toBeLessThan(once); // a quarter, darker than a half
+  expect(near(px(red({}), 10, 10), [255, 0, 0], 2)).toBe(true);
+});
