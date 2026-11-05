@@ -6,7 +6,11 @@ import { join } from "node:path";
 
 const app = "mantou-instance-test-" + process.pid;
 function run(...args: string[]) {
-  const p = Bun.spawn(["bun", "tests/fixtures/instance-app.ts", ...args], { env: { ...process.env, MANTOU_APP: app }, stdin: "pipe", stdout: "pipe" });
+  return spawn("tests/fixtures/instance-app.ts", args);
+}
+
+function spawn(file: string, args: string[]) {
+  const p = Bun.spawn(["bun", file, ...args], { env: { ...process.env, MANTOU_APP: app }, stdin: "pipe", stdout: "pipe" });
   const out = { text: "" };
   (async () => {
     const dec = new TextDecoder();
@@ -35,5 +39,19 @@ test("the second launch exits and the first hears its URL", async () => {
   expect(await until(again, "first")).toContain("first");
   again.stdin.write("x");
   await again.exited;
+  rmSync(join(tmpdir(), app), { recursive: true, force: true });
+}, 20000);
+
+test("in the app Worker, process.argv has the launch args and onOpen hears them", async () => {
+  const first = spawn("tests/fixtures/instance-host.ts", ["mantou://start"]);
+  expect(await until(first, "first")).toContain("open mantou://start");
+  const second = spawn("tests/fixtures/instance-host.ts", ["mailto:a@b.c"]);
+  expect(await until(second, "second")).toContain("second");
+  expect(await second.exited).toBe(0);
+  const heard = await until(first, "open mailto:a@b.c");
+  expect(heard).toContain("launch mailto:a@b.c");
+  expect(heard).not.toContain("--width");
+  first.stdin.write("x");
+  await first.exited;
   rmSync(join(tmpdir(), app), { recursive: true, force: true });
 }, 20000);

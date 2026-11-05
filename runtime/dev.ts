@@ -14,6 +14,7 @@ import { Ui } from "./ui";
 const lib = openCore();
 const handle = lib.symbols.mt_app();
 let entry = "";
+let argv: string[] | undefined;
 let app: Worker | null = null;
 /** The next app's Worker, started ahead with the JSX plugin (and Babel) loaded, so a reload only compiles the app. */
 let spare: Worker | null = null;
@@ -43,6 +44,7 @@ addEventListener(
     const data = (e as MessageEvent).data;
     if (data?.type !== "mantou:entry") return;
     entry = data.entry;
+    argv = data.argv;
     start();
     watchFiles(data.watch as string);
   },
@@ -67,7 +69,7 @@ function start() {
     } else if (data?.type === "mantou:error") showError(data.message);
   });
   w.addEventListener("error", (e) => gen === generation && showError(String((e as ErrorEvent).error ?? (e as ErrorEvent).message)));
-  w.postMessage({ type: "mantou:entry", entry, dev: true });
+  w.postMessage({ type: "mantou:entry", entry, dev: true, argv });
   // Warm the next one once this app has had a moment to start.
   spare = null;
   setTimeout(() => gen === generation && !spare && (spare = warm()), 200);

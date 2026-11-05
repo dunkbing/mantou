@@ -32,7 +32,9 @@ export async function build(entry: string, outDir: string, name: string): Promis
   writeFileSync(
     worker,
     `globalThis.addEventListener("message", async (e: Event) => {
-  if ((e as MessageEvent).data?.type !== "mantou:entry") return;
+  const data = (e as MessageEvent).data;
+  if (data?.type !== "mantou:entry") return;
+  if (data.argv) process.argv = [process.argv[0], data.entry, ...data.argv];
   try { await import(${q(app)}); } catch (err) { console.error("mantou: the app failed to load:", err); postMessage("mantou:failed"); }
 }, { once: true });\n`,
   );

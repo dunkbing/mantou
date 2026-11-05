@@ -73,7 +73,7 @@ run(App);
 ```
 
 - **`singleInstance(onLaunch?)`** resolves `true` for the first copy and `false` for a later one, which has handed its arguments to the first (that window is focused) and should exit. Call it before `run`.
-- **`onOpen`** hears the URLs (`scheme://…`, `mailto:`) and existing files among the launch arguments, both this copy's own and those of later launches.
+- **`onOpen`** hears the URLs (`scheme://…`, `mailto:`) and existing files among the launch arguments, both this copy's own and those of later launches. In the app Worker `process.argv` is `[exec, entry, ...launch args]` (the bootstrap's `--width`-style flags are removed). macOS "Open with" and `open -a` events (open-document, open-URL Apple events) are not delivered yet, only command-line arguments are.
 - The copies talk over a local socket with a token kept in `paths.temp`.
 - Arguments only: macOS "Open with" and URL-scheme launches arrive as system events, not arguments, and aren't delivered yet ([#66](https://github.com/dunkbing/mantou/issues/66)).
 

@@ -6,6 +6,7 @@
 //   (apps outside this repo use the `mantou` command: runtime/cli.ts)
 import { resolve } from "node:path";
 import { openCore } from "./ffi";
+import { launchArgs } from "./launch";
 import { encodeWindowConfig } from "./winconfig";
 
 /** What the app asks of its window before it opens (run()'s options), in logical px. */
@@ -70,7 +71,7 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
       clearTimeout(timer);
       fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
     });
-    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch) });
+    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch), argv: launchArgs(args, entry) });
   }).catch((err) => {
     console.error(err instanceof Error ? err.message : err);
     process.exit(70);

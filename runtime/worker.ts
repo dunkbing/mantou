@@ -2,6 +2,7 @@
 // uses Solid loads (so only the plugin is a static import), then imports the
 // app the bootstrap names.
 import "./solid/preload";
+import { setLaunchArgs } from "./launch";
 
 globalThis.addEventListener("message", async (e: Event) => {
   const data = (e as MessageEvent).data;
@@ -13,6 +14,7 @@ globalThis.addEventListener("message", async (e: Event) => {
     return;
   }
   if (data?.type !== "mantou:entry") return;
+  setLaunchArgs(data.entry, data.argv);
   // Under `mantou dev`, errors go to the supervisor (runtime/dev.ts), which shows them and waits for a save.
   if (data.dev) (globalThis as { __mantouDev?: boolean }).__mantouDev = true;
   try {
