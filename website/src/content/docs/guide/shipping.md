@@ -97,3 +97,51 @@ The same settings in `package.json`:
 ```
 
 CI installs the counter this way on a Windows runner (silently, into a temp folder), checks the shortcut, the entry, the version resource and the registration, starts it, installs over it, uninstalls it, and checks that everything is gone.
+
+## Updating an installed app
+
+An app checks a **feed**, a JSON file you host anywhere (GitHub release assets work), downloads the build for its platform, and restarts into it.
+
+```tsx
+import { checkForUpdate } from "mantou-ui";
+import pkg from "../package.json";
+
+const u = await checkForUpdate({ url: "https://github.com/me/app/releases/latest/download/latest.json", version: pkg.version });
+if (u) {
+  if (u.canInstall) await u.install({ onProgress: (done, total) => setPercent(total ? done / total : 0) }); // quits and restarts
+  else openExternal(u.url); // show the link
+}
+```
+
+`checkForUpdate` resolves `null` when the feed's version isn't newer (semver order, prereleases below their release) or has no build for this platform, and throws an `UpdateError` for a feed that can't be read. `install()` downloads, checks the SHA-256 (and the signature), applies the update and quits the app (through `win.close()`, so a `quitOnClose: false` app should quit itself when it resolves `"restarting"`); it resolves `"manual"` without doing anything when `canInstall` is false. `u.download()` alone returns the verified file's path.
+
+**The feed**, `latest.json`:
+
+```json
+{
+  "version": "1.2.0",
+  "notes": "Fixes the sidebar",
+  "platforms": {
+    "darwin-arm64": { "url": "https://…/My-App-1.2.0.dmg", "sha256": "…", "size": 41234567 },
+    "linux-x64": { "url": "https://…/my-app-1.2.0-x86_64.AppImage", "sha256": "…" },
+    "windows-x64": { "url": "https://…/My-App-Setup-1.2.0.exe", "sha256": "…", "signature": "…" }
+  }
+}
+```
+
+Keys are `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, `windows-x64`. `mantou package … --update-url https://…/download/v1.2.0` (or `"update": { "url": … }` in the `"mantou"` block) writes it as `dist/latest.json`, with the hash of the file this machine made and `--update-notes`. Run it on each OS (one runner per platform): a feed of the same version already in `dist/` gains the new platform. Upload the feed and the files; with a stable URL for the feed (GitHub's `releases/latest/download/latest.json`), published apps find new versions.
+
+**What each platform does.**
+
+| Platform | Update file | Applied by |
+|---|---|---|
+| macOS | `.dmg` (or a `.zip` of the `.app`) | The `.app` is copied out of the image next to the installed one, checked, then swapped in by a helper after the app quits; the old bundle is kept until the swap worked, and put back if it didn't. Needs write access to the app's folder. |
+| Linux, AppImage | `.AppImage` | Copied next to the running AppImage (`$APPIMAGE`), then renamed over it by a helper once the app quits. |
+| Linux, `.deb` or tarball | | `canInstall` is false: show `u.url`. |
+| Windows | the NSIS `.exe` | A helper waits for the app to quit, runs the installer silently (`/S`) and starts the app. A per-user installer needs no prompt; a per-machine one asks for elevation. |
+
+Everything that can fail (download, checksum, signature, unpacking, staging) happens before the app quits, so a failed update throws and leaves the installed app as it was.
+
+**Signing the feed.** A hash in a file served from the same place as the build doesn't stop someone who controls that place. To pin a key: `mantou update-keygen` writes `update-key.pem` (keep it secret) and prints a public key; build with `--update-key update-key.pem` (or `"update": { "key": … }`), which signs each build's hash (Ed25519) into the feed; pass the public key as `checkForUpdate({ publicKey })` and any build without a valid signature is refused. This is in addition to code signing and notarization, not instead of it.
+
+**Tested, and not.** The feed, version order, download, hash and signature checks and the steps run in unit tests with fakes, and the macOS image staging and the swap script ran for real on macOS. Not exercised on real installs: the Windows installer run and relaunch, an AppImage restart on Linux, and macOS with a notarized app in `/Applications`.

@@ -32,3 +32,4 @@ export { launchAtLogin } from "./autostart";
 export { WebView, type WebViewProps } from "./webview";
 export { singleInstance, onOpen } from "./instance";
 export { onError, type AppError, type ErrorHandler } from "./errors";
+export { checkForUpdate, Update, UpdateError, type UpdateFeed, type FeedAsset, type CheckOptions as UpdateCheckOptions } from "./update";

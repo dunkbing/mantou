@@ -9,7 +9,7 @@
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
 //   mantou package <entry> [options]  macOS: a signed .app and .dmg; Linux: a .deb, a .tar.gz and an AppImage;
 //                                     Windows: an NSIS installer (see USAGE)
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { libPath } from "./ffi";
 import { SNAP_USAGE } from "./snap-usage";
@@ -39,7 +39,11 @@ const USAGE = `usage:
                  [--publisher P] [--windows-scope user|machine] [--protocols mailto] [--desktop-shortcut]
                  [--sign-thumbprint SHA1 | --sign-pfx FILE [--sign-password PW]] [--timestamp URL]
                                           Windows: an NSIS installer (per user, no admin, by default) with a Start menu
-                                          shortcut, an Apps & features entry and the icon; signed with signtool if asked`;
+                                          shortcut, an Apps & features entry and the icon; signed with signtool if asked
+                 [--update-url BASE] [--update-key KEY.pem] [--update-notes TEXT]
+                                          also write latest.json, the update feed, beside the files (their URLs are BASE/<file>);
+                                          --update-key signs each build's hash (make one with \`mantou update-keygen\`)
+  mantou update-keygen [FILE.pem]         make an Ed25519 key for signing updates: the PEM goes to FILE (default update-key.pem), the public key is printed`;
 
 const [command, ...rest] = Bun.argv.slice(2);
 switch (command) {
@@ -98,6 +102,18 @@ switch (command) {
     const code = await p.exited;
     if (code === 0) console.log(`mantou: native core built: ${libPath()}`);
     process.exit(code);
+  }
+  case "update-keygen": {
+    const { generateKeyPairSync } = await import("node:crypto");
+    const k = generateKeyPairSync("ed25519");
+    const file = rest[0] ?? "update-key.pem";
+    if (existsSync(file)) {
+      console.error(`mantou: ${file} exists`);
+      process.exit(1);
+    }
+    writeFileSync(file, k.privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
+    console.log(`mantou: private key in ${file} (keep it secret)\nmantou: public key for checkForUpdate({ publicKey }): ${k.publicKey.export({ type: "spki", format: "der" }).toString("base64")}`);
+    break;
   }
   case "build":
   case "package": {
@@ -166,7 +182,14 @@ switch (command) {
           dmg: !rest.includes("--no-dmg"),
           icon: opt("icon") ?? cfg.icon,
         });
-      for (const m of [made].flat()) console.log(`mantou: ${m}`);
+      const files = [made].flat();
+      const updateUrl = opt("update-url") ?? cfg.update?.url;
+      if (command === "package" && updateUrl) {
+        const keyFile = opt("update-key") ?? cfg.update?.key;
+        const { writeFeed } = await import("./update-feed");
+        files.push(await writeFeed(out, files, { version, baseUrl: updateUrl, notes: opt("update-notes"), signingKey: keyFile ? readFileSync(keyFile, "utf8") : undefined }));
+      }
+      for (const m of files) console.log(`mantou: ${m}`);
     } catch (e) {
       console.error(e instanceof Error ? e.message : e);
       process.exit(1);

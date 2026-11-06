@@ -290,6 +290,8 @@ export interface PackageConfig {
   icon?: string;
   description?: string;
   homepage?: string;
+  /** `--update-url` and `--update-key`: the update feed written by `mantou package`. */
+  update?: { url?: string; key?: string };
   windows?: Pick<WindowsPackageOptions, "scope" | "publisher" | "protocols" | "desktopShortcut" | "sign"> & { format?: string };
   linux?: Partial<Pick<LinuxPackageOptions, "formats" | "categories" | "keywords" | "maintainer" | "depends" | "recommends" | "slug">>;
 }
