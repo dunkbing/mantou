@@ -49,6 +49,12 @@ export interface KeyMods {
 const utf8 = new TextEncoder();
 const isMac = process.platform === "darwin";
 
+/** KeyModifier bits for `mods`; `primary` is ⌘ on macOS and Ctrl elsewhere. */
+function modifierBits(mods: KeyMods): number {
+  const ctrl = mods.ctrl || (mods.primary && !isMac), meta = mods.meta || (mods.primary && isMac);
+  return (mods.shift ? KeyModifier.Shift : 0) | (ctrl ? KeyModifier.Control : 0) | (mods.alt ? KeyModifier.Alt : 0) | (meta ? KeyModifier.Meta : 0);
+}
+
 /** UTF-8 bytes for FFI, or null for an empty string (bun:ffi takes no empty buffers). */
 function bytes(s: string): Uint8Array | null {
   return s ? utf8.encode(s) : null;
@@ -165,11 +171,23 @@ export class HeadlessCore {
     return this.step();
   }
 
-  /** Presses (down + up) at logical (x, y), or at the centre of a node (or the node with that testId). */
-  press(target: Target): this {
+  /**
+   * Presses (down + up) at logical (x, y), or at the centre of a node (or the node with that testId), with
+   * `mods` held (Shift+press, ⌘/Ctrl+press: `{ shift: true }`, `{ primary: true }`).
+   */
+  press(target: Target, mods?: KeyMods): this {
     const [x, y] = this.point(target);
+    if (mods) this.holdModifiers(mods);
     this.pointer("down", x, y);
-    return this.pointer("up", x, y);
+    this.pointer("up", x, y);
+    if (mods) this.holdModifiers({});
+    return this;
+  }
+
+  /** The modifier keys held from now on, as pointer events report them (`{}` lets go). */
+  holdModifiers(mods: KeyMods): this {
+    this.lib.symbols.mt_test_modifiers(this.handle, modifierBits(mods));
+    return this;
   }
 
   /**
@@ -180,8 +198,7 @@ export class HeadlessCore {
   key(key: string, mods: KeyMods = {}): this {
     const code = [...key].length === 1 ? key.codePointAt(0)! : (NamedKey as Record<string, number>)[key];
     if (code === undefined) throw new Error(`mantou: unknown key "${key}"`);
-    const ctrl = mods.ctrl || (mods.primary && !isMac), meta = mods.meta || (mods.primary && isMac);
-    const bits = (mods.shift ? KeyModifier.Shift : 0) | (ctrl ? KeyModifier.Control : 0) | (mods.alt ? KeyModifier.Alt : 0) | (meta ? KeyModifier.Meta : 0);
+    const bits = modifierBits(mods);
     this.ui.flush();
     this.lib.symbols.mt_test_key(this.handle, code, 1, bits);
     this.lib.symbols.mt_test_key(this.handle, code, 0, bits);

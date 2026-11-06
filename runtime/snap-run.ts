@@ -30,7 +30,7 @@ function writeFileSync(path: string, data: string | Uint8Array) {
 }
 
 type Step =
-  | { press: Target }
+  | { press: Target; mods?: KeyMods }
   | { hover: Target }
   | { type: string; into?: Target }
   | { key: string; mods?: KeyMods }
@@ -117,7 +117,7 @@ export async function snapRun(args: string[]): Promise<number> {
     if (scriptArg) {
       const steps: Step[] = JSON.parse(scriptArg.trim().startsWith("[") ? scriptArg : await Bun.file(scriptArg).text());
       for (const step of steps) {
-        if ("press" in step) core.press(step.press);
+        if ("press" in step) core.press(step.press, step.mods);
         else if ("hover" in step) core.hover(step.hover);
         else if ("type" in step) {
           if (step.into !== undefined) core.press(step.into);

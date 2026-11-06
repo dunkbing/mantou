@@ -48,7 +48,7 @@ function Tab(props: { chosen: boolean; ref: (n: Node) => void; onPress: () => vo
       selected={props.chosen}
       tabIndex={props.chosen ? 0 : -1}
       onPress={props.onPress}
-      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 8, paddingBottom: 8, cursor: "pointer", borderRadius: 6, backgroundColor: state().hovered && !props.chosen ? theme.controlHover : "transparent" }}
+      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 8, paddingBottom: 8, cursor: "pointer", borderRadius: theme.radiusSmall, backgroundColor: state().hovered && !props.chosen ? theme.controlHover : "transparent" }}
     >
       {label(props.children, () => ({ color: props.chosen ? theme.accent : theme.dimText, fontWeight: props.chosen ? 600 : 400 }))}
       <View style={{ position: "absolute", left: 8, right: 8, bottom: -1, height: 2, borderRadius: 1, backgroundColor: props.chosen ? theme.accent : "transparent" }} />
@@ -125,7 +125,7 @@ export function Select<T>(props: SelectProps<T>): JSX.Element {
         onKey={keys}
         onPress={press}
         style={[
-          { minWidth: 160, height: 32, paddingLeft: 10, paddingRight: 10, flexDirection: "row", alignItems: "center", justifyContent: "spaceBetween", gap: 8, borderRadius: 8, borderWidth: 1, borderColor: open() ? theme.accent : theme.border, backgroundColor: theme.control, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer" },
+          { minWidth: 160, height: theme.controlHeight, paddingLeft: 10, paddingRight: 10, flexDirection: "row", alignItems: "center", justifyContent: "spaceBetween", gap: 8, borderRadius: theme.radius, borderWidth: 1, borderColor: open() ? theme.accent : theme.border, backgroundColor: theme.control, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer" },
           resolve(props.style, state()),
         ]}
       >
@@ -136,7 +136,7 @@ export function Select<T>(props: SelectProps<T>): JSX.Element {
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} /> {/* fixed is placed by the window but sized by its parent */}
         <View
           role="menu"
-          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
+          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
         >
           <For each={props.options}>
             {(o, i) => (
@@ -146,7 +146,7 @@ export function Select<T>(props: SelectProps<T>): JSX.Element {
                 disabled={o.disabled}
                 onHover={(h) => h && !o.disabled && setActive(i())}
                 onPress={() => choose(i())}
-                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: o.disabled ? 0.4 : 1, cursor: o.disabled ? "notAllowed" : "pointer" }}
+                style={{ height: theme.controlHeight - 4, paddingLeft: 8, paddingRight: 8, borderRadius: theme.radiusSmall, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: o.disabled ? 0.4 : 1, cursor: o.disabled ? "notAllowed" : "pointer" }}
               >
                 <Text style={{ color: theme.text, fontWeight: i() === chosen() ? 600 : 400, whiteSpace: "nowrap" }}>{o.label}</Text>
               </View>
@@ -224,7 +224,7 @@ export function Menu(props: MenuProps): JSX.Element {
         focusable={!props.disabled}
         onKey={keys}
         onPress={() => (open() ? choose(active()) : show())}
-        style={{ borderRadius: 8, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer", backgroundColor: open() || state().hovered ? theme.controlHover : "transparent" }}
+        style={{ borderRadius: theme.radius, opacity: props.disabled ? 0.5 : 1, cursor: props.disabled ? "notAllowed" : "pointer", backgroundColor: open() || state().hovered ? theme.controlHover : "transparent" }}
       >
         {label(props.children, () => ({ color: theme.text }))}
       </View>
@@ -232,7 +232,7 @@ export function Menu(props: MenuProps): JSX.Element {
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} />
         <View
           role="menu"
-          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: 160, zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
+          style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: 160, zIndex: 900, padding: 4, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}
         >
           <For each={props.items}>
             {(it, i) =>
@@ -244,7 +244,7 @@ export function Menu(props: MenuProps): JSX.Element {
                   disabled={it.disabled}
                   onHover={(h) => h && usable(i()) && setActive(i())}
                   onPress={() => choose(i())}
-                  style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: it.disabled ? 0.4 : 1, cursor: it.disabled ? "notAllowed" : "pointer" }}
+                  style={{ height: theme.controlHeight - 4, paddingLeft: 8, paddingRight: 8, borderRadius: theme.radiusSmall, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", opacity: it.disabled ? 0.4 : 1, cursor: it.disabled ? "notAllowed" : "pointer" }}
                 >
                   <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{it.label}</Text>
                 </View>
@@ -321,18 +321,18 @@ export function Combobox(props: ComboboxProps): JSX.Element {
           }
         }}
         label={props.label}
-        style={[{ minWidth: 200, height: 32, paddingLeft: 10, paddingRight: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.control, color: theme.text }, props.style]}
+        style={[{ minWidth: 200, height: theme.controlHeight, paddingLeft: 10, paddingRight: 10, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.control, color: theme.text }, props.style]}
       />
       <Show when={list()}>
         <View onPress={() => setOpen(false)} style={{ position: "fixed", left: 0, top: 0, width: win().width, height: win().height, zIndex: 899 }} />
-        <View role="menu" style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: 8, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}>
+        <View role="menu" style={{ position: "absolute", left: 0, top: "100%", marginTop: 4, minWidth: "100%", zIndex: 900, padding: 4, borderRadius: theme.radius, borderWidth: 1, borderColor: theme.divider, backgroundColor: theme.surface, boxShadow: { y: 6, blur: 20, color: "#0003" } }}>
           <For each={matches()}>
             {(o, i) => (
               <View
                 role="menuItem"
                 onHover={(h) => h && setActive(i())}
                 onPress={() => take(o)}
-                style={{ height: 28, paddingLeft: 8, paddingRight: 8, borderRadius: 6, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", cursor: "pointer" }}
+                style={{ height: theme.controlHeight - 4, paddingLeft: 8, paddingRight: 8, borderRadius: theme.radiusSmall, justifyContent: "center", backgroundColor: active() === i() ? theme.selected : "transparent", cursor: "pointer" }}
               >
                 <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{o}</Text>
               </View>
@@ -494,7 +494,7 @@ export function TreeView(props: TreeViewProps): JSX.Element {
       label={props.label}
       focusable
       onKey={keys}
-      style={[{ minHeight: 0, flexGrow: 1, borderRadius: 8 }, props.style]}
+      style={[{ minHeight: 0, flexGrow: 1, borderRadius: theme.radius }, props.style]}
     >
       <List each={rows()} itemHeight={h()} ref={(l) => (list = l)} style={{ flexGrow: 1, minHeight: 0 }}>
         {(row, i) => {
@@ -512,7 +512,7 @@ export function TreeView(props: TreeViewProps): JSX.Element {
                 box?.focus();
               }}
               onDoubleClick={() => props.onOpen?.(row().item.id, row().item)}
-              style={{ height: h(), flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 6 + row().depth * 16, paddingRight: 8, borderRadius: 6, cursor: "pointer", backgroundColor: chosen() ? theme.selected : "transparent" }}
+              style={{ height: h(), flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 6 + row().depth * 16, paddingRight: 8, borderRadius: theme.radiusSmall, cursor: "pointer", backgroundColor: chosen() ? theme.selected : "transparent" }}
             >
               <Show when={row().item.children?.length} fallback={<View style={{ width: 14, flexShrink: 0 }} />}>
                 <View

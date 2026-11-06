@@ -37,18 +37,25 @@ export interface Theme {
   /** Tooltips and toasts. */
   inverse: string;
   inverseText: string;
+  /** Corner radius of controls, panels and menus (px), and of small parts (menu items, tabs, rows). */
+  radius: number;
+  radiusSmall: number;
+  /** Height of buttons, fields, selects and table rows (px); menu items are 4 less. */
+  controlHeight: number;
 }
 
 export const light: Theme = {
   background: "#ffffff", surface: "#ffffff", surfaceAlt: "#f9fafb", control: "#ffffff", controlHover: "#f3f4f6", controlPressed: "#d1d5db", selected: "#e0e7ff",
   border: "#9ca3af", borderHover: "#6b7280", divider: "#e5e7eb", track: "#d1d5db", text: "#111827", dimText: "#4b5563", placeholder: "#9ca3af",
   accent: "#2563eb", accentHover: "#1d4ed8", accentPressed: "#1e40af", accentText: "#ffffff", accentSoft: "#bfdbfe", knob: "#ffffff", inverse: "#111827", inverseText: "#ffffff",
+  radius: 8, radiusSmall: 6, controlHeight: 32,
 };
 
 export const dark: Theme = {
   background: "#111827", surface: "#1f2937", surfaceAlt: "#18212f", control: "#1f2937", controlHover: "#374151", controlPressed: "#4b5563", selected: "#1e3a8a",
   border: "#6b7280", borderHover: "#9ca3af", divider: "#374151", track: "#4b5563", text: "#f3f4f6", dimText: "#9ca3af", placeholder: "#6b7280",
   accent: "#3b82f6", accentHover: "#60a5fa", accentPressed: "#2563eb", accentText: "#ffffff", accentSoft: "#1e40af", knob: "#f9fafb", inverse: "#f3f4f6", inverseText: "#111827",
+  radius: 8, radiusSmall: 6, controlHeight: 32,
 };
 
 type Choice = Theme | "light" | "dark" | "system";

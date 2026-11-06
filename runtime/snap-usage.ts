@@ -3,7 +3,7 @@ export const SNAP_USAGE = `mantou snap <entry.tsx> [options]      run the app he
   --out shot.png            a screenshot (at --scale, default 2)
   --tree tree.json|tree.txt the tree as drawn: testIds, text, boxes, opacity, roles (.json, or text otherwise)
   --scene NAME              first apply the entry's \`scenes[NAME]\` (--list-scenes lists them)
-  --script steps.json       then run steps: [{"press":"save"}, {"type":"hi","into":"name"}, {"key":"Enter"},
+  --script steps.json       then run steps: [{"press":"save"}, {"press":"row-3","mods":{"shift":true}}, {"type":"hi","into":"name"}, {"key":"Enter"},
                             {"hover":"row"}, {"scroll":"list","dy":300}, {"wait":250}, {"resize":[800,600]},
                             {"snap":"mid.png"}, {"tree":"mid.txt"}]; targets are testIds or [x, y]
   --at MS                   then advance the clock MS (mid-animation; default: until animations settle, up to 2 s)

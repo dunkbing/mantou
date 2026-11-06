@@ -1,7 +1,7 @@
-// The newer base components on the real core, headless: each one's pointer and keyboard behaviour.
+// The newer base components on the real core, headless (runtime/widgets/): each one's pointer and keyboard behaviour.
 import "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Accordion, Avatar, Badge, HoverCard, Kbd, Popover, RollingNumber, SegmentedControl, ShortcutRecorder, SortableList, Text, TreeView, View, createSignal, formatShortcut, mount, type JSX, type TreeItem, type TreeViewHandle } from "mantou-ui";
+import { Table, Accordion, Avatar, Badge, HoverCard, Kbd, Popover, RollingNumber, SegmentedControl, ShortcutRecorder, SortableList, Text, TreeView, View, createSignal, formatShortcut, mount, type JSX, type TreeItem, type TreeViewHandle } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -203,3 +203,70 @@ test("SortableList: dragging a row past another reorders, and Alt+arrows move th
   h.press("rows-two").key("ArrowDown", { alt: true });
   expect(items()).toEqual(["three", "two", "one"]);
 });
+
+const people = ["Ada", "Grace", "Alan", "Edsger", "Barbara"].map((name, i) => ({ id: `p${i}`, name, age: 30 + i }));
+
+function table(extra: Partial<Parameters<typeof Table<(typeof people)[number], string>>[0]> = {}) {
+  const [sel, setSel] = createSignal<Set<string>>(new Set());
+  const events: string[] = [];
+  const h = app(() => (
+    <View style={{ padding: 10, height: 280 }}>
+      <Table
+        testId="people"
+        columns={[{ key: "name", header: "Name" }, { key: "age", header: "Age", width: 60, align: "end" }]}
+        rows={people}
+        rowKey={(r) => r.id}
+        selection={sel()}
+        onSelectionChange={setSel}
+        onRowDoubleClick={(r) => events.push(`open ${r.name}`)}
+        onRowContextMenu={(r, _i, at) => events.push(`menu ${r.name} ${at.x > 0}`)}
+        rowLabel={(r) => `${r.name}, ${r.age}`}
+        style={{ flexGrow: 1 }}
+        {...extra}
+      />
+    </View>
+  ));
+  return { h, sel: () => [...sel()].sort(), events };
+}
+
+test("Table selects as file lists do: a press, Shift for a range, ⌘/Ctrl to add or remove", () => {
+  const { h, sel } = table();
+  h.press("people-p1");
+  expect(sel()).toEqual(["p1"]);
+  // Shift+press: the range from the last press.
+  h.press("people-p3", { shift: true });
+  expect(sel()).toEqual(["p1", "p2", "p3"]);
+  h.press("people-p2", { primary: true });
+  expect(sel()).toEqual(["p1", "p3"]);
+  // The keyboard: ↓ moves and selects one, Shift+↓ extends, ⌘/Ctrl+A selects all.
+  h.key("ArrowDown");
+  expect(sel()).toEqual(["p3"]);
+  h.key("ArrowDown", { shift: true });
+  expect(sel()).toEqual(["p3", "p4"]);
+  h.key("a", { primary: true });
+  expect(sel()).toEqual(["p0", "p1", "p2", "p3", "p4"]);
+});
+
+test("Table rows: double click opens, a secondary press asks for a menu, and screen readers hear a label", () => {
+  const { h, events } = table();
+  const [x, y] = h.center("people-p0");
+  h.pointer("down", x, y).pointer("up", x, y).pointer("down", x, y).pointer("up", x, y);
+  h.pointerButton("down", 2, x, y).pointerButton("up", 2, x, y);
+  expect(events).toEqual(["open Ada", "menu Ada true"]);
+  expect(h.accessibility()).toContain('ListItem "Ada, 30"');
+});
+
+test("Table looks: header, cells and rows take styles; a flat table has no border", () => {
+  const { h } = table({
+    headerStyle: { backgroundColor: "#000000", height: 24 },
+    headerTextStyle: { fontSize: 11, color: "#ffffff" },
+    cellPadding: 4,
+    striped: false,
+    style: { flexGrow: 1, borderWidth: 0, borderRadius: 0 },
+    rowStyle: (_r, i) => (i === 0 ? { backgroundColor: "#ff0000" } : {}),
+  });
+  const header = h.tree("people")!.children[0];
+  expect(header.rect![3]).toBe(24);
+  expect(h.tree("people-p1")!.children[0].children[0].rect![0]).toBe(10 + 4); // the cell's padding
+  expect(h.capture().at(20, 40)).toEqual([255, 0, 0, 255]); // the first row's own style
+}, 60_000);

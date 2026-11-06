@@ -1,10 +1,10 @@
 // Arranging content: Splitter, Table, Collapsible, Accordion and SortableList.
 import { For, List, Show, Text, View } from "../solid/components";
 import { createSignal } from "../solid/solid";
-import type { JSX, StyleProp } from "../jsx-runtime";
+import type { JSX, ListHandle, StyleProp } from "../jsx-runtime";
 import { theme } from "./theme";
-import { label, useInteraction, Chevron } from "./shared";
-import type { Rect } from "../ui";
+import { label, useInteraction, Chevron, isMac } from "./shared";
+import type { KeyEvent, Rect } from "../ui";
 
 export interface SplitterProps {
   /** "row" (side by side, the default) or "column" (one above the other). */
@@ -65,56 +65,210 @@ export interface TableColumn<T> {
   align?: "start" | "center" | "end";
   /** The cell: default is the row's `key` property as text. */
   render?: (row: T, index: number) => JSX.Element;
+  /** Over the table's `headerStyle` and `headerTextStyle`, for this column. */
+  headerStyle?: StyleProp;
+  headerTextStyle?: StyleProp;
+  /** Over the table's `cellStyle`, for this column's cells. */
+  cellStyle?: StyleProp | ((row: T, index: number) => StyleProp);
+  /** Its header sorts (default: when the table has `onSort`). */
+  sortable?: boolean;
 }
 
-export interface TableProps<T> {
+/** The modifier keys held during a press. `primary` is ⌘ on macOS and Ctrl elsewhere. */
+export interface Modifiers {
+  shift: boolean;
+  ctrl: boolean;
+  alt: boolean;
+  meta: boolean;
+  primary: boolean;
+}
+
+/** What a row's look can depend on. */
+export interface RowState {
+  selected: boolean;
+  hovered: boolean;
+  /** The row the keyboard is on (in a focused table). */
+  active: boolean;
+}
+
+export interface TableProps<T, K = number> {
   columns: readonly TableColumn<T>[];
   rows: readonly T[];
-  /** Row height in px (default 32). */
+  /** Row height in px (default the theme's controlHeight), and the header's (default the same). */
   rowHeight?: number;
+  headerHeight?: number;
   /** The column the rows are sorted by and which way (the app sorts `rows`; this draws the arrow). */
   sort?: { key: string; descending?: boolean };
-  /** A header was pressed. */
+  /** A sortable header was pressed. */
   onSort?: (key: string) => void;
-  onRowPress?: (row: T, index: number) => void;
-  /** The row marked as chosen. */
-  selected?: number;
+  /** A row was pressed, with the modifier keys held. */
+  onRowPress?: (row: T, index: number, mods: Modifiers) => void;
+  onRowDoubleClick?: (row: T, index: number) => void;
+  /** A secondary press (or Ctrl+press on macOS) on a row, at (x, y) in the window: open a menu there. */
+  onRowContextMenu?: (row: T, index: number, at: { x: number; y: number }) => void;
+  /** What screen readers call a row (default: its cells' text). */
+  rowLabel?: (row: T, index: number) => string;
+  /** A row's identity for `selection` (default: its index). */
+  rowKey?: (row: T, index: number) => K;
+  /**
+   * The selected rows, by key: the table selects as file lists do (a press selects one row, Shift+press a range,
+   * ⌘/Ctrl+press adds or removes one; ↑ and ↓ move, with Shift to extend; ⌘/Ctrl+A selects all) and calls
+   * `onSelectionChange`. The state is the app's.
+   */
+  selection?: ReadonlySet<K>;
+  onSelectionChange?: (selection: Set<K>) => void;
+  /** Rows marked as chosen, without the table selecting: an index, or a test. */
+  selected?: number | ((row: T, index: number) => boolean);
+  /** Every other row tinted (default true). */
+  striped?: boolean;
+  /** Cells' left and right padding in px (default 10). */
+  cellPadding?: number;
+  /** The header row, and its text. */
+  headerStyle?: StyleProp;
+  headerTextStyle?: StyleProp;
+  /** Every row, over the default look (selected, striped, hovered). */
+  rowStyle?: StyleProp | ((row: T, index: number, state: RowState) => StyleProp);
+  cellStyle?: StyleProp | ((row: T, index: number) => StyleProp);
+  /** The outer box (border, radius and background come from here too: `{ borderWidth: 0, borderRadius: 0 }` for a flat table). */
   style?: StyleProp;
+  label?: string;
+  /** Rows get testIds `<testId>-<key>`. */
+  testId?: string;
 }
 
-/** A table: a header row over virtualized rows (a `List`), so thousands of rows are cheap. */
-export function Table<T>(props: TableProps<T>): JSX.Element {
+const pick = <A extends unknown[]>(v: StyleProp | ((...a: A) => StyleProp) | undefined, ...a: A): StyleProp => (typeof v === "function" ? v(...a) : v);
+
+/**
+ * A table: a header row over virtualized rows (a `List`), so thousands of rows are cheap. Rows can be
+ * selected (one, a range, several), double-clicked and opened with a context menu, and everything is
+ * styled through props and the theme.
+ */
+export function Table<T, K = number>(props: TableProps<T, K>): JSX.Element {
+  const h = () => props.rowHeight ?? theme.controlHeight;
+  const pad = () => props.cellPadding ?? 10;
+  const keyOf = (row: T, i: number) => (props.rowKey ? props.rowKey(row, i) : (i as unknown as K));
+  const multi = () => !!props.selection && !!props.onSelectionChange;
+  const isSelected = (row: T, i: number) =>
+    multi() ? props.selection!.has(keyOf(row, i)) : typeof props.selected === "function" ? props.selected(row, i) : props.selected === i;
+  const [active, setActive] = createSignal(-1);
+  const [hovered, setHovered] = createSignal(-1);
+  let anchor = -1;
+  let mods: Modifiers = { shift: false, ctrl: false, alt: false, meta: false, primary: false };
+  let list: ListHandle | undefined;
+  const range = (a: number, b: number) => {
+    const out: K[] = [];
+    for (let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(keyOf(props.rows[i], i));
+    return out;
+  };
+  /** Selects as file lists do, for a press (or a key) on row `i` with `m` held. */
+  const choose = (i: number, m: Pick<Modifiers, "shift" | "primary">) => {
+    if (!multi() || i < 0 || i >= props.rows.length) return;
+    const k = keyOf(props.rows[i], i);
+    // A range starts from the last row pressed, or else from the first selected one.
+    if (anchor < 0 || anchor >= props.rows.length) anchor = props.rows.findIndex((r, j) => props.selection!.has(keyOf(r, j)));
+    let next: Set<K>;
+    if (m.shift && anchor >= 0) next = new Set([...(m.primary ? props.selection! : []), ...range(anchor, i)]);
+    else if (m.primary) {
+      next = new Set(props.selection);
+      if (!next.delete(k)) next.add(k);
+      anchor = i;
+    } else {
+      next = new Set([k]);
+      anchor = i;
+    }
+    setActive(i);
+    props.onSelectionChange!(next);
+  };
+  const keys = (e: KeyEvent) => {
+    if (e.type !== "keyDown" || !multi() || !props.rows.length) return;
+    const primary = isMac ? e.meta : e.ctrl;
+    const at = active();
+    const go = (i: number) => {
+      const j = Math.max(0, Math.min(props.rows.length - 1, i));
+      choose(j, { shift: e.shift, primary: false });
+      list?.scrollToIndex(j);
+    };
+    if (e.key === "ArrowDown") go(at + 1);
+    else if (e.key === "ArrowUp") go(at < 0 ? 0 : at - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(props.rows.length - 1);
+    else if (primary && (e.key === "a" || e.key === "A")) props.onSelectionChange!(new Set(range(0, props.rows.length - 1)));
+    else if (e.key === "Enter" && at >= 0) props.onRowDoubleClick?.(props.rows[at], at);
+    else return;
+    e.stopPropagation?.();
+  };
   const cell = (c: TableColumn<T>): StyleProp => ({
     ...(c.width ? { width: c.width, flexShrink: 0 } : { flexGrow: 1, flexBasis: 0, minWidth: 0 }),
-    paddingLeft: 10, paddingRight: 10, justifyContent: "center", alignItems: c.align ?? "start",
+    paddingLeft: pad(), paddingRight: pad(), justifyContent: "center", alignItems: c.align ?? "start",
   });
+  const textOf = (row: T, c: TableColumn<T>) => String((row as Record<string, unknown>)[c.key] ?? "");
   return (
-    <View role="list" style={[{ minHeight: 0, borderWidth: 1, borderColor: theme.divider, borderRadius: 8, overflow: "hidden" }, props.style]}>
-      <View style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: theme.surfaceAlt, borderBottomWidth: 1, borderColor: theme.divider, flexShrink: 0 }}>
+    <View
+      testId={props.testId}
+      role="list"
+      label={props.label}
+      focusable={multi()}
+      onKey={keys}
+      style={[{ minHeight: 0, borderWidth: 1, borderColor: theme.divider, borderRadius: theme.radius, overflow: "hidden", backgroundColor: theme.surface }, props.style]}
+    >
+      <View style={[{ flexDirection: "row", height: props.headerHeight ?? h(), backgroundColor: theme.surfaceAlt, borderBottomWidth: 1, borderColor: theme.divider, flexShrink: 0 }, props.headerStyle]}>
         <For each={props.columns}>
-          {(c) => (
-            <View role="button" label={`Sort by ${c.header}`} onPress={() => props.onSort?.(c.key)} style={[cell(c), { flexDirection: "row", gap: 4, cursor: props.onSort ? "pointer" : "default" }]}>
-              <Text style={{ fontWeight: 600, color: theme.text, whiteSpace: "nowrap" }}>{c.header}</Text>
-              <Show when={props.sort?.key === c.key}>
-                <Text style={{ color: theme.dimText, fontSize: 10 }}>{props.sort?.descending ? "▼" : "▲"}</Text>
-              </Show>
-            </View>
-          )}
+          {(c) => {
+            const sorts = () => c.sortable ?? !!props.onSort;
+            return (
+              <View
+                role={sorts() ? "button" : "none"}
+                label={sorts() ? `Sort by ${c.header}` : undefined}
+                onPress={() => sorts() && props.onSort?.(c.key)}
+                style={[cell(c), { flexDirection: "row", gap: 4, alignItems: "center", justifyContent: c.align ?? "start", cursor: sorts() ? "pointer" : "default" }, c.headerStyle]}
+              >
+                <Text style={[{ fontWeight: 600, color: theme.text, whiteSpace: "nowrap" }, props.headerTextStyle, c.headerTextStyle]}>{c.header}</Text>
+                <Show when={props.sort?.key === c.key}>
+                  <Text style={[{ color: theme.dimText, fontSize: 10 }, props.headerTextStyle, c.headerTextStyle]}>{props.sort?.descending ? "▼" : "▲"}</Text>
+                </Show>
+              </View>
+            );
+          }}
         </For>
       </View>
-      <List each={props.rows} itemHeight={props.rowHeight ?? 32} style={{ flexGrow: 1, minHeight: 0 }}>
-        {(row, i) => (
-          <View
-            role="listItem"
-            selected={props.selected === i}
-            onPress={() => props.onRowPress?.(row(), i)}
-            style={{ flexDirection: "row", height: props.rowHeight ?? 32, backgroundColor: props.selected === i ? theme.selected : i % 2 ? theme.surfaceAlt : theme.surface, cursor: props.onRowPress ? "pointer" : "default" }}
-          >
-            <For each={props.columns}>
-              {(c) => <View style={cell(c)}>{c.render ? c.render(row(), i) : <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{String((row() as Record<string, unknown>)[c.key] ?? "")}</Text>}</View>}
-            </For>
-          </View>
-        )}
+      <List each={props.rows} itemHeight={h()} ref={(l) => (list = l)} style={{ flexGrow: 1, minHeight: 0 }}>
+        {(row, i) => {
+          const state = (): RowState => ({ selected: isSelected(row(), i), hovered: hovered() === i, active: active() === i });
+          return (
+            <View
+              testId={props.testId ? `${props.testId}-${String(keyOf(row(), i))}` : undefined}
+              role="listItem"
+              selected={state().selected}
+              label={props.rowLabel?.(row(), i)}
+              onHover={(on) => (on ? setHovered(i) : hovered() === i && setHovered(-1))}
+              onPointerDown={(e) => (mods = { shift: e.shift, ctrl: e.ctrl, alt: e.alt, meta: e.meta, primary: isMac ? e.meta : e.ctrl })}
+              onPress={() => {
+                const m = mods;
+                mods = { shift: false, ctrl: false, alt: false, meta: false, primary: false };
+                choose(i, m);
+                props.onRowPress?.(row(), i, m);
+              }}
+              onDoubleClick={() => props.onRowDoubleClick?.(row(), i)}
+              onContextMenu={(e) => props.onRowContextMenu?.(row(), i, { x: e.x, y: e.y })}
+              style={[
+                {
+                  flexDirection: "row", height: h(),
+                  backgroundColor: state().selected ? theme.selected : state().hovered && (props.onRowPress || multi()) ? theme.controlHover : (props.striped ?? true) && i % 2 ? theme.surfaceAlt : theme.surface,
+                  cursor: props.onRowPress || multi() ? "pointer" : "default",
+                },
+                pick(props.rowStyle, row(), i, state()),
+              ]}
+            >
+              <For each={props.columns}>
+                {(c) => (
+                  <View style={[cell(c), pick(props.cellStyle, row(), i), pick(c.cellStyle, row(), i)]}>
+                    {c.render ? c.render(row(), i) : <Text style={{ color: theme.text, whiteSpace: "nowrap" }}>{textOf(row(), c)}</Text>}
+                  </View>
+                )}
+              </For>
+            </View>
+          );
+        }}
       </List>
     </View>
   );
@@ -142,7 +296,7 @@ export function Collapsible(props: CollapsibleProps): JSX.Element {
         expanded={props.open}
         focusable
         onPress={() => props.onToggle?.(!props.open)}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, height: 32, paddingLeft: 6, paddingRight: 8, borderRadius: 6, cursor: "pointer", backgroundColor: state().hovered ? theme.controlHover : "transparent" }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 6, height: theme.controlHeight, paddingLeft: 6, paddingRight: 8, borderRadius: theme.radiusSmall, cursor: "pointer", backgroundColor: state().hovered ? theme.controlHover : "transparent" }}
       >
         <Chevron open={props.open} />
         {label(props.title, () => ({ color: theme.text, fontWeight: 600 }))}

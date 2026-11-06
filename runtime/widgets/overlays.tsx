@@ -86,7 +86,7 @@ export function Tooltip(props: TooltipProps): JSX.Element {
       <Show when={shown()}>
         <View
           role="status"
-          style={{ pointerEvents: "none", position: "absolute", left: 0, ...(props.side === "above" ? { bottom: "100%", marginBottom: 6 } : { top: "100%", marginTop: 6 }), zIndex: 900, paddingLeft: 8, paddingRight: 8, paddingTop: 4, paddingBottom: 4, borderRadius: 6, backgroundColor: theme.inverse }}
+          style={{ pointerEvents: "none", position: "absolute", left: 0, ...(props.side === "above" ? { bottom: "100%", marginBottom: 6 } : { top: "100%", marginTop: 6 }), zIndex: 900, paddingLeft: 8, paddingRight: 8, paddingTop: 4, paddingBottom: 4, borderRadius: theme.radiusSmall, backgroundColor: theme.inverse }}
         >
           <Text style={{ color: theme.inverseText, fontSize: 12, whiteSpace: "nowrap" }}>{props.text}</Text>
         </View>
@@ -127,7 +127,7 @@ function ToastBody(props: ToastProps): JSX.Element {
       <View
         role="status"
         onPress={() => props.onClose?.()}
-        style={[{ pointerEvents: "auto", maxWidth: "90%", paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: 8, backgroundColor: theme.inverse, boxShadow: { y: 4, blur: 16, color: "#0004" } }, props.style]}
+        style={[{ pointerEvents: "auto", maxWidth: "90%", paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderRadius: theme.radius, backgroundColor: theme.inverse, boxShadow: { y: 4, blur: 16, color: "#0004" } }, props.style]}
       >
         {label(props.children, () => ({ color: theme.inverseText }))}
       </View>

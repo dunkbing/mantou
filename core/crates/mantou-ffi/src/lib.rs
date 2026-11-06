@@ -65,7 +65,7 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 15: crash reports: mt_set_crash_dir, the CORE_ERROR event, mt_test_panic.
 /// 16: Html nodes: mt_html_link_at and the HTML_REQUEST event.
 /// 17: mt_render_image (icons for `mantou package`).
-pub const ABI_VERSION: u32 = 18;
+pub const ABI_VERSION: u32 = 19;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -556,6 +556,12 @@ pub extern "C" fn mt_test_key(inst: u32, key: u32, down: u32, modifiers: u32) {
             send(UserEvent::TestKey(inst, key, down != 0, modifiers));
         }
     })
+}
+
+/// Test hook: the modifier keys held from now on (`KeyModifier` bits), as pointer events report them.
+#[unsafe(no_mangle)]
+pub extern "C" fn mt_test_modifiers(inst: u32, modifiers: u32) {
+    with(inst, (), |i| i.modifiers.store(modifiers, std::sync::atomic::Ordering::Relaxed))
 }
 
 /// What a key code types when pressed: itself, if it's a printable character.

@@ -169,7 +169,8 @@ import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select,
 <Select value={lang()} onChange={setLang} placeholder="Language" options={[{ value: "en", label: "English" }, { value: "vi", label: "Tiếng Việt" }]} />
 <Menu items={[{ id: "rename", label: "Rename" }, { id: "-", label: "", separator: true }, { id: "del", label: "Delete" }]} onSelect={run}>Actions</Menu>  // a popover under its trigger
 <Combobox value={city()} onChange={setCity} options={cities} onSelect={go} placeholder="City" />   // suggestions narrow as you type
-<Table columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }]} rows={rows()} sort={sort()} onSort={toggleSort} onRowPress={open} />
+<Table columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }]} rows={rows()} sort={sort()} onSort={toggleSort}
+       rowKey={(r) => r.id} selection={picked()} onSelectionChange={setPicked} onRowDoubleClick={open} onRowContextMenu={menu} />
 <Progress value={done() / total()} />                       // 0 to 1
 <Spinner size={20} />                                       // turns while it's on screen
 <Toast open={saved()} onClose={() => setSaved(false)}>Saved</Toast>  // closes itself after `duration` (4000 ms)
@@ -180,6 +181,14 @@ import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select,
 - **Keyboard:** they're focusable, with the focus ring when reached by Tab. Enter and Space press buttons and toggle checkboxes and toggles. Tab reaches a radio group or a tab list once (its chosen item), and the arrows move the choice. A slider moves with the arrows, Page Up and Down and Home and End. A focused splitter handle moves with the arrows. A dialog keeps Tab inside it, closes on Escape or a press on its backdrop, and gives the focus back when it closes.
 - **Pointer:** hover and pressed looks, a slider you press or drag anywhere on, a splitter handle you drag. A tooltip shows after the pointer rests (`delay`, default 500 ms).
 - **Styles:** `style` is laid over the default look. It can be a function of the state: `style={(s) => ({ backgroundColor: s.pressed ? "#000" : s.hovered ? "#333" : "#555" })}`, where `s` has `hovered`, `pressed`, `focused` and `disabled` (and `checked` or `value` where they apply).
+
+### Table
+
+A header over virtualized rows (thousands are cheap):
+
+- **Selection:** pass `selection` (a set of row keys, from `rowKey`) and `onSelectionChange`, and the table selects as file lists do: a press selects one row, Shift+press a range from the last one, ⌘/Ctrl+press adds or removes one; ↑ and ↓ move (Shift extends), Home and End jump, ⌘/Ctrl+A selects all. Without them, `selected` (an index or a test) only marks rows, and `onRowPress(row, i, mods)` gets the modifier keys held.
+- **Rows:** `onRowDoubleClick` (and Enter on the keyboard's row), `onRowContextMenu(row, i, { x, y })` for a menu at the pointer, `rowLabel` for screen readers.
+- **Looks:** `headerStyle`, `headerTextStyle`, and per column `headerStyle`, `headerTextStyle` and `cellStyle`; `cellStyle` and `rowStyle` for every cell and row (both can be functions, `rowStyle` of the row's `selected`, `hovered` and `active` state); `cellPadding` (10), `striped` (true), `rowHeight` and `headerHeight` (the theme's `controlHeight`). `style` reaches the outer box, so `{ borderWidth: 0, borderRadius: 0 }` makes a flat table.
 
 ### More components
 
@@ -224,7 +233,7 @@ setTheme({ ...darkTheme, accent: "#10b981" });   // your own tokens (missing one
 </View>
 ```
 
-Tokens: `background`, `surface`, `surfaceAlt`, `control`, `controlHover`, `controlPressed`, `selected`, `border`, `borderHover`, `divider`, `track`, `text`, `dimText`, `placeholder`, `accent`, `accentHover`, `accentPressed`, `accentText`, `accentSoft`, `knob`, `inverse` (tooltips, toasts), `inverseText`. A component's `style` prop still wins over the theme. The theme is global to the app; `setColorScheme`/`defineTheme` (see Styling) are separate and unchanged.
+Tokens: `background`, `surface`, `surfaceAlt`, `control`, `controlHover`, `controlPressed`, `selected`, `border`, `borderHover`, `divider`, `track`, `text`, `dimText`, `placeholder`, `accent`, `accentHover`, `accentPressed`, `accentText`, `accentSoft`, `knob`, `inverse` (tooltips, toasts), `inverseText`, and sizes: `radius` (8) and `radiusSmall` (6) for corners, `controlHeight` (32) for buttons, fields, selects and table rows (menu items are 4 less). A flat, dense look is `setTheme({ ...darkTheme, radius: 4, radiusSmall: 3, controlHeight: 26 })`. A component's `style` prop still wins over the theme. The theme is global to the app; `setColorScheme`/`defineTheme` (see Styling) are separate and unchanged.
 
 ## Control flow
 

@@ -5,6 +5,8 @@ export type GalleryTab = "controls" | "layout" | "more";
 /** The tab showing (module state, so `mantou snap --scene` can pick one). */
 export const [tab, setTab] = createSignal<GalleryTab>("controls");
 
+const fileRows = Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `File ${i + 1}.txt`, size: `${(i * 37) % 900} KB` }));
+
 function Section(props: { title: string; children: JSX.Element }) {
   return (
     <View style={{ gap: 10 }}>
@@ -29,6 +31,7 @@ export function Gallery() {
   const [lang, setLang] = createSignal<string | undefined>(undefined);
   const [toast, setToast] = createSignal(false);
   const [city, setCity] = createSignal("");
+  const [picked, setPicked] = createSignal<Set<number>>(new Set([2]));
   return (
     <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 16, backgroundColor: theme.background }}>
       <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Components</Text>
@@ -84,7 +87,7 @@ export function Gallery() {
             <More />
           ) : (
             <View style={{ gap: 16, flexGrow: 1, minHeight: 0 }}>
-            <Table style={{ height: 130 }} columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }, { key: "size", header: "Size", width: 80, align: "end" }]} rows={Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `File ${i + 1}.txt`, size: `${(i * 37) % 900} KB` }))} sort={{ key: "id" }} onSort={() => {}} />
+            <Table testId="files" style={{ height: 130 }} columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }, { key: "size", header: "Size", width: 80, align: "end" }]} rows={fileRows} rowKey={(r) => r.id} selection={picked()} onSelectionChange={setPicked} sort={{ key: "id" }} onSort={() => {}} />
             <Splitter size={pane()} onResize={setPane} min={80} max={400} style={{ borderWidth: 1, borderColor: theme.divider, borderRadius: 8 }}>
               {[
                 <View style={{ padding: 12, backgroundColor: theme.surfaceAlt, flexGrow: 1 }}><Text style={{ color: theme.text }}>Drag the bar →</Text></View>,

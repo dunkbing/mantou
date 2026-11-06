@@ -25,7 +25,7 @@ export function Button(props: ButtonProps): JSX.Element {
     const v = props.variant ?? "primary";
     const bg = v === "primary" ? (s.pressed ? theme.accentPressed : s.hovered ? theme.accentHover : theme.accent) : s.pressed ? theme.controlPressed : s.hovered ? theme.controlHover : "transparent";
     return {
-      height: 32, paddingLeft: 14, paddingRight: 14, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, flexShrink: 0,
+      height: theme.controlHeight, paddingLeft: 14, paddingRight: 14, borderRadius: theme.radius, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, flexShrink: 0,
       backgroundColor: bg, borderWidth: v === "secondary" ? 1 : 0, borderColor: theme.border,
       opacity: s.disabled ? 0.5 : 1, cursor: s.disabled ? "notAllowed" : "pointer",
     };
@@ -111,7 +111,7 @@ export function Toggle(props: ToggleProps): JSX.Element {
       style={[{ flexDirection: "row", alignItems: "center", gap: 8, cursor: props.disabled ? "notAllowed" : "pointer", opacity: props.disabled ? 0.5 : 1, borderRadius: 10 }, resolve(props.style, s())]}
     >
       <View transition={{ backgroundColor: 150 }} style={{ width: 36, height: 20, borderRadius: 10, flexShrink: 0, padding: 2, backgroundColor: props.checked ? theme.accent : theme.track }}>
-        <View transition={{ translateX: { duration: 150, easing: "ease-out" } }} style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: theme.knob, translateX: props.checked ? 16 : 0, boxShadow: { y: 1, blur: 2, color: "#0003" } }} />
+        <View transition={{ translateX: { duration: 150, easing: "ease-out" } }} style={{ width: 16, height: 16, borderRadius: theme.radius, backgroundColor: theme.knob, translateX: props.checked ? 16 : 0, boxShadow: { y: 1, blur: 2, color: "#0003" } }} />
       </View>
       {label(props.children, () => ({ color: theme.text }))}
     </View>
@@ -310,12 +310,12 @@ export function SegmentedControl<T>(props: SegmentedControlProps<T>): JSX.Elemen
       label={props.label}
       onKey={keys}
       onLayout={(r: Rect) => (origin = r)}
-      style={[{ flexDirection: "row", alignSelf: "start", padding: 2, height: 32, borderRadius: 8, backgroundColor: theme.controlHover }, props.style]}
+      style={[{ flexDirection: "row", alignSelf: "start", padding: 2, height: theme.controlHeight, borderRadius: theme.radius, backgroundColor: theme.controlHover }, props.style]}
     >
       <Show when={box()}>
         <View
           transition={{ translateX: { spring: { stiffness: 400, damping: 34 } } }}
-          style={{ position: "absolute", left: 0, top: 2, bottom: 2, width: box()!.width, translateX: box()!.x, borderRadius: 6, backgroundColor: theme.surface, boxShadow: { y: 1, blur: 3, color: "#0002" } }}
+          style={{ position: "absolute", left: 0, top: 2, bottom: 2, width: box()!.width, translateX: box()!.x, borderRadius: theme.radiusSmall, backgroundColor: theme.surface, boxShadow: { y: 1, blur: 3, color: "#0002" } }}
         />
       </Show>
       <For each={props.options}>
@@ -332,7 +332,7 @@ export function SegmentedControl<T>(props: SegmentedControlProps<T>): JSX.Elemen
               return next;
             })}
             onPress={() => !o.disabled && props.onChange?.(o.value)}
-            style={{ flexShrink: 0, minWidth: 56, paddingLeft: 12, paddingRight: 12, borderRadius: 6, alignItems: "center", justifyContent: "center", cursor: o.disabled ? "notAllowed" : "pointer", opacity: o.disabled ? 0.4 : 1 }}
+            style={{ flexShrink: 0, minWidth: 56, paddingLeft: 12, paddingRight: 12, borderRadius: theme.radiusSmall, alignItems: "center", justifyContent: "center", cursor: o.disabled ? "notAllowed" : "pointer", opacity: o.disabled ? 0.4 : 1 }}
           >
             {label(o.label, () => ({ color: i() === index() ? theme.text : theme.dimText, fontWeight: i() === index() ? 600 : 500, whiteSpace: "nowrap" }))}
           </View>

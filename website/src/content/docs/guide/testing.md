@@ -33,7 +33,7 @@ Give what a test needs to find a `testId`: any element takes one, it costs nothi
 | | |
 |---|---|
 | `find("id")`, `findAll("id")` | Nodes by `testId` |
-| `press(target)`, `hover(target)`, `pointer("down" \| "up" \| "move", x, y)` | Mouse; a target is a node, a testId or `[x, y]` |
+| `press(target, mods?)`, `hover(target)`, `pointer("down" \| "up" \| "move", x, y)`, `holdModifiers(mods)` | Mouse; a target is a node, a testId or `[x, y]`; `press("row", { shift: true })` holds keys |
 | `key("Enter", { ctrl: true })`, `type("hello")`, `value(target)` | Keyboard and inputs |
 | `scroll(target, dy)`, `wheel(x, y, dy)`, `resize(w, h)`, `step(ms)` | Scrolling, window size, animation time |
 | `tree()`, `treeText()` | The screen as a tree: testIds, text, boxes as drawn, what's clipped or hidden, opacity, animating |
@@ -85,7 +85,7 @@ mantou snap src/main.tsx --script open.json --strip open.png --check-motion
 
 - `run()` mounts into a headless instance instead of a window, at `run()`'s size (or `--size 800x600`). A module with a component as its default export works too.
 - Scenes are the entry's `export const scenes = { empty: () => setItems([]) }`: named functions that set the app's state (keep it in modules), applied with no transitions. `--list-scenes` lists them.
-- Script steps: `press`, `hover`, `type` (with `into`), `key` (with `mods`), `scroll` (with `dy`), `wait` (ms of the clock), `resize`, `scene`, and `snap` and `tree` to write files mid-way. Targets are testIds or `[x, y]`.
+- Script steps: `press` (with `mods`, like `{"shift": true}`), `hover`, `type` (with `into`), `key` (with `mods`), `scroll` (with `dy`), `wait` (ms of the clock), `resize`, `scene`, and `snap` and `tree` to write files mid-way. Targets are testIds or `[x, y]`.
 - `--dark`, `--light` and `--reduced-motion` set the system's settings; `--at MS` stops the clock mid-animation.
 - It exits 1, with a message, when a target or a scene isn't there, or when `--check-motion` finds something.
 

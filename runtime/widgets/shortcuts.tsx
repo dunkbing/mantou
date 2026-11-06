@@ -94,7 +94,7 @@ export function ShortcutRecorder(props: ShortcutRecorderProps): JSX.Element {
       onBlur={() => (handlers.onBlur(), setRecording(false))}
       onPress={() => setRecording(!recording())}
       style={[
-        { minWidth: 140, height: 32, paddingLeft: 8, paddingRight: 8, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 8, borderWidth: 1, cursor: "pointer", alignSelf: "start",
+        { minWidth: 140, height: theme.controlHeight, paddingLeft: 8, paddingRight: 8, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: theme.radius, borderWidth: 1, cursor: "pointer", alignSelf: "start",
           borderColor: recording() ? theme.accent : state().hovered ? theme.borderHover : theme.border, backgroundColor: theme.control },
         resolve(props.style, { ...state(), recording: recording() }),
       ]}
