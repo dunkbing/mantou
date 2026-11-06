@@ -26,9 +26,9 @@ On the CI-like container these pages were written on (an Intel Xeon at 2.1 GHz, 
 
 | | |
 |---|--:|
-| Process start to the first frame drawn | 494 ms |
-| … of which Bun and the JSX plugin (Babel) | 228 ms |
-| … importing `mantou-ui` | 167 ms |
+| Process start to the first frame drawn | 494 ms; **145 ms** with compiled JSX cached |
+| … of which Bun and the JSX plugin (Babel) | 228 ms; **34 ms** |
+| … importing `mantou-ui` | 167 ms; **8 ms** |
 | 3,000 animated cells, a frame (CPU) | 2.5 ms (scene 0.8 ms) |
 | 3,000 cells recoloured from JS, a frame | 9.3 ms (JS 5.7, layout 2.2, applying 0.8, scene 0.5); **7.6 ms** (layout 0.7) since colours stopped laying out |
 | 10,000-row list, a wheel step | 0.7 ms |
@@ -40,7 +40,7 @@ What they point at, roughly in order of what users would notice:
 
 - **Typing in a long text** laid the whole text out three times a key: 9 ms at 5,000 characters. Fixed: the editor's wrap width was set again on every frame and on every measure, and each time parley laid the text out again; an input stretched across a column was first measured at the default width (200 px) and then laid out at its own. Now a key lays the text out once, and only the lines that show are drawn: 2.3 ms (layout 0.01, scene 0.5), the rest being that one layout of the edited text. (The stretched input's height is now right too: it was its text's height at 200 px.) Laying out only the edited paragraph would take the rest.
 - **Dragging a selection in an Html document** repaints the bands that show, on the CPU: 10 ms a step. Painting documents on the GPU would fix this, and scrolling to a new band (6 ms) too.
-- **Startup** spends 167 ms importing `mantou-ui` before any window exists. A packaged app skips the Babel part, but not the import; it's worth profiling what loads. Ahead-of-time compilation (blocked on Bun's MDWE issue) cut this by more than half in an earlier trial.
+- **Startup** spent 167 ms importing `mantou-ui` before any window existed, and 228 ms before that loading Bun and the JSX plugin. Nearly all of it was Babel: 200 ms and 40 MB to load it, and 250 ms to compile the widgets. Fixed: compiled files are kept in the user's cache folder, keyed by their source and the compiler's versions, and Babel loads only when a file is new or changed. From the cache, the counter's first frame is laid out 62 ms after the process starts and drawn at 145 ms (most of that is llvmpipe). A packaged app, compiled ahead of time, no longer loads Babel at all.
 - **A big JS update** spends most of its time in JS (5.7 of 9.3 ms for 3,000 style changes). It also laid out again for colours, which move nothing: fixed, a style change now lays out only when the node's layout style or text style changed, and otherwise only places the boxes again (layout 2.3 to 0.7 ms a frame).
 
 Not measured yet: frames in a real window (presenting, vsync, input to photon), and a GPU's draw time (`draw + read back` here is llvmpipe on the CPU).
@@ -51,10 +51,10 @@ Measured after a full garbage collection, same machine, median of 3 runs. "Nativ
 
 | | |
 |--:|--:|
-| Bun and the JSX plugin (Babel) | 70 MB |
-| … with `mantou-ui` imported | 96 MB |
-| … an empty instance | 102 MB |
-| … after the first frame drawn (GPU device and pipelines) | 180 MB |
+| Bun and the JSX plugin (Babel) | 70 MB; **28 MB** with compiled JSX cached (no Babel) |
+| … with `mantou-ui` imported | 96 MB; **31 MB** |
+| … an empty instance | 102 MB; **38 MB** |
+| … after the first frame drawn (GPU device and pipelines) | 180 MB; **128 MB** |
 | A view | 4.6 KB native + 3.5 KB JS; **2.2 KB JS** since handlers are made when first used |
 | A `<Text>` (its shaped text kept) | 12 KB native + 3.5 KB JS; **2.2 KB JS** since |
 | A 10,000-row `<List>` | 0.1 MB (only the rows that show exist) |
@@ -66,5 +66,5 @@ Leaks are counted in objects and nodes, not in the resident set: the allocators 
 What it points at:
 
 - **A JS `Node` costs 3.5 KB**, because it creates about 25 objects up front: a map of its styles and one of its transitions, a set of running animations, and an empty array for each kind of handler (press, wheel, layout, scroll, hover, five pointer kinds, drop, image), whether it uses them or not. Fixed: they're made when first used (and an input's options, and the scroll offset, start shared), so a node costs 2.2 KB. Most of the rest is Solid's own per-element work and the node's map of styles.
-- **Importing `mantou-ui` costs 26 MB** (and most of the startup time above): worth seeing which modules it loads that an app may not need.
+- **Importing `mantou-ui` cost 26 MB**, and Babel 40 MB before it: both were Babel loading and compiling. Fixed with the cache above: 31 MB with `mantou-ui` imported, where it was 96.
 - The benchmark found a crash on the way: disposing an app with a scroll view in it left the scroll view's thumb in the next scene, and drawing it panicked. Fixed, with a test.

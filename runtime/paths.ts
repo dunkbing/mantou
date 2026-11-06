@@ -15,7 +15,8 @@ function appName(): string {
   return "mantou-app";
 }
 
-function base(kind: "data" | "config" | "cache"): string {
+/** The user's folder of that kind, for every app. */
+export function base(kind: "data" | "config" | "cache"): string {
   const home = homedir(), env = process.env;
   if (process.platform === "darwin") return join(home, "Library", kind === "cache" ? "Caches" : "Application Support");
   if (process.platform === "win32") {
