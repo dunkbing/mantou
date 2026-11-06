@@ -6,7 +6,8 @@
 //   mantou run <entry> [options]      run an app: --width N --height N --min-width N --min-height N --title T (flags win over run()'s options)
 //   mantou dev <entry> [options]      run it, and reload it when a file changes, keeping the window (--watch DIR)
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
-//   mantou package <entry> [options]  macOS: a signed .app and .dmg; Linux: a .deb, a .tar.gz and an AppImage (see USAGE)
+//   mantou package <entry> [options]  macOS: a signed .app and .dmg; Linux: a .deb, a .tar.gz and an AppImage;
+//                                     Windows: an NSIS installer (see USAGE)
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { libPath } from "./ffi";
@@ -28,7 +29,11 @@ const USAGE = `usage:
                  [--linux deb,tar,appimage] [--icon icon.svg] [--description D] [--categories Network,Email]
                  [--keywords K,L] [--maintainer "Name <mail>"] [--homepage URL] [--depends A,B] [--recommends A,B]
                                           Linux: a .deb, a .tar.gz (install.sh, uninstall.sh) and an AppImage, with a
-                                          .desktop entry and icons; options also come from package.json's "mantou" block`;
+                                          .desktop entry and icons; options also come from package.json's "mantou" block
+                 [--publisher P] [--windows-scope user|machine] [--protocols mailto] [--desktop-shortcut]
+                 [--sign-thumbprint SHA1 | --sign-pfx FILE [--sign-password PW]] [--timestamp URL]
+                                          Windows: an NSIS installer (per user, no admin, by default) with a Start menu
+                                          shortcut, an Apps & features entry and the icon; signed with signtool if asked`;
 
 const [command, ...rest] = Bun.argv.slice(2);
 switch (command) {
@@ -95,7 +100,29 @@ switch (command) {
       const b = await import("./build");
       let made: string | string[];
       if (command === "build") made = await b.build(entry, out, name);
-      else if (process.platform === "linux") {
+      else if (process.platform === "win32") {
+        const w = cfg.windows;
+        if (w?.format && w.format !== "nsis") throw new Error(`mantou package: Windows format "${w.format}" isn't supported (only "nsis")`);
+        const scope = opt("windows-scope") ?? w?.scope;
+        if (scope && scope !== "user" && scope !== "machine") throw new Error(`mantou package: --windows-scope is "user" or "machine", not "${scope}"`);
+        const thumbprint = opt("sign-thumbprint") ?? w?.sign?.thumbprint;
+        const pfx = opt("sign-pfx") ?? w?.sign?.pfx;
+        const { packageWindows } = await import("./package-windows");
+        made = await packageWindows(entry, out, {
+          name,
+          version,
+          id: opt("id") ?? cfg.id,
+          description: opt("description") ?? cfg.description ?? pkg.description,
+          icon: opt("icon") ?? cfg.icon,
+          publisher: opt("publisher") ?? w?.publisher,
+          scope: scope as "user" | "machine" | undefined,
+          protocols: list("protocols") ?? w?.protocols,
+          desktopShortcut: rest.includes("--desktop-shortcut") || w?.desktopShortcut,
+          sign: thumbprint || pfx || w?.sign?.args
+            ? { thumbprint, pfx, password: opt("sign-password") ?? w?.sign?.password, args: w?.sign?.args, timestamp: opt("timestamp") ?? w?.sign?.timestamp }
+            : undefined,
+        });
+      } else if (process.platform === "linux") {
         const { packageLinux } = await import("./package-linux");
         made = await packageLinux(entry, out, {
           name,

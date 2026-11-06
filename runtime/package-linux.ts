@@ -7,6 +7,7 @@ import { basename, join, resolve } from "node:path";
 import { build } from "./build";
 import { libPath } from "./ffi";
 import { encodePng, renderImage } from "./png";
+import type { WindowsPackageOptions } from "./package-windows";
 
 export type LinuxFormat = "deb" | "tar" | "appimage";
 
@@ -37,7 +38,7 @@ const RECOMMENDS = ["mesa-vulkan-drivers", "zenity | xdg-desktop-portal"];
 const ICON_SIZES = [48, 64, 128, 256, 512];
 
 // A rounded square with a window in it, for apps without an icon.
-const DEFAULT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="32" y="32" width="448" height="448" rx="100" fill="url(#g)"/><rect x="128" y="156" width="256" height="200" rx="24" fill="#fff"/><rect x="128" y="156" width="256" height="48" rx="24" fill="#bfdbfe"/><rect x="128" y="180" width="256" height="24" fill="#bfdbfe"/></svg>`;
+export const DEFAULT_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="32" y="32" width="448" height="448" rx="100" fill="url(#g)"/><rect x="128" y="156" width="256" height="200" rx="24" fill="#fff"/><rect x="128" y="156" width="256" height="48" rx="24" fill="#bfdbfe"/><rect x="128" y="180" width="256" height="24" fill="#bfdbfe"/></svg>`;
 
 // appimagetool and the AppImage runtime, pinned with their SHA-256 (used when appimagetool isn't on PATH).
 const APPIMAGETOOL = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{arch}.AppImage";
@@ -289,6 +290,7 @@ export interface PackageConfig {
   icon?: string;
   description?: string;
   homepage?: string;
+  windows?: Pick<WindowsPackageOptions, "scope" | "publisher" | "protocols" | "desktopShortcut" | "sign"> & { format?: string };
   linux?: Partial<Pick<LinuxPackageOptions, "formats" | "categories" | "keywords" | "maintainer" | "depends" | "recommends" | "slug">>;
 }
 

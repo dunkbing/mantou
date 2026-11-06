@@ -102,6 +102,12 @@ jobs:
       - name: mantou dev reloads
         if: runner.os != 'Linux'
         run: bun spike/devtest.ts
+      - name: (Windows) Package, install, run and uninstall the counter
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y --no-progress
+          $env:PATH += ";C:\Program Files (x86)\NSIS"
+          bun scripts/package-smoke-windows.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

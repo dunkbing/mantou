@@ -1,6 +1,6 @@
 ---
 title: Shipping an app
-description: Build one executable, a macOS app and disk image, or Linux packages.
+description: Build one executable, a macOS app and disk image, Linux packages, or a Windows installer.
 ---
 
 ```bash
@@ -54,4 +54,40 @@ The same settings can live in `package.json`, so `mantou package src/main.tsx` a
 }
 ```
 
-Windows installers are not built yet; `mantou build` gives you the executable.
+## Windows installer
+
+```powershell
+bunx mantou package src/main.tsx --name "My App" --version 1.0.0 --icon assets/icon.svg `
+  --publisher "Your Name" --protocols mailto
+```
+
+On Windows this writes `dist/my-app-1.0.0-windows-x64.exe`, an installer that:
+
+- installs the executable and `mantou_ffi.dll` per user into `%LOCALAPPDATA%\Programs\My App`, with no admin rights (`--windows-scope machine` installs into Program Files and asks for admin);
+- adds a Start menu shortcut (and a desktop one with `--desktop-shortcut`);
+- adds an entry to Apps & features with the icon, version and publisher; uninstalling removes what was installed and leaves the app's data under `%APPDATA%` alone;
+- upgrades in place: running it over an older version (even a running one) replaces it in the same folder;
+- with `--protocols mailto` (or `myapp`, …), registers the app as a handler for those URL schemes, as a mail client for `mailto`. The app is started with the URL as its argument.
+
+It is silent with `/S`, and `/D=C:\some\dir` picks the folder (it must come last): `my-app-1.0.0-windows-x64.exe /S`. Uninstall silently with the `QuietUninstallString` of the entry, or `uninstall.exe /S`.
+
+The icon (SVG or a large PNG) becomes an `.ico` of 16 to 256 px, embedded in the executable and used by the shortcuts; the executable also gets a version resource (name, version, publisher, description), so Explorer and SmartScreen show them. Bun's compiler writes both, so there is no resource editor to install.
+
+**Signing.** Unsigned installers work, with SmartScreen's warning. To sign the executable, the DLL and the installer with Authenticode and a timestamp, pass a certificate in the store (`--sign-thumbprint SHA1`) or a `.pfx` (`--sign-pfx file.pfx`, with the password in `MANTOU_SIGN_PASSWORD` or `--sign-password`). `signtool` comes from the Windows SDK (or `SIGNTOOL`); the timestamp server is `--timestamp URL` (default DigiCert's). For a cloud signer such as Azure Trusted Signing, put its `signtool` arguments in `"windows": { "sign": { "args": ["/dlib", "…", "/dmdf", "…"] } }`. The uninstaller inside the installer is not signed.
+
+**Why NSIS.** The installer is made with [NSIS](https://nsis.sourceforge.io) (`choco install nsis`, `brew install makensis`, `apt install nsis`; or set `MAKENSIS`): one small program that compiles a text script, with silent mode and per-user installs built in. WiX would need its .NET toolset and makes an `.msi`, which is better for managed fleets but heavier to build and test on a CI runner. The app itself is still built on Windows, since it needs the Windows core.
+
+The same settings in `package.json`:
+
+```json
+{
+  "mantou": {
+    "name": "Mantou Mail",
+    "id": "dev.dunkbing.mantoumail",
+    "icon": "assets/icon.svg",
+    "windows": { "format": "nsis", "scope": "user", "publisher": "Your Name", "protocols": ["mailto"], "desktopShortcut": false }
+  }
+}
+```
+
+CI installs the counter this way on a Windows runner (silently, into a temp folder), checks the shortcut, the entry, the version resource and the registration, starts it, installs over it, uninstalls it, and checks that everything is gone.

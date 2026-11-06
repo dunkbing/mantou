@@ -13,8 +13,19 @@ function run(cmd: string[]) {
   if (p.exitCode !== 0) throw new Error(`mantou: \`${cmd.join(" ")}\` failed (${p.exitCode})`);
 }
 
+/** What Bun's compiler embeds in a Windows executable: its icon (.ico) and version resource. */
+export interface WindowsResources {
+  hideConsole?: boolean;
+  icon?: string;
+  title?: string;
+  publisher?: string;
+  version?: string;
+  description?: string;
+  copyright?: string;
+}
+
 /** Compiles `entry` into `<outDir>/<name>` with the core beside it. Returns the executable's path. */
-export async function build(entry: string, outDir: string, name: string): Promise<string> {
+export async function build(entry: string, outDir: string, name: string, windows?: WindowsResources): Promise<string> {
   const app = resolve(entry);
   if (!existsSync(app)) throw new Error(`mantou: no such entry: ${entry}`);
   const core = libPath();
@@ -40,7 +51,7 @@ export async function build(entry: string, outDir: string, name: string): Promis
   );
 
   const exe = join(outDir, name);
-  const r = await Bun.build({ entrypoints: [boot, worker], plugins: [mantouJsx], compile: { outfile: exe } as never });
+  const r = await Bun.build({ entrypoints: [boot, worker], plugins: [mantouJsx], compile: { outfile: exe, ...(windows && process.platform === "win32" ? { windows } : {}) } as never });
   if (!r.success) throw new Error(`mantou: build failed:\n${r.logs.join("\n")}`);
   rmSync(gen, { recursive: true, force: true });
   copyFileSync(core, join(dirname(exe), basename(core)));
