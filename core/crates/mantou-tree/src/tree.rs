@@ -527,6 +527,9 @@ struct Node {
 
 /// A laid-out box in paint order: the node, its border box and content box
 /// (logical px), and the clip its ancestors put on it (logical px).
+/// The nodes by id (FxHash: looked up for every box, every frame).
+type Nodes = rustc_hash::FxHashMap<u32, Node>;
+
 #[derive(Clone, Copy)]
 struct LaidOut {
     id: u32,
@@ -591,7 +594,7 @@ pub struct Tree {
     image_cache: HashMap<String, std::sync::Weak<mantou_image::Image>>,
     /// The colour glyph atlas as an image, by the atlas's version.
     color_glyphs: Option<(u64, Arc<Pixels>)>,
-    nodes: HashMap<u32, Node>,
+    nodes: Nodes,
     styles: HashMap<u32, Vec<(Prop, Value)>>,
     root: Option<u32>,
     clear: [f32; 4],
@@ -649,6 +652,9 @@ pub struct Tree {
     /// The Html node whose document has the text selection.
     html_sel: Option<u32>,
     hovered: Vec<u32>,
+    /// Something placed can use the hovered path (a Hover listener, a cursor, an input, an Html node, spans):
+    /// without one, a still pointer isn't hit-tested again each time boxes move (a scroll, an animation).
+    hover_matters: bool,
 }
 
 /// What WINDOW_LIMITS asked for: sizes in logical px (0 = no limit).
@@ -686,7 +692,7 @@ impl Tree {
             text: None,
             image_cache: HashMap::new(),
             color_glyphs: None,
-            nodes: HashMap::new(),
+            nodes: Nodes::default(),
             styles: HashMap::new(),
             root: None,
             clear: [0.08, 0.08, 0.1, 1.0],
@@ -721,6 +727,7 @@ impl Tree {
             html_nodes: HashSet::new(),
             html_sel: None,
             hovered: Vec::new(),
+            hover_matters: false,
         }
     }
 
@@ -1302,6 +1309,7 @@ impl Tree {
 
     fn place_boxes(&mut self) {
         self.boxes_dirty = false;
+        self.hover_matters = false;
         self.boxes.clear();
         self.thumbs.clear();
         if let Some(root) = self.root {
@@ -1446,7 +1454,9 @@ impl Tree {
         }
         let at_box = self.boxes.len();
         self.boxes.push(laid);
-        self.nodes.get_mut(&id).expect("exists").placed = true;
+        let node = self.nodes.get_mut(&id).expect("exists");
+        node.placed = true;
+        self.hover_matters |= node.listen & event_mask::HOVER != 0 || node.v.cursor != p::cursor::AUTO || node.input.is_some() || node.html.is_some() || node.rich.is_some();
         let node = &self.nodes[&id];
         let inner = if node.v.clips { intersect(clip, laid.rect) } else { clip };
         // A clip with rounded corners clips to them; one that doesn't shrink the clip leaves the one above in charge.
@@ -1477,12 +1487,18 @@ impl Tree {
         } else {
             (view, rect)
         };
-        let mut kids = node.children.clone();
-        if kids.iter().any(|c| self.nodes[c].v.z != 0) {
+        if node.children.iter().any(|c| self.nodes[c].v.z != 0) {
+            let mut kids = node.children.clone();
             kids.sort_by_key(|c| self.nodes[c].v.z); // stable: ties keep tree order
-        }
-        for c in kids {
-            self.collect_boxes(c, x - offset[0], y - offset[1], inner, inner_r, xf, child_view, child_box);
+            for c in kids {
+                self.collect_boxes(c, x - offset[0], y - offset[1], inner, inner_r, xf, child_view, child_box);
+            }
+        } else {
+            // In tree order, without copying the list (a child's subtree never changes it).
+            for i in 0..node.children.len() {
+                let c = self.nodes[&id].children[i];
+                self.collect_boxes(c, x - offset[0], y - offset[1], inner, inner_r, xf, child_view, child_box);
+            }
         }
         let end = self.boxes.len();
         if let Some(sp) = &mut self.boxes[at_box].spin {
@@ -1523,7 +1539,8 @@ impl Tree {
         };
         let mut glyphs = false;
         let mut images: HashMap<u32, Arc<Pixels>> = HashMap::new();
-        let thumb_quad = |t: &Thumb, nodes: &HashMap<u32, Node>| {
+        let mut alphas: rustc_hash::FxHashMap<u32, f32> = Default::default();
+        let thumb_quad = |t: &Thumb, nodes: &Nodes| {
             let v = nodes[&t.view].vis();
             let mut alpha = v.opacity;
             let mut a = nodes[&t.view].parent;
@@ -1581,13 +1598,20 @@ impl Tree {
             // What's drawn now: the style, with animated values over it.
             let v = node.vis();
             let k = b.k;
-            let mut alpha = v.opacity;
-            let mut a = node.parent;
-            while let Some(pid) = a {
-                let pn = &self.nodes[&pid];
-                alpha *= pn.vis().opacity;
-                a = pn.parent;
-            }
+            // Its opacity times its ancestors': boxes come after their parent's, so the parent's is known.
+            let parent_alpha = node.parent.map_or(1.0, |p| {
+                alphas.get(&p).copied().unwrap_or_else(|| {
+                    let (mut alpha, mut a) = (1.0, Some(p));
+                    while let Some(pid) = a {
+                        let pn = &self.nodes[&pid];
+                        alpha *= pn.vis().opacity;
+                        a = pn.parent;
+                    }
+                    alpha
+                })
+            });
+            let alpha = v.opacity * parent_alpha;
+            alphas.insert(b.id, alpha);
             let clip = if b.clip[0].is_finite() { [snap(b.clip[0]), snap(b.clip[1]), snap(b.clip[2]), snap(b.clip[3])] } else { NO_CLIP };
             if clip[2] <= clip[0] || clip[3] <= clip[1] {
                 continue; // clipped away entirely
@@ -1825,8 +1849,8 @@ impl Tree {
             && let Some(text) = self.text.as_ref()
         {
             let a = text.color_atlas();
-            if self.color_glyphs.as_ref().is_none_or(|(v, _)| *v != a.version) {
-                self.color_glyphs = Some((a.version, Pixels::new(a.width, a.height, a.pixels.clone())));
+            if self.color_glyphs.as_ref().is_none_or(|(v, _)| *v != a.version()) {
+                self.color_glyphs = Some(a.read(|px, v| (v, Pixels::new(a.width, a.height, px.to_vec()))));
             }
             let px = self.color_glyphs.as_ref().expect("just made").1.clone();
             for q in quads.iter_mut().filter(|q| q.image.is_some_and(|i| i.id == COLOR_GLYPHS)) {
@@ -2042,7 +2066,7 @@ fn finite(v: f32, or: f32) -> f32 {
 
 /// The width a node of auto width will be stretched to, if its parent is a column that stretches it (its own
 /// alignSelf, else the parent's alignItems): the space available less its margins, within its min and max.
-fn stretched_width(nodes: &HashMap<u32, Node>, styles: &HashMap<u32, Vec<(Prop, Value)>>, node: &Node, style: &Style, avail: AvailableSpace) -> Option<f32> {
+fn stretched_width(nodes: &Nodes, styles: &HashMap<u32, Vec<(Prop, Value)>>, node: &Node, style: &Style, avail: AvailableSpace) -> Option<f32> {
     let AvailableSpace::Definite(space) = avail else { return None };
     if !style.size.width.is_auto() {
         return None;

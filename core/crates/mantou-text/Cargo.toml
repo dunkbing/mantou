@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 parley = "0.12"
+rustc-hash = "2"
 swash = "0.2.10"
 # Load fontconfig at run time on Linux instead of linking it: no -dev package
 # to build, and machines without it still start (with only the bundled font).

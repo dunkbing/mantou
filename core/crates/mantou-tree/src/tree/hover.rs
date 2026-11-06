@@ -26,6 +26,14 @@ impl Tree {
     /// nodes it left (innermost first), then POINTER_ENTER for those it came
     /// over (outermost first).
     pub(super) fn update_hover(&mut self) {
+        if !self.hover_matters && !self.hovered.is_empty() {
+            // Nothing placed uses it: no one to tell, and the arrow either way.
+            self.hovered.clear();
+            return;
+        }
+        if !self.hover_matters {
+            return;
+        }
         let mut path = Vec::new();
         let mut at = self.pointer.and_then(|(x, y)| self.hit(x, y));
         while let Some(id) = at {
@@ -52,6 +60,12 @@ impl Tree {
 
     /// A node started listening for hover: if the pointer is already over it, it hears so.
     pub(super) fn hover_listener_added(&mut self, id: u32) {
+        if !self.hover_matters {
+            // The pointer wasn't followed until now: find what it's over (the new listener hears so).
+            self.hover_matters = true;
+            self.update_hover();
+            return;
+        }
         if self.hovered.contains(&id) {
             self.events.push(TreeEvent::PointerEnter(id));
         }

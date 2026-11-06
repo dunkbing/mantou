@@ -219,3 +219,28 @@ fn select_places_the_caret_in_utf16_units() {
         .unwrap();
     assert_eq!(r.errors.len(), 1, "not an input");
 }
+
+#[test]
+fn with_nothing_that_uses_it_the_pointer_is_not_followed_until_something_does() {
+    // Plain views: no Hover listener, no cursor, no input.
+    let mut o = Ops::new();
+    o.create(1).create(2).style(2, Prop::Width, px(100.0)).style(2, Prop::Height, px(100.0)).insert(1, 2, 0).set_root(1);
+    let mut t = Tree::new();
+    t.set_viewport(400, 300, 1.0);
+    t.apply(&o.bytes()).unwrap();
+    t.layout();
+    t.pointer_at(Some((10.0, 10.0)));
+    assert!(t.hovered().is_empty(), "nothing hit-tested");
+    assert_eq!(t.cursor(), cursor::DEFAULT);
+    // Now the view listens: it hears it's hovered at once, and a cursor style is followed too.
+    t.apply(&{
+        let mut o = Ops::new();
+        o.listen(2, event_mask::HOVER).style(2, Prop::Cursor, Value::Enum(cursor::POINTER));
+        o.bytes()
+    })
+    .unwrap();
+    assert_eq!(hover_events(&mut t), ["enter 2"]);
+    t.layout();
+    assert_eq!(t.hovered(), [1, 2]);
+    assert_eq!(t.cursor(), cursor::POINTER);
+}

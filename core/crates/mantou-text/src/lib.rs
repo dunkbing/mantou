@@ -9,6 +9,7 @@ pub use editor::Editor;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use parley::fontique::Blob;
@@ -218,14 +219,76 @@ fn next_version() -> u64 {
     NEXT_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
-/// The coverage atlas (one byte per texel). Renderers upload it whenever `version` changes.
-#[derive(Clone, Debug, PartialEq)]
+/// A glyph atlas's texels: one byte of coverage each, or four for the colour atlas (RGBA8, straight alpha).
+/// Glyphs are only ever added (a bigger atlas is a new image), so it's shared rather than copied: scenes and
+/// renderers hold it while new glyphs land, and a renderer uploads only the rows that changed since its
+/// last upload (`changed_rows_since`).
+#[derive(Debug)]
 pub struct AtlasImage {
     pub width: u32,
     pub height: u32,
-    /// One byte of coverage per texel; the colour atlas has four (RGBA8, straight alpha).
-    pub pixels: Vec<u8>,
-    pub version: u64,
+    inner: Mutex<AtlasPixels>,
+}
+
+#[derive(Debug)]
+struct AtlasPixels {
+    pixels: Vec<u8>,
+    version: u64,
+    /// The version it started at, and each change since: (the version it made, its first row, its row after).
+    base: u64,
+    log: Vec<(u64, u32, u32)>,
+}
+
+/// One image is equal only to itself: two images can't be told apart cheaply, and a scene with a new one
+/// is a new scene.
+impl PartialEq for AtlasImage {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self, other)
+    }
+}
+
+impl Eq for AtlasImage {}
+
+/// Changes remembered; a renderer further behind uploads it all.
+const ATLAS_LOG: usize = 512;
+
+impl AtlasImage {
+    fn new(width: u32, height: u32, pixels: Vec<u8>) -> AtlasImage {
+        let version = next_version();
+        AtlasImage { width, height, inner: Mutex::new(AtlasPixels { pixels, version, base: version, log: Vec::new() }) }
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, AtlasPixels> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Changes whenever a glyph is added.
+    pub fn version(&self) -> u64 {
+        self.lock().version
+    }
+
+    /// Reads its texels (rows of `width` texels) and its version.
+    pub fn read<R>(&self, f: impl FnOnce(&[u8], u64) -> R) -> R {
+        let inner = self.lock();
+        f(&inner.pixels, inner.version)
+    }
+
+    /// The rows that changed since `version` (first, after; empty when none), or None when it's further back
+    /// than the changes remembered (or from another image): then all of it.
+    pub fn changed_rows_since(&self, version: u64) -> Option<(u32, u32)> {
+        let inner = self.lock();
+        if version == inner.version {
+            return Some((0, 0));
+        }
+        if version < inner.base || version > inner.version {
+            return None;
+        }
+        let i = inner.log.partition_point(|e| e.0 <= version);
+        if i == 0 && version != inner.base {
+            return None;
+        }
+        Some(inner.log[i..].iter().fold((u32::MAX, 0), |(a, b), e| (a.min(e.1), b.max(e.2))))
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -261,7 +324,7 @@ struct Atlas {
 impl Atlas {
     fn new(bpp: usize, side: u32) -> Atlas {
         Atlas {
-            image: Arc::new(AtlasImage { width: side, height: side, pixels: vec![0; side as usize * side as usize * bpp], version: next_version() }),
+            image: Arc::new(AtlasImage::new(side, side, vec![0; side as usize * side as usize * bpp])),
             bpp,
             shelves: Vec::new(),
             next_y: 0,
@@ -298,21 +361,30 @@ impl Atlas {
         let (w, h) = (old.width * 2, old.height * 2);
         let (b, ow, nw) = (self.bpp, old.width as usize * self.bpp, w as usize * self.bpp);
         let mut pixels = vec![0; w as usize * h as usize * b];
-        for y in 0..old.height as usize {
-            pixels[y * nw..y * nw + ow].copy_from_slice(&old.pixels[y * ow..(y + 1) * ow]);
-        }
-        self.image = Arc::new(AtlasImage { width: w, height: h, pixels, version: next_version() });
+        old.read(|old_px, _| {
+            for y in 0..old.height as usize {
+                pixels[y * nw..y * nw + ow].copy_from_slice(&old_px[y * ow..(y + 1) * ow]);
+            }
+        });
+        self.image = Arc::new(AtlasImage::new(w, h, pixels));
     }
 
     fn blit(&mut self, x: u32, y: u32, w: u32, h: u32, data: &[u8]) {
         let b = self.bpp;
-        let img = Arc::make_mut(&mut self.image);
+        let width = self.image.width as usize;
+        let mut img = self.image.lock();
         let row_len = w as usize * b;
         for row in 0..h as usize {
-            let dst = ((y as usize + row) * img.width as usize + x as usize) * b;
+            let dst = ((y as usize + row) * width + x as usize) * b;
             img.pixels[dst..dst + row_len].copy_from_slice(&data[row * row_len..(row + 1) * row_len]);
         }
         img.version = next_version();
+        let v = img.version;
+        if img.log.len() >= ATLAS_LOG {
+            img.base = img.log[0].0; // further back than this: all of it
+            img.log.remove(0);
+        }
+        img.log.push((v, y, y + h));
     }
 }
 
@@ -329,8 +401,70 @@ fn straight(mut rgba: Vec<u8>) -> Vec<u8> {
     rgba
 }
 
-/// Text, style, width, and the spans' ranges and layout styles.
-type LayoutKey = (String, [u32; 9], u32, Vec<(u32, u32, [u32; 6])>);
+/// What a layout depends on besides its width: the text, its style, and the spans' ranges and layout styles.
+struct ShapeKey {
+    text: String,
+    style: [u32; 9],
+    spans: Vec<(u32, u32, [u32; 6])>,
+}
+
+impl ShapeKey {
+    fn new(text: &str, style: [u32; 9], spans: &[Span]) -> ShapeKey {
+        ShapeKey { text: text.to_owned(), style, spans: spans.iter().map(|s| (s.start, s.end, s.style.span_key())).collect() }
+    }
+
+    fn matches(&self, text: &str, style: &[u32; 9], spans: &[Span]) -> bool {
+        self.text == text && self.style == *style && self.spans.len() == spans.len() && self.spans.iter().zip(spans).all(|(k, s)| *k == (s.start, s.end, s.style.span_key()))
+    }
+}
+
+/// A fast hash of what a layout depends on besides its width (FxHash: it's hashed on every measure).
+fn shape_hash(text: &str, style: &[u32; 9], spans: &[Span]) -> u64 {
+    let mut h = rustc_hash::FxHasher::default();
+    text.hash(&mut h);
+    style.hash(&mut h);
+    for s in spans {
+        (s.start, s.end, s.style.span_key()).hash(&mut h);
+    }
+    h.finish()
+}
+
+/// A cache by hash in two generations: when the newer one fills up it becomes the older, so a working set a
+/// little larger than the limit keeps most of its hits instead of losing them all. Each entry keeps what it
+/// was made from, checked on a hit (hashes can collide).
+struct Generations<V> {
+    newer: rustc_hash::FxHashMap<(u64, u32), (ShapeKey, V)>,
+    older: rustc_hash::FxHashMap<(u64, u32), (ShapeKey, V)>,
+    limit: usize,
+}
+
+impl<V> Generations<V> {
+    fn new(limit: usize) -> Self {
+        Generations { newer: Default::default(), older: Default::default(), limit }
+    }
+
+    fn clear(&mut self) {
+        self.newer.clear();
+        self.older.clear();
+    }
+
+    fn get(&self, key: (u64, u32), text: &str, style: &[u32; 9], spans: &[Span]) -> Option<&V> {
+        self.newer.get(&key).filter(|(k, _)| k.matches(text, style, spans)).map(|(_, v)| v)
+    }
+
+    /// Takes the entry out, from either generation; the caller puts it back with `put`.
+    fn take(&mut self, key: (u64, u32), text: &str, style: &[u32; 9], spans: &[Span]) -> Option<(ShapeKey, V)> {
+        let found = self.newer.remove(&key).or_else(|| self.older.remove(&key))?;
+        found.0.matches(text, style, spans).then_some(found)
+    }
+
+    fn put(&mut self, key: (u64, u32), entry: (ShapeKey, V)) {
+        if self.newer.len() >= self.limit {
+            self.older = std::mem::take(&mut self.newer);
+        }
+        self.newer.insert(key, entry);
+    }
+}
 
 /// Text layout and glyph rasterization for one tree.
 pub struct TextEngine {
@@ -342,11 +476,11 @@ pub struct TextEngine {
     atlas: Atlas,
     /// Colour glyphs (emoji), RGBA; its entries live in `atlas.entries` with the others.
     color_atlas: Atlas,
-    /// Layouts by text, style and width, in two generations: when the newer
-    /// one fills up it becomes the older, so a working set a little larger
-    /// than the limit keeps most of its hits instead of losing them all.
-    cache: HashMap<LayoutKey, Arc<TextLayout>>,
-    older: HashMap<LayoutKey, Arc<TextLayout>>,
+    /// Layouts by text, style and width.
+    cache: Generations<Arc<TextLayout>>,
+    /// Shaped text by text and style, before it's broken into lines: a new width (a window being resized)
+    /// only breaks the lines again, several times cheaper than shaping.
+    shaped: Generations<Layout<u32>>,
     ellipses: HashMap<[u32; 9], Vec<PlacedGlyph>>,
     /// Font family lists by id, each ending in the default ones (FAMILY).
     families: HashMap<u32, String>,
@@ -361,6 +495,8 @@ impl Default for TextEngine {
 }
 
 const CACHE_LIMIT: usize = 4096;
+/// Shaped texts kept: about what a window shows (each holds its glyphs and clusters).
+const SHAPED_LIMIT: usize = 256;
 
 /// The fonts every engine starts with (the bundled Inter and the system's), for other text engines
 /// (mantou-html's documents) to use the same ones.
@@ -388,8 +524,8 @@ impl TextEngine {
             fonts: Vec::new(),
             atlas: Atlas::new(1, ATLAS_START),
             color_atlas: Atlas::new(4, 256),
-            cache: HashMap::new(),
-            older: HashMap::new(),
+            cache: Generations::new(CACHE_LIMIT),
+            shaped: Generations::new(SHAPED_LIMIT),
             ellipses: HashMap::new(),
             families: HashMap::new(),
             uncached: 0,
@@ -423,7 +559,7 @@ impl TextEngine {
 
     fn forget_layouts(&mut self) {
         self.cache.clear();
-        self.older.clear();
+        self.shaped.clear();
         self.ellipses.clear();
     }
 
@@ -577,28 +713,40 @@ impl TextEngine {
 
     /// Lays out rich text: `spans` (byte ranges, in order, not overlapping) set parts of it in their own style.
     pub fn layout_rich(&mut self, text: &str, style: &TextStyle, spans: &[Span], max_width: Option<f32>) -> Arc<TextLayout> {
-        let key = (text.to_owned(), style.key(), max_width.map_or(u32::MAX, f32::to_bits), spans.iter().map(|s| (s.start, s.end, s.style.span_key())).collect::<Vec<_>>());
-        if let Some(l) = self.cache.get(&key) {
+        let style_key = style.key();
+        let hash = shape_hash(text, &style_key, spans);
+        let key = (hash, max_width.map_or(u32::MAX, f32::to_bits));
+        if let Some(l) = self.cache.get(key, text, &style_key, spans) {
             return l.clone();
         }
-        let result = match self.older.remove(&key) {
-            Some(l) => l, // still in use: back to the newer generation
+        let entry = match self.cache.take(key, text, &style_key, spans) {
+            Some(e) => e, // still in use: back to the newer generation
             None => {
                 self.uncached += 1;
-                Arc::new(self.layout_uncached(text, style, spans, max_width))
+                (ShapeKey::new(text, style_key, spans), Arc::new(self.layout_uncached(text, style, spans, max_width, hash)))
             }
         };
-        if self.cache.len() >= CACHE_LIMIT {
-            self.older = std::mem::take(&mut self.cache);
-        }
-        self.cache.insert(key, result.clone());
+        let result = entry.1.clone();
+        self.cache.put(key, entry);
         result
     }
 
-    fn layout_uncached(&mut self, text: &str, style: &TextStyle, spans: &[Span], max_width: Option<f32>) -> TextLayout {
+    fn layout_uncached(&mut self, text: &str, style: &TextStyle, spans: &[Span], max_width: Option<f32>, hash: u64) -> TextLayout {
         if text.is_empty() {
             return TextLayout::default();
         }
+        let style_key = style.key();
+        let (key, mut layout) = match self.shaped.take((hash, 0), text, &style_key, spans) {
+            Some(e) => e,
+            None => (ShapeKey::new(text, style_key, spans), self.shape_transformed(text, style, spans)),
+        };
+        let out = self.lay_out_shaped(&mut layout, style, spans, max_width);
+        self.shaped.put((hash, 0), (key, layout));
+        out
+    }
+
+    /// Shapes `text` after its style's text-transform, with the spans moved to match.
+    fn shape_transformed(&mut self, text: &str, style: &TextStyle, spans: &[Span]) -> Layout<u32> {
         let transformed;
         let mut moved = Vec::new();
         let (text, spans) = if style.transform == Transform::None {
@@ -624,7 +772,11 @@ impl TextEngine {
             transformed = out;
             (transformed.as_str(), moved.as_slice())
         };
-        let mut layout = self.shape(text, style, spans);
+        self.shape(text, style, spans)
+    }
+
+    /// Breaks shaped text into lines at `max_width` and places its glyphs.
+    fn lay_out_shaped(&mut self, layout: &mut Layout<u32>, style: &TextStyle, spans: &[Span], max_width: Option<f32>) -> TextLayout {
         let single = style.max_lines == 1 || style.nowrap;
         layout.break_all_lines(if single { None } else { max_width });
         if !single {
@@ -814,6 +966,38 @@ mod tests {
     }
 
     #[test]
+    fn the_atlas_remembers_which_rows_changed() {
+        let mut e = TextEngine::new();
+        let a = e.atlas();
+        let v0 = a.version();
+        assert_eq!(a.changed_rows_since(v0), Some((0, 0)), "nothing since");
+        let t = e.layout("Ag", &TextStyle { size: 30.0, ..TextStyle::default() }, None);
+        for g in &t.glyphs {
+            e.glyph(g.font, g.id, 30.0, 0.0);
+        }
+        let (y0, y1) = a.changed_rows_since(v0).expect("remembered");
+        assert!(y0 == 0 && y1 > 20 && y1 < 100, "{y0}..{y1}");
+        let v1 = a.version();
+        assert_eq!(a.changed_rows_since(v1), Some((0, 0)));
+        assert_eq!(a.changed_rows_since(v0 - 1), None, "from before this image: all of it");
+        assert!(Arc::ptr_eq(&a, &e.atlas()), "shared, not copied, while a scene holds it");
+    }
+
+    #[test]
+    fn a_new_width_breaks_the_shaped_text_again_as_if_it_were_new() {
+        let text = "The quick brown fox jumps over the lazy dog, then naps in the sun for a while. Straße!";
+        let base = TextStyle { size: 15.0, align: Align::Center, transform: Transform::Upper, max_lines: 4, ellipsis: true, ..TextStyle::default() };
+        let spans = [Span { start: 4, end: 9, style: TextStyle { weight: 800.0, ..base } }, Span { start: 40, end: 44, style: TextStyle { size: 22.0, ..base } }];
+        let mut kept = TextEngine::new();
+        for width in [400.0, 180.0, 90.0, 260.0, 180.0, 1000.0] {
+            let rebroken = kept.layout_rich(text, &base, &spans, Some(width));
+            let fresh = TextEngine::new().layout_rich(text, &base, &spans, Some(width));
+            assert_eq!(*rebroken, *fresh, "at {width}");
+        }
+        assert_eq!(kept.layout_rich(text, &base, &spans, None), TextEngine::new().layout_rich(text, &base, &spans, None));
+    }
+
+    #[test]
     fn heavier_weights_are_wider_and_layouts_are_cached() {
         let mut e = TextEngine::new();
         let regular = e.layout("Mantou", &TextStyle::default(), None);
@@ -876,8 +1060,8 @@ mod tests {
             assert!(entry.w > 20 && entry.h > 20, "{what}: drawn at the size asked ({}×{})", entry.w, entry.h);
         }
         let atlas = e.color_atlas();
-        assert_eq!(atlas.pixels.len(), (atlas.width * atlas.height * 4) as usize, "RGBA");
-        let coloured = atlas.pixels.chunks_exact(4).filter(|p| p[3] > 200 && (p[0] as i32 - p[2] as i32).abs() > 60).count();
+        assert_eq!(atlas.read(|p, _| p.len()), (atlas.width * atlas.height * 4) as usize, "RGBA");
+        let coloured = atlas.read(|p, _| p.to_vec()).chunks_exact(4).filter(|p| p[3] > 200 && (p[0] as i32 - p[2] as i32).abs() > 60).count();
         assert!(coloured > 100, "it has colour, not just coverage: {coloured}");
     }
 
@@ -885,26 +1069,27 @@ mod tests {
     fn atlases_of_different_engines_never_share_a_version() {
         // A renderer shared by headless instances uploads an atlas only when its version is new to it.
         let (mut a, mut b) = (TextEngine::new(), TextEngine::new());
-        assert_ne!(a.atlas().version, b.atlas().version);
+        assert_ne!(a.atlas().version(), b.atlas().version());
         for e in [&mut a, &mut b] {
             let t = e.layout("A", &TextStyle::default(), None);
             let g = t.glyphs[0];
             e.glyph(g.font, g.id, 16.0, 0.0);
         }
-        assert_ne!(a.atlas().version, b.atlas().version);
+        assert_ne!(a.atlas().version(), b.atlas().version());
     }
 
     #[test]
     fn glyphs_rasterize_into_the_atlas() {
         let mut e = TextEngine::new();
         let t = e.layout("Ag", &TextStyle { size: 24.0, ..TextStyle::default() }, None);
-        let v0 = e.atlas().version;
+        let v0 = e.atlas().version();
         let g = t.glyphs[0];
         let entry = e.glyph(g.font, g.id, 24.0, 0.0).expect("A has ink");
         assert!(entry.w > 5 && entry.h > 10, "{entry:?}");
-        assert!(e.atlas().version > v0);
+        assert!(e.atlas().version() > v0);
         let atlas = e.atlas();
-        let ink: u32 = (0..entry.h).map(|y| (0..entry.w).map(|x| atlas.pixels[((entry.y + y) * atlas.width + entry.x + x) as usize] as u32).sum::<u32>()).sum();
+        let px = atlas.read(|p, _| p.to_vec());
+        let ink: u32 = (0..entry.h).map(|y| (0..entry.w).map(|x| px[((entry.y + y) * atlas.width + entry.x + x) as usize] as u32).sum::<u32>()).sum();
         assert!(ink > 1000, "coverage {ink}");
         assert_eq!(e.glyph(g.font, g.id, 24.0, 0.0), Some(entry), "cached");
         let space = e.layout(" ", &TextStyle::default(), None);

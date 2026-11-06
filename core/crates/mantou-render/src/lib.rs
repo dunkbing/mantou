@@ -24,7 +24,8 @@ pub struct Renderer {
     atlas: wgpu::Texture,
     atlas_view: wgpu::TextureView,
     /// Size and version of the atlas the texture holds.
-    atlas_state: (u32, u32, u64),
+    /// The atlas image last uploaded (its address, for telling images apart) and the version uploaded.
+    atlas_state: (usize, u64),
     sampler: wgpu::Sampler,
     /// Image textures by pixels id (0 = a 1×1 stand-in for quads without an image).
     images: HashMap<u32, wgpu::TextureView>,
@@ -93,7 +94,7 @@ impl Renderer {
             scratch: Vec::new(),
             atlas,
             atlas_view,
-            atlas_state: (1, 1, 0),
+            atlas_state: (0, 0),
             sampler,
             images: HashMap::new(),
             binds: HashMap::new(),
@@ -194,22 +195,32 @@ impl Renderer {
 
     /// Uploads the scene's atlas if the texture doesn't hold that version yet.
     fn sync_atlas(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, atlas: &Arc<AtlasImage>) {
-        let (w, h, version) = self.atlas_state;
-        if version == atlas.version && w == atlas.width && h == atlas.height {
+        let (at, version) = self.atlas_state;
+        let same = at == Arc::as_ptr(atlas) as usize;
+        if same && version == atlas.version() {
             return;
         }
-        if w != atlas.width || h != atlas.height {
+        // Only the rows with glyphs added since the last upload, when it's the same image.
+        let rows = if same { atlas.changed_rows_since(version) } else { None };
+        if !same && (self.atlas.width() != atlas.width || self.atlas.height() != atlas.height) {
             self.atlas = Self::atlas_texture(device, atlas.width, atlas.height);
             self.atlas_view = self.atlas.create_view(&wgpu::TextureViewDescriptor::default());
             self.binds.clear(); // they hold the old atlas
         }
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo { texture: &self.atlas, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-            &atlas.pixels,
-            wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(atlas.width), rows_per_image: Some(atlas.height) },
-            wgpu::Extent3d { width: atlas.width, height: atlas.height, depth_or_array_layers: 1 },
-        );
-        self.atlas_state = (atlas.width, atlas.height, atlas.version);
+        let (y0, y1) = rows.unwrap_or((0, atlas.height));
+        let uploaded = atlas.read(|pixels, v| {
+            if y1 > y0 {
+                let row = atlas.width as usize; // one byte a texel
+                queue.write_texture(
+                    wgpu::TexelCopyTextureInfo { texture: &self.atlas, mip_level: 0, origin: wgpu::Origin3d { x: 0, y: y0, z: 0 }, aspect: wgpu::TextureAspect::All },
+                    &pixels[y0 as usize * row..y1 as usize * row],
+                    wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(atlas.width), rows_per_image: Some(y1 - y0) },
+                    wgpu::Extent3d { width: atlas.width, height: y1 - y0, depth_or_array_layers: 1 },
+                );
+            }
+            v
+        });
+        self.atlas_state = (Arc::as_ptr(atlas) as usize, uploaded);
     }
 
     fn color(&self, c: [f32; 4]) -> [f32; 4] {
@@ -297,21 +308,15 @@ impl Renderer {
             self.binds.clear(); // they hold the old buffer
         }
         if blocks > 0 {
-            let bytes: Vec<u8> = self.rare_scratch.iter().flat_map(|f| f.to_le_bytes()).collect();
-            queue.write_buffer(&self.rare, 0, &bytes);
+            queue.write_buffer(&self.rare, 0, bytemuck::cast_slice(&self.rare_scratch));
         }
         if count > 0 {
-            let bytes: Vec<u8> = self.scratch.iter().flat_map(|f| f.to_le_bytes()).collect();
-            queue.write_buffer(&self.instances, 0, &bytes);
+            queue.write_buffer(&self.instances, 0, bytemuck::cast_slice(&self.scratch));
         }
-        let mut binds: HashMap<u32, wgpu::BindGroup> = HashMap::new();
         for q in &scene.quads {
-            let k = q.image.map_or(0, |r| r.id);
-            if !binds.contains_key(&k) {
-                let group = self.bind(device, k).clone();
-                binds.insert(k, group);
-            }
+            self.bind(device, q.image.map_or(0, |r| r.id));
         }
+        let binds = &self.binds;
         let clear = self.color(scene.clear);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("mantou frame") });
         {

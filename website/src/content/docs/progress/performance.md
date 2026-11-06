@@ -33,7 +33,7 @@ On the CI-like container these pages were written on (an Intel Xeon at 2.1 GHz, 
 | 3,000 cells recoloured from JS, a frame | 9.3 ms (JS 5.7, layout 2.2, applying 0.8, scene 0.5); **7.6 ms** (layout 0.7) since colours stopped laying out |
 | 10,000-row list, a wheel step | 0.7 ms |
 | Typing in 5,000 characters, a key | 9.0 ms (layout 5.1, scene 2.2); **2.3 ms** since the fix below |
-| 1,000 paragraphs: first layout / relayout at a new width | 46 ms / 3.6 ms |
+| 1,000 paragraphs: first layout / relayout at a new width | 46 ms / 3.6 ms; **1.5 ms** a relayout since shaped text is kept |
 | HTML mail: first frame / a selection drag step | 57 ms / 10 ms; **0.03 ms** a drag step |
 
 What they point at, roughly in order of what users would notice:
@@ -42,6 +42,13 @@ What they point at, roughly in order of what users would notice:
 - **Dragging a selection in an Html document** repainted the bands that show, on the CPU: 10 ms a step. Fixed: the bands are painted without the selection, and its highlight is drawn over them on the GPU (one translucent rectangle per line, the inputs' selection colour), so a drag step repaints nothing: 0.03 ms. Scrolling to a new band still paints it (6 ms).
 - **Startup** spent 167 ms importing `mantou-ui` before any window existed, and 228 ms before that loading Bun and the JSX plugin. Nearly all of it was Babel: 200 ms and 40 MB to load it, and 250 ms to compile the widgets. Fixed: compiled files are kept in the user's cache folder, keyed by their source and the compiler's versions, and Babel loads only when a file is new or changed. From the cache, the counter's first frame is laid out 62 ms after the process starts and drawn at 145 ms (most of that is llvmpipe). A packaged app, compiled ahead of time, no longer loads Babel at all.
 - **A big JS update** spends most of its time in JS (5.7 of 9.3 ms for 3,000 style changes). It also laid out again for colours, which move nothing: fixed, a style change now lays out only when the node's layout style or text style changed, and otherwise only places the boxes again (layout 2.3 to 0.7 ms a frame).
+- **Per-frame overheads**, found by reading the frame path rather than by one benchmark, and fixed together:
+  - A new width shaped every text again. Shaped text is now kept apart from its line breaks, so a resize only breaks lines again (an exact match for a fresh layout, tested): a relayout at a new width went from 3.7 to 1.5 ms. Layouts are looked up by a fast hash, without copying the text.
+  - A new glyph copied the whole atlas (the last scene still held it, so adding to it copied it first) and then uploaded all of it, up to 16 MB. The atlas is now shared and only grows, and a renderer uploads only the rows that changed since its last upload.
+  - Instances were copied into a byte vector, and a map of bind groups was built, every frame; now the buffer is uploaded as it is and the bind groups are borrowed.
+  - Nodes are looked up by a fast hash; each box's opacity reads its parent's instead of walking to the root; placing boxes doesn't copy each node's children.
+  - With nothing that uses hover (a listener, a cursor, an input, an Html node, spans), a still pointer isn't hit-tested again each time the boxes move (a scroll, an animation).
+  - Together: 3,000 cells recoloured from JS, layout 0.7 to 0.34 ms and scene 0.62 to 0.48 ms a frame; the counter's first frame drawn 140 to 120 ms.
 
 Not measured yet: frames in a real window (presenting, vsync, input to photon), and a GPU's draw time (`draw + read back` here is llvmpipe on the CPU).
 

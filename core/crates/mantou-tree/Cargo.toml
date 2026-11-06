@@ -12,6 +12,7 @@ mantou-image = { path = "../mantou-image" }
 mantou-html = { path = "../mantou-html", optional = true }
 # Without `calc`: Mantou never builds calc() lengths, the only ones that hold a pointer (see `unsafe impl Send for Tree`).
 accesskit = "0.25"
+rustc-hash = "2"
 taffy = { version = "0.15", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout", "content_size"] }
 
 [features]
