@@ -34,12 +34,12 @@ On the CI-like container these pages were written on (an Intel Xeon at 2.1 GHz, 
 | 10,000-row list, a wheel step | 0.7 ms |
 | Typing in 5,000 characters, a key | 9.0 ms (layout 5.1, scene 2.2); **2.3 ms** since the fix below |
 | 1,000 paragraphs: first layout / relayout at a new width | 46 ms / 3.6 ms |
-| HTML mail: first frame / a selection drag step | 57 ms / 10 ms |
+| HTML mail: first frame / a selection drag step | 57 ms / 10 ms; **0.03 ms** a drag step |
 
 What they point at, roughly in order of what users would notice:
 
 - **Typing in a long text** laid the whole text out three times a key: 9 ms at 5,000 characters. Fixed: the editor's wrap width was set again on every frame and on every measure, and each time parley laid the text out again; an input stretched across a column was first measured at the default width (200 px) and then laid out at its own. Now a key lays the text out once, and only the lines that show are drawn: 2.3 ms (layout 0.01, scene 0.5), the rest being that one layout of the edited text. (The stretched input's height is now right too: it was its text's height at 200 px.) Laying out only the edited paragraph would take the rest.
-- **Dragging a selection in an Html document** repaints the bands that show, on the CPU: 10 ms a step. Painting documents on the GPU would fix this, and scrolling to a new band (6 ms) too.
+- **Dragging a selection in an Html document** repainted the bands that show, on the CPU: 10 ms a step. Fixed: the bands are painted without the selection, and its highlight is drawn over them on the GPU (one translucent rectangle per line, the inputs' selection colour), so a drag step repaints nothing: 0.03 ms. Scrolling to a new band still paints it (6 ms).
 - **Startup** spent 167 ms importing `mantou-ui` before any window existed, and 228 ms before that loading Bun and the JSX plugin. Nearly all of it was Babel: 200 ms and 40 MB to load it, and 250 ms to compile the widgets. Fixed: compiled files are kept in the user's cache folder, keyed by their source and the compiler's versions, and Babel loads only when a file is new or changed. From the cache, the counter's first frame is laid out 62 ms after the process starts and drawn at 145 ms (most of that is llvmpipe). A packaged app, compiled ahead of time, no longer loads Babel at all.
 - **A big JS update** spends most of its time in JS (5.7 of 9.3 ms for 3,000 style changes). It also laid out again for colours, which move nothing: fixed, a style change now lays out only when the node's layout style or text style changed, and otherwise only places the boxes again (layout 2.3 to 0.7 ms a frame).
 

@@ -54,8 +54,11 @@ pub struct HtmlDoc {
     stale: bool,
     width: f32,
     size: (f32, f32),
-    /// Bumped whenever what it paints may have changed.
+    /// Bumped whenever what it paints may have changed (the selection isn't painted: see `selection_rects`).
     pub version: u64,
+    /// The selection's ends as last set here, (inline root, byte offset): kept to set it again after painting.
+    anchor: Option<(blitz_dom::NodeId, usize)>,
+    focus: Option<(blitz_dom::NodeId, usize)>,
 }
 
 // SAFETY: a document is only ever used by one thread at a time (the tree holding it is behind a mutex), and
@@ -81,7 +84,7 @@ impl HtmlDoc {
                 ..Default::default()
             },
         );
-        HtmlDoc { doc, net, dark, laid: None, stale: true, width: 600.0, size: (0.0, 0.0), version: 1 }
+        HtmlDoc { doc, net, dark, laid: None, stale: true, width: 600.0, size: (0.0, 0.0), version: 1, anchor: None, focus: None }
     }
 
     /// Lays it out `width` logical px wide at `scale` device px per px (only when either changed, or a
@@ -128,8 +131,16 @@ impl HtmlDoc {
     pub fn paint(&mut self, top: f32, height: f32, scale: f32) -> (u32, u32, Vec<u8>) {
         let (w, h) = ((self.width * scale).round().max(1.0) as u32, (height * scale).round().max(1.0) as u32);
         self.doc.set_viewport_scroll(Point { x: 0.0, y: top as f64 });
+        // Painted without the selection, which is drawn over it (`selection_rects`): dragging it repaints nothing.
+        let ranges = self.doc.get_text_selection_ranges();
+        if !ranges.is_empty() {
+            self.doc.clear_text_selection();
+        }
         let doc = &mut self.doc;
         let mut rgba = render_to_buffer::<VelloCpuImageRenderer, _>(|scene| blitz_paint::paint_scene(scene, doc, scale as f64, w, h, 0, 0), w, h);
+        if !ranges.is_empty() {
+            self.restore_selection(&ranges);
+        }
         self.doc.set_viewport_scroll(Point { x: 0.0, y: 0.0 });
         // vello_cpu's pixels are premultiplied.
         for px in rgba.chunks_exact_mut(4) {
@@ -143,19 +154,33 @@ impl HtmlDoc {
         (w, h, rgba)
     }
 
+    /// Sets the selection again after painting: from its ends, or (when a layout since replaced their nodes)
+    /// from the ranges it covered, which keep what's selected.
+    fn restore_selection(&mut self, ranges: &[(blitz_dom::NodeId, usize, usize)]) {
+        if let (Some(a), Some(f)) = (self.anchor, self.focus) {
+            self.doc.set_text_selection(a.0, a.1, f.0, f.1);
+            if self.doc.get_text_selection_ranges() == ranges {
+                return;
+            }
+        }
+        let (first, last) = (ranges[0], ranges[ranges.len() - 1]);
+        self.doc.set_text_selection(first.0, first.1, last.0, last.2);
+        self.anchor = Some((first.0, first.1));
+        self.focus = Some((last.0, last.2));
+    }
+
     /// A press at (x, y) (logical px from its top left): a selection starts there, empty, when there's text
     /// there (whether it did); any earlier one is dropped.
     pub fn select_start(&mut self, x: f32, y: f32) -> bool {
-        if self.doc.has_text_selection() {
-            self.version += 1; // its highlight goes
-        }
         match self.doc.find_text_position(x, y) {
             Some((node, offset)) => {
                 self.doc.set_text_selection(node, offset, node, offset);
+                (self.anchor, self.focus) = (Some((node, offset)), Some((node, offset)));
                 true
             }
             None => {
                 self.doc.clear_text_selection();
+                (self.anchor, self.focus) = (None, None);
                 false
             }
         }
@@ -164,22 +189,49 @@ impl HtmlDoc {
     /// The pointer moved to (x, y) while selecting: the selection's end goes there (when there's text there).
     /// Whether it changed.
     pub fn select_to(&mut self, x: f32, y: f32) -> bool {
-        let before = self.doc.get_text_selection_ranges();
-        if !self.doc.extend_text_selection_to_point(x, y) || self.doc.get_text_selection_ranges() == before {
+        if self.anchor.is_none() {
             return false;
         }
-        self.version += 1;
-        true
+        let Some((node, offset)) = self.doc.find_text_position(x, y) else { return false };
+        let before = self.doc.get_text_selection_ranges();
+        self.doc.update_selection_focus(node, offset);
+        self.focus = Some((node, offset));
+        self.doc.get_text_selection_ranges() != before
     }
 
     /// Drops the selection; whether there was one.
     pub fn select_none(&mut self) -> bool {
+        (self.anchor, self.focus) = (None, None);
         if !self.doc.has_text_selection() {
             return false;
         }
         self.doc.clear_text_selection();
-        self.version += 1;
         true
+    }
+
+    /// The selection's highlight: one rectangle per line of each block it covers, logical px from the
+    /// document's top left (at the last layout).
+    pub fn selection_rects(&self) -> Vec<[f32; 4]> {
+        use parley::{Affinity, Cursor, Selection};
+        let mut out = Vec::new();
+        for (id, start, end) in self.doc.get_text_selection_ranges() {
+            let Some(node) = self.doc.get_node(id) else { continue };
+            let Some(text) = node.element_data().and_then(|e| e.inline_layout_data.as_ref()) else { continue };
+            // Where Blitz draws the text: the content box (inside the padding and border), moved down by
+            // `block_offset`. The layout is in device px.
+            let at = node.absolute_position(0.0, 0.0);
+            let l = node.final_layout();
+            let (x0, y0) = (at.x + l.border.left + l.padding.left, at.y + l.border.top + l.padding.top + text.block_offset);
+            let scale = text.layout.scale().max(1e-3);
+            let cursor = |i| Cursor::from_byte_index(&text.layout, i, Affinity::Downstream);
+            Selection::new(cursor(start), cursor(end)).geometry_with(&text.layout, |r, _| {
+                let r = [x0 + r.x0 as f32 / scale, y0 + r.y0 as f32 / scale, x0 + r.x1 as f32 / scale, y0 + r.y1 as f32 / scale];
+                if r[2] > r[0] && r[3] > r[1] {
+                    out.push(r);
+                }
+            });
+        }
+        out
     }
 
     /// The selected text, if any is selected (blocks joined by a space).
@@ -286,11 +338,28 @@ mod tests {
         assert!(d.select_to(70.0, 45.0));
         let both = d.selected_text().unwrap();
         assert!(both.starts_with("Hello there") && both.contains("Gen"), "{both}");
-        assert_ne!(d.paint(0.0, 60.0, 1.0).2, plain, "the highlight is drawn");
+        let v = d.version;
+        assert_eq!(d.paint(0.0, 60.0, 1.0).2, plain, "the highlight isn't painted");
+        assert_eq!(d.version, v, "selecting doesn't repaint");
+        assert_eq!(d.selected_text().unwrap(), both, "painting keeps the selection");
+        // It's drawn over: a rectangle per line, the first from the left edge, the second down a line.
+        let r = d.selection_rects();
+        assert_eq!(r.len(), 2, "{r:?}");
+        assert!(r[0][0] < 3.0 && (r[0][1] - 0.0).abs() < 1.0 && (r[0][3] - 30.0).abs() < 1.0 && r[0][2] > 90.0, "{r:?}");
+        assert!(r[1][0] < 1.0 && (r[1][1] - 30.0).abs() < 1.0 && r[1][2] > 30.0 && r[1][2] < 75.0, "{r:?}");
+        // The drag goes on from the same anchor after a paint, backwards too.
+        assert!(d.select_to(80.0, 15.0));
+        assert!(d.selected_text().unwrap().starts_with("Hello"));
+        assert!(d.select_start(80.0, 45.0));
+        assert!(d.select_to(2.0, 15.0));
+        d.paint(0.0, 60.0, 1.0);
+        assert!(d.select_to(30.0, 15.0));
+        let back = d.selected_text().unwrap();
+        assert!(!back.starts_with('H') && back.contains("Gen"), "{back}");
         assert!(d.select_none());
         assert_eq!(d.selected_text(), None);
+        assert!(d.selection_rects().is_empty());
         assert!(!d.select_none());
-        assert_eq!(d.paint(0.0, 60.0, 1.0).2, plain);
         assert!(d.text_at(5.0, 15.0));
         assert!(!d.text_at(300.0, 15.0), "past the end of the line");
     }

@@ -1659,6 +1659,15 @@ impl Tree {
                     quads.push(Quad { rect, color: [1.0, 1.0, 1.0, alpha], uv, clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: Some(ImageRef { id: px.id, tint: false }), extra: Extra::NONE });
                     images.insert(px.id, px);
                 }
+                // The selection, over the text: a translucent blue that tints it.
+                let tint = rgba(SELECTION, alpha);
+                for r in h.selection(b.content, k) {
+                    let rect = intersect(visible, r);
+                    let rect = [snap(rect[0]), snap(rect[1]), snap(rect[2]), snap(rect[3])];
+                    if rect[2] > rect[0] && rect[3] > rect[1] && overlaps(rect, clip) {
+                        quads.push(Quad { rect, color: tint, uv: [0.0; 4], clip, radius: 0.0, border: 0.0, border_color: [0.0; 4], shadow: None, image: None, extra: Extra::NONE });
+                    }
+                }
             }
             if let Some(src) = node.image.as_ref().and_then(|i| i.source.as_ref()) {
                 let (rect_l, frac) = image::place(node.v.fit, b.content, src.natural_size());

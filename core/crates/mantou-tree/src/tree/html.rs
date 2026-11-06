@@ -1,6 +1,7 @@
 //! Html nodes (dunkbing/mantou#74): a static HTML/CSS document (mantou-html, with the `html` feature),
 //! measured like text (its height follows the width it gets) and drawn as image bands: only the bands
-//! that show are painted, on the CPU, and kept while they show and nothing changed.
+//! that show are painted, on the CPU, and kept while they show and nothing changed. The selection isn't
+//! painted in them: it's drawn over them, so dragging it repaints nothing.
 //! Without the feature an Html node lays out empty and draws nothing.
 
 use super::Tree;
@@ -76,6 +77,16 @@ impl HtmlNode {
             out.push(([content[0], content[1] + top * k, content[2], content[1] + (top + h) * k], pixels));
         }
         out
+    }
+
+    /// The selection's highlight in a box whose content is `content` (logical, window coordinates, `k` times
+    /// the document's px): rectangles in logical window coordinates, drawn over the bands.
+    #[cfg(feature = "html")]
+    pub(super) fn selection(&self, content: [f32; 4], k: f32) -> Vec<[f32; 4]> {
+        let k = k.max(1e-3);
+        let doc = self.doc.borrow();
+        let Some(doc) = doc.as_ref() else { return Vec::new() };
+        doc.selection_rects().into_iter().map(|r| [content[0] + r[0] * k, content[1] + r[1] * k, content[0] + r[2] * k, content[1] + r[3] * k]).collect()
     }
 
     /// Starts a selection at (x, y) (the document's px); whether there's text there.

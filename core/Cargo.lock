@@ -2583,6 +2583,7 @@ dependencies = [
  "data-url",
  "image",
  "mantou-text",
+ "parley",
 ]
 
 [[package]]

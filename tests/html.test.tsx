@@ -153,7 +153,10 @@ test("dragging selects the document's text, the highlight is drawn, and Copy cop
   h.pointer("move", 90, 65);
   h.pointer("up", 90, 65);
   const after = h.capture();
-  // The highlight is behind the selected text: some pixels changed in the first line, none past it.
+  // The highlight is drawn over the selected text, blue: some pixels changed in the first line, none past it.
+  const [r, g, b] = after.at(22, 22); // above the H, in the line's box
+  expect(b - r).toBeGreaterThan(40);
+  expect(r).toBeLessThan(230);
   const differs = (x0: number, y0: number, x1: number, y1: number) => {
     for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) if (String(before.at(x, y)) !== String(after.at(x, y))) return true;
     return false;
