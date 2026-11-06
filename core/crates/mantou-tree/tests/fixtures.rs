@@ -56,6 +56,8 @@ fn op_json(o: &Op) -> J {
         Op::Html { id, flags, html } => json!({"op": "HTML", "id": id, "flags": flags, "html": html}),
         Op::HtmlResource { id, url, data } => json!({"op": "HTML_RESOURCE", "id": id, "url": url, "data": data}),
         Op::FollowPointer { id, x, y } => json!({"op": "FOLLOW_POINTER", "id": id, "x": *x as f64, "y": *y as f64}),
+        Op::Motion { flags, speed } => json!({"op": "MOTION", "flags": flags, "speed": *speed as f64}),
+        Op::Instant { on } => json!({"op": "INSTANT", "on": on}),
         Op::TextRuns { id, runs } => json!({"op": "TEXT_RUNS", "id": id, "runs": runs.iter().map(|(len, spans)| json!({"length": len, "spans": spans})).collect::<Vec<_>>()}),
         Op::Canvas { id, commands } => json!({"op": "CANVAS", "id": id, "commands": commands}),
         Op::Keyframes { id, animation, values } => json!({"op": "KEYFRAMES", "id": id, "animation": animation, "values": values}),

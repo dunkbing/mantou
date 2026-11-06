@@ -81,6 +81,10 @@ pub mod op {
     pub const HTML: u32 = 37;
     /// The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing).
     pub const HTML_RESOURCE: u32 = 38;
+    /// How the instance animates: MotionFlag.Reduced is reduced motion (movement — translate, scale, rotate and layout transitions and animations — jumps to its end, and running movement ends; opacity and colours still fade), and `speed` scales the animation clock (1 = real time; 0.25 plays animations four times slower, to look at them).
+    pub const MOTION: u32 = 39;
+    /// Style changes between INSTANT 1 and INSTANT 0 apply at once, with no transitions (running ones of those properties end there), and the next layout moves nothing with a layout transition.
+    pub const INSTANT: u32 = 40;
 }
 
 pub fn op_name(code: u32) -> &'static str {
@@ -123,6 +127,8 @@ pub fn op_name(code: u32) -> &'static str {
         36 => "FOLLOW_POINTER",
         37 => "HTML",
         38 => "HTML_RESOURCE",
+        39 => "MOTION",
+        40 => "INSTANT",
         _ => "UNKNOWN",
     }
 }
@@ -167,6 +173,10 @@ pub mod easing {
 
 pub mod animate_flag {
     pub const ALTERNATE: u32 = 1;
+}
+
+pub mod motion_flag {
+    pub const REDUCED: u32 = 1;
 }
 
 pub mod window_flag {

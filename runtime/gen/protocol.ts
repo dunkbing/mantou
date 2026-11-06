@@ -79,9 +79,13 @@ export const Op = {
   HTML: 37,
   /** The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing). */
   HTML_RESOURCE: 38,
+  /** How the instance animates: MotionFlag.Reduced is reduced motion (movement — translate, scale, rotate and layout transitions and animations — jumps to its end, and running movement ends; opacity and colours still fade), and `speed` scales the animation clock (1 = real time; 0.25 plays animations four times slower, to look at them). */
+  MOTION: 39,
+  /** Style changes between INSTANT 1 and INSTANT 0 apply at once, with no transitions (running ones of those properties end there), and the next layout moves nothing with a layout transition. */
+  INSTANT: 40,
 } as const;
 
-export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS", 36: "FOLLOW_POINTER", 37: "HTML", 38: "HTML_RESOURCE" };
+export const OpName: Record<number, string> = { 1: "CREATE", 2: "INSERT", 3: "REMOVE", 4: "RELEASE", 5: "STYLE", 6: "STYLE_RESET", 7: "STYLE_DEF", 8: "STYLE_USE", 9: "LISTEN", 10: "SET_ROOT", 11: "CLEAR_COLOR", 12: "TITLE", 13: "TEXT", 14: "VALUE", 15: "PLACEHOLDER", 16: "INPUT_OPTIONS", 17: "FOCUS", 34: "FOCUSABLE", 19: "SCROLL_TO", 20: "SCROLL_INTO_VIEW", 21: "FONT", 22: "FONT_FAMILY", 23: "WINDOW_SIZE", 24: "WINDOW_LIMITS", 25: "IMAGE_PATH", 26: "IMAGE_DATA", 27: "TRANSITION", 28: "ANIMATE", 29: "SELECT", 18: "FOCUS_SCOPE", 35: "CANVAS", 32: "KEYFRAMES", 31: "INPUT_ALLOW", 33: "TEXT_RUNS", 30: "ACCESS", 36: "FOLLOW_POINTER", 37: "HTML", 38: "HTML_RESOURCE", 39: "MOTION", 40: "INSTANT" };
 
 export const NodeKind = {"View":1,"Text":2,"Input":3,"Image":4,"Html":5} as const;
 export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16,"Drop":32,"Select":64} as const;
@@ -96,6 +100,7 @@ export const HtmlFlag = {"Dark":1} as const;
 export const CanvasCmd = {"FillRect":1,"StrokeRect":2,"Line":3,"Circle":4,"StrokeCircle":5,"RoundRect":6,"Area":7,"FillPoly":8,"Text":9} as const;
 export const Easing = {"Linear":0,"Ease":1,"EaseIn":2,"EaseOut":3,"EaseInOut":4,"Spring":16} as const;
 export const AnimateFlag = {"Alternate":1} as const;
+export const MotionFlag = {"Reduced":1} as const;
 export const ScrollFlag = {"By":1} as const;
 export const ScrollBlock = {"Nearest":0,"Start":1,"Center":2,"End":3} as const;
 export const Unit = { px: 0, percent: 1, auto: 2 } as const;

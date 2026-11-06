@@ -111,8 +111,12 @@ fn a_new_target_mid_transition_starts_from_what_is_drawn() {
         o.style(2, Prop::TranslateX, Value::F32(0.0));
     });
     assert_eq!(t.rect(2).unwrap()[0], 100.0, "no jump");
+    // It keeps going the way it was (its speed carried over, dying away) before turning back.
+    tick(&mut t, 52.0);
+    assert!(t.rect(2).unwrap()[0] > 100.0, "still moving right: {}", t.rect(2).unwrap()[0]);
     tick(&mut t, 100.0);
-    assert_eq!(t.rect(2).unwrap()[0], 75.0, "halfway back from +50");
+    let x = t.rect(2).unwrap()[0];
+    assert!(x > 75.0 && x < 77.0, "about halfway back from +50, a little behind: {x}");
     assert!(!tick(&mut t, 150.0));
     assert_eq!(t.rect(2).unwrap()[0], 50.0);
 }
@@ -146,7 +150,8 @@ fn a_new_animation_of_a_property_replaces_the_old_one() {
     });
     tick(&mut t, 10_050.0);
     let c = box_color(&mut t).unwrap();
-    assert!(close(c[0], 0.5) && close(c[2], 0.5), "a colour halfway: {c:?}");
+    // Halfway from red to blue in OKLab: a bright purple, not sRGB's dark (0.5, 0, 0.5).
+    assert!(c[0] > 0.5 && c[2] > 0.6 && c[1] > 0.2 && c[1] < 0.4, "a colour halfway: {c:?}");
     assert!(t.is_animating(), "forever");
     apply(&mut t, 10_050.0, |o| {
         o.animate(2, 3, Prop::Opacity, 0f32.to_bits(), 0f32.to_bits(), 0.0, 0, 1.0, 0);
@@ -214,4 +219,95 @@ fn only_animatable_properties() {
     let r = t.apply(&o.bytes()).unwrap();
     assert_eq!(r.errors.len(), 2, "{:?}", r.errors);
     assert!(!t.is_animating());
+}
+
+/// The box's x as drawn after ticking to `at`.
+fn x_at(t: &mut Tree, at: f64) -> f32 {
+    tick(t, at);
+    t.rect(2).unwrap()[0]
+}
+
+#[test]
+fn an_interrupted_spring_keeps_its_speed() {
+    let mut t = scene_with(|o| {
+        o.transition(2, Prop::TranslateX, 400.0, easing::SPRING + 100);
+    });
+    apply(&mut t, 0.0, |o| {
+        o.style(2, Prop::TranslateX, Value::F32(200.0));
+    });
+    let (a, b) = (x_at(&mut t, 96.0), x_at(&mut t, 100.0));
+    let before = (b - a) / 4.0;
+    assert!(before > 0.5, "moving right fast: {before} px/ms");
+    // A new target to the left: it carries on right, slowing, then comes back.
+    apply(&mut t, 100.0, |o| {
+        o.style(2, Prop::TranslateX, Value::F32(0.0));
+    });
+    let (c, d) = (x_at(&mut t, 100.0), x_at(&mut t, 104.0));
+    let after = (d - c) / 4.0;
+    assert!((after - before).abs() < before * 0.35, "the speed carries over: {before} then {after} px/ms");
+    assert!(!tick(&mut t, 600.0));
+    assert_eq!(t.rect(2).unwrap()[0], 50.0, "it ends at the style");
+}
+
+#[test]
+fn opacity_and_colours_never_overshoot() {
+    let mut t = scene_with(|o| {
+        o.transition(2, Prop::Opacity, 100.0, easing::SPRING + 20); // a bouncy spring
+    });
+    apply(&mut t, 0.0, |o| {
+        o.style(2, Prop::Opacity, Value::F32(0.5));
+    });
+    let mut last = 1.0;
+    for ms in (5..=100).step_by(5) {
+        tick(&mut t, ms as f64);
+        let a = box_color(&mut t).map_or(0.0, |c| c[3]);
+        assert!(a >= 0.5 - 1e-3 && a <= last + 1e-3, "falls steadily to 0.5, never under: {a} at {ms} ms");
+        last = a;
+    }
+}
+
+#[test]
+fn reduced_motion_jumps_movement_and_keeps_fades() {
+    let mut t = scene_with(|o| {
+        o.transition(2, Prop::TranslateX, 100.0, easing::LINEAR).transition(2, Prop::Opacity, 100.0, easing::LINEAR);
+    });
+    apply(&mut t, 0.0, |o| {
+        o.animate(2, 9, Prop::Rotate, 0f32.to_bits(), 360f32.to_bits(), 1000.0, easing::LINEAR, f32::INFINITY, 0);
+    });
+    t.take_events();
+    apply(&mut t, 10.0, |o| {
+        o.motion(mantou_tree::protocol::motion_flag::REDUCED, 1.0);
+    });
+    assert_eq!(t.take_events(), vec![TreeEvent::AnimationEnd { id: 2, animation: 9 }], "a running spin ends");
+    apply(&mut t, 20.0, |o| {
+        o.style(2, Prop::TranslateX, Value::F32(100.0)).style(2, Prop::Opacity, Value::F32(0.0));
+    });
+    assert_eq!(t.rect(2).unwrap()[0], 150.0, "the move jumps");
+    tick(&mut t, 70.0);
+    assert!(close(box_color(&mut t).unwrap()[3], 0.5), "the fade still plays");
+    apply(&mut t, 80.0, |o| {
+        o.animate(2, 10, Prop::Scale, 1f32.to_bits(), 2f32.to_bits(), 100.0, easing::LINEAR, 1.0, 0);
+    });
+    assert_eq!(t.take_events(), vec![TreeEvent::AnimationEnd { id: 2, animation: 10 }], "a new movement ends at once");
+}
+
+#[test]
+fn instant_changes_skip_transitions_and_the_clock_can_slow_down() {
+    let mut t = scene_with(|o| {
+        o.transition(2, Prop::TranslateX, 100.0, easing::LINEAR);
+    });
+    apply(&mut t, 0.0, |o| {
+        o.style(2, Prop::TranslateX, Value::F32(100.0));
+    });
+    tick(&mut t, 50.0);
+    apply(&mut t, 50.0, |o| {
+        o.instant(true).style(2, Prop::TranslateX, Value::F32(10.0)).instant(false);
+    });
+    assert_eq!(t.rect(2).unwrap()[0], 60.0, "applied at once, the running transition ended");
+    assert!(!t.is_animating());
+    // At a quarter speed, 100 ms of real time is 25 ms of animation.
+    apply(&mut t, 100.0, |o| {
+        o.motion(0, 0.25).style(2, Prop::TranslateX, Value::F32(110.0));
+    });
+    assert!(close(x_at(&mut t, 200.0), 85.0), "a quarter of the way: {}", t.rect(2).unwrap()[0]);
 }

@@ -118,6 +118,21 @@ node.animate("translateY", { from: 40, to: 0, spring: { stiffness: 250, damping:
 node.animate("rotate", { from: 0, to: 360, duration: 900, easing: "linear", iterations: Infinity }); // a spinner
 ```
 
+A movement that gets a new target mid-way keeps its speed: it carries on, slows and turns towards the new value instead of stopping dead. Opacity and colours never overshoot, even with a bouncy spring, and colours mix in OKLab, so a fade from red to blue passes through purple rather than grey.
+
+### Reduced motion, instant changes, slow motion
+
+```tsx
+import { instant, useReducedMotion, setReducedMotion, setAnimationSpeed } from "mantou-ui";
+
+instant(() => setTab(restoredTab));     // applied at once: no transitions, nothing slides into place
+const reduced = useReducedMotion();      // a signal: the OS setting, unless the app chose
+setReducedMotion(true);                  // or false, or "system"
+setAnimationSpeed(0.25);                 // animations four times slower, to look at them
+```
+
+With reduced motion on (the OS's accessibility setting, or the app's choice), movement — translate, scale, rotate and layout transitions and animations — jumps to its end, and a running spinner stops; fades and colour changes still play. `MANTOU_REDUCED_MOTION=1` (or `0`) overrides the OS for a run.
+
 ### Animating layout
 
 Add `layout` to a view's `transition` and it slides to its new place when layout moves it, for example when siblings are added, removed or reordered. The core does it as a translation from where the box was drawn, so there's no JS per frame, and `onLayout` still reports where layout put it.

@@ -98,9 +98,10 @@ test("colours and transforms are drawn mid-animation", () => {
   box.animate("scale", { from: 1, to: 0.5, duration: 100, easing: "linear" });
   h.step();
   h.step(50);
-  // Three quarters of its size about its centre (150, 100), half red, half blue.
+  // Three quarters of its size about its centre (150, 100), half red, half blue: mixed in OKLab, a brighter
+  // purple than sRGB's #800080.
   expect(h.rect(box)).toEqual([112.5, 62.5, 187.5, 137.5]);
-  expect(h.scene()).toContain("quad 113 63 188 138 #800080ff");
+  expect(h.scene()).toContain("quad 113 63 188 138 #8c53a2ff");
 });
 
 test("transformed views, text inside, at 1× and 2×", () => {

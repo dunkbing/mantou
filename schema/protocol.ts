@@ -58,6 +58,8 @@ export const ops: OpDef[] = [
   { name: "FOLLOW_POINTER", code: 36, operands: [["id", "id"], ["x", "f32"], ["y", "f32"]], doc: "The node is drawn with its top left at the pointer minus (x, y) logical px, against the window like a fixed node, and moves with the pointer on the main thread, with no JS (a drag's preview; give it pointerEvents none). One node at a time; id 0 = none." },
   { name: "HTML", code: 37, operands: [["id", "id"], ["flags", "u32"], ["html", "string"]], doc: "An Html node's document: static HTML and CSS, parsed and laid out by the core (no scripts run, nothing is fetched); HtmlFlag bits. The node's height follows the document's at its width. What it asks for (images, stylesheets) comes back as HTML_REQUEST events." },
   { name: "HTML_RESOURCE", code: 38, operands: [["id", "id"], ["urlLength", "u32"], ["found", "u32"], ["data", "bytes"]], doc: "The app's answer to an HTML_REQUEST: `data` is the URL's UTF-8 bytes (`urlLength` of them), then the resource's bytes when `found` is 1 (0: blocked or missing; an image shows nothing)." },
+  { name: "MOTION", code: 39, operands: [["flags", "u32"], ["speed", "f32"]], doc: "How the instance animates: MotionFlag.Reduced is reduced motion (movement — translate, scale, rotate and layout transitions and animations — jumps to its end, and running movement ends; opacity and colours still fade), and `speed` scales the animation clock (1 = real time; 0.25 plays animations four times slower, to look at them)." },
+  { name: "INSTANT", code: 40, operands: [["on", "u32"]], doc: "Style changes between INSTANT 1 and INSTANT 0 apply at once, with no transitions (running ones of those properties end there), and the next layout moves nothing with a layout transition." },
 ];
 
 export const nodeKinds = { View: 1, Text: 2, Input: 3, Image: 4, Html: 5 } as const;
@@ -67,6 +69,9 @@ export const htmlFlags = { Dark: 1 } as const;
 
 /** Timing curves for TRANSITION and ANIMATE (the CSS ones). Spring and above: a spring that settles over the duration, damping ratio = (code - 16) / 100 (1.00 is critical; lower overshoots). */
 export const easings = { Linear: 0, Ease: 1, EaseIn: 2, EaseOut: 3, EaseInOut: 4, Spring: 16 } as const;
+
+/** MOTION flags. */
+export const motionFlags = { Reduced: 1 } as const;
 
 /** ANIMATE flags. */
 export const animateFlags = { Alternate: 1 } as const;

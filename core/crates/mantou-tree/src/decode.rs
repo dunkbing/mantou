@@ -58,6 +58,8 @@ pub enum Op {
     HtmlResource { id: u32, url: String, data: Option<Vec<u8>> },
     /// The node drawn at the pointer minus (x, y); id 0 = none.
     FollowPointer { id: u32, x: f32, y: f32 },
+    Motion { flags: u32, speed: f32 },
+    Instant { on: u32 },
     /// A Text's runs: (UTF-8 byte length, span ids outermost first).
     TextRuns { id: u32, runs: Vec<(u32, Vec<u32>)> },
     Animate { id: u32, animation: u32, prop: Prop, from: u32, to: u32, duration: f32, easing: u32, iterations: f32, flags: u32 },
@@ -283,6 +285,14 @@ pub fn decode(bytes: &[u8]) -> Result<Vec<Op>, DecodeError> {
                 let Ok(url) = std::str::from_utf8(&bytes[from..from + url_len]) else { return err(i, "HTML_RESOURCE: the URL is not UTF-8") };
                 let data = (a[2] != 0).then(|| bytes[from + url_len..from + len].to_vec());
                 Op::HtmlResource { id: a[0], url: url.to_owned(), data }
+            }
+            op::MOTION => {
+                fixed(2)?;
+                Op::Motion { flags: a[0], speed: f32::from_bits(a[1]) }
+            }
+            op::INSTANT => {
+                fixed(1)?;
+                Op::Instant { on: a[0] }
             }
             op::FOLLOW_POINTER => {
                 fixed(3)?;

@@ -1390,7 +1390,13 @@ export class Ui {
   /** Stops what this Ui keeps running by itself, before its core goes away. */
   dispose() {
     for (const d of this.roots.splice(0)) d();
+    Ui.live.delete(this);
   }
+
+  /** @internal Every Ui not disposed, for settings that apply to all of them (motion). */
+  static readonly live = new Set<Ui>();
+  /** @internal Reduced motion (MotionFlag) and the animation speed, sent to every Ui (motion.ts). */
+  static motion = { flags: 0, speed: 1 };
 
   private scheduled = false;
   private nextId = 1;
@@ -1414,7 +1420,10 @@ export class Ui {
   windowSize: WindowSize | null = null;
   private resizeHandlers = new Set<(size: WindowSize) => void>();
 
-  constructor(private sink: Sink) {}
+  constructor(private sink: Sink) {
+    Ui.live.add(this);
+    if (Ui.motion.flags !== 0 || Ui.motion.speed !== 1) this.enc.motion(Ui.motion.flags, Ui.motion.speed);
+  }
 
   private nextRequest = 1;
   private requests = new Map<number, (answer: unknown | null) => void>();

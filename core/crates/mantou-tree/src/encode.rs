@@ -197,6 +197,12 @@ impl Ops {
         w.extend(all.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
         self.op(op::HTML_RESOURCE, &w)
     }
+    pub fn motion(&mut self, flags: u32, speed: f32) -> &mut Self {
+        self.op(op::MOTION, &[flags, speed.to_bits()])
+    }
+    pub fn instant(&mut self, on: bool) -> &mut Self {
+        self.op(op::INSTANT, &[on as u32])
+    }
     pub fn follow_pointer(&mut self, id: u32, x: f32, y: f32) -> &mut Self {
         self.op(op::FOLLOW_POINTER, &[id, x.to_bits(), y.to_bits()])
     }

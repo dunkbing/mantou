@@ -642,6 +642,13 @@ pub struct Tree {
     window_limits: Option<WindowLimits>,
     /// The clock animations run on (ms), and how many nodes are animating.
     now: f64,
+    /// The real time at the last `set_time`, and how fast the animation clock runs against it (MOTION).
+    real_now: f64,
+    anim_speed: f64,
+    /// MOTION's reduced motion; INSTANT, and whether the next layout's moves are instant.
+    reduced_motion: bool,
+    instant: bool,
+    instant_layout: bool,
     animating: usize,
     /// Where the pointer is (logical px; None = outside the window), and the nodes under it, outermost first.
     pointer: Option<(f32, f32)>,
@@ -721,6 +728,11 @@ impl Tree {
             window_size: None,
             window_limits: None,
             now: 0.0,
+            real_now: 0.0,
+            anim_speed: 1.0,
+            reduced_motion: false,
+            instant: false,
+            instant_layout: false,
             animating: 0,
             pointer: None,
             follow: None,
@@ -1062,6 +1074,8 @@ impl Tree {
             }
             Op::Html { id, flags, html } => self.set_html(id, flags, &html).map_err(|e| format!("HTML: {e}"))?,
             Op::HtmlResource { id, url, data } => self.html_resource(id, &url, data).map_err(|e| format!("HTML_RESOURCE: {e}"))?,
+            Op::Motion { flags, speed } => self.set_motion(flags & p::motion_flag::REDUCED != 0, speed),
+            Op::Instant { on } => self.set_instant(on != 0),
             Op::FollowPointer { id, x, y } => {
                 if id != 0 {
                     self.node(id)?;

@@ -1,4 +1,5 @@
 // The app's entry point in the Worker: opens the window's instance and renders.
+import { followSystemMotion } from "./motion";
 import { readFileSync } from "node:fs";
 import { MantouCore } from "./core";
 import type { WindowOptions } from "./main";
@@ -27,6 +28,7 @@ export function run(app: () => JSX.Element, options: RunOptions = {}): MantouCor
   const restored = key ? restoredOptions(key, options) : null;
   if (restored) options = restored.options;
   const core = new MantouCore();
+  followSystemMotion();
   const remember = key ? rememberWindow(core.ui, key, restored!.saved) : null;
   setTitleBar(options.titleBar === "overlay" && !options.frameless);
   if (options.title) core.ui.title(options.title);

@@ -102,6 +102,8 @@ export class OpEncoder {
     this.op(Op.HTML_RESOURCE, [id, u.length, data ? 1 : 0, u.length + (data?.length ?? 0), ...words]);
   }
   followPointer(id: number, x: number, y: number) { this.op(Op.FOLLOW_POINTER, [id, f32bits(x), f32bits(y)]); }
+  motion(flags: number, speed: number) { this.op(Op.MOTION, [flags, f32bits(speed)]); }
+  instant(on: boolean) { this.op(Op.INSTANT, [on ? 1 : 0]); }
   focusScope(id: number, flags: number) { this.op(Op.FOCUS_SCOPE, [id, flags]); }
   scrollTo(id: number, x: number, y: number, flags: number) { this.op(Op.SCROLL_TO, [id, f32bits(x), f32bits(y), flags]); }
   scrollIntoView(id: number, block: number) { this.op(Op.SCROLL_INTO_VIEW, [id, block]); }

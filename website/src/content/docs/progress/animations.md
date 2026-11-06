@@ -47,13 +47,20 @@ await pulse.finished;
 | Property | |
 |---|---|
 | `opacity` | 0–1, multiplied down the tree |
-| `backgroundColor`, `borderColor`, `color` | interpolated in sRGB, alpha included |
+| `backgroundColor`, `borderColor`, `color` | mixed in OKLab (premultiplied: a fade from transparent keeps the hue), alpha included |
 | `translateX`, `translateY` | logical px |
 | `scale` | about the box's centre |
 
 `translateX`, `translateY` and `scale` are also plain style properties. They're a transform, as in CSS: the node and everything inside it are drawn moved and scaled (borders, radii, shadows, text, images, inputs), and hit-testing, `measure()` and scrolling follow what's drawn. Layout doesn't see them: neighbours stay where they are, and `onLayout` reports the untransformed box, so a sliding panel sends no layout events. Text inside a scaled view is rasterized at the size it's drawn at, so it stays sharp.
 
 Layout properties (`width`, `height`, margins…) can't be animated; animate a transform instead.
+
+## Interruptions, reduced motion, instant changes
+
+- A transition of a movement (translate, scale, rotate, layout) that's replaced mid-way hands its velocity to the new one: the new one adds the old speed, dying away like its own spring (critically damped for other easings), so the motion bends instead of stopping.
+- Opacity and colours never overshoot: a spring on them runs critically damped.
+- `MOTION` (flags, speed): `MotionFlag.Reduced` makes movement jump (running movement ends, `ANIMATION_END` for explicit ones) while fades still play; `speed` scales the animation clock. The runtime reads the OS setting once at start (`defaults` on macOS, the registry's `MinAnimate` on Windows, `gsettings` on Linux; `MANTOU_REDUCED_MOTION` overrides) and sends it to every window.
+- `INSTANT` (on): changes between `INSTANT 1` and `INSTANT 0` skip their transitions and the next layout moves nothing; `instant(fn)` wraps `fn` (and the effects it sets off) in them.
 
 ## How it runs
 
@@ -65,6 +72,8 @@ Layout properties (`width`, `height`, margins…) can't be animated; animate a t
 ## Tests
 
 - `core/crates/mantou-tree/tests/anim.rs`: transitions start from what's drawn and end at the style, no transition on a first look, iterations and alternation, replacement and `ANIMATION_END`, scale about the centre with hit-testing, layout events unaffected, released nodes stop.
+- `core/crates/mantou-tree/tests/anim.rs` also: an interrupted spring keeps its speed, opacity never overshoots, reduced motion, instant changes and a slower clock.
+- `tests/motion.test.tsx` (headless): `instant()`, `setReducedMotion`, `setAnimationSpeed`.
 - `tests/anim.test.tsx` (headless): the `transition` prop on the core's clock with no commits per frame, `animate()`'s promise, `stop()`, colours mid-way, and reference images of transformed views with text at 1× and 2×.
 - `runtime/anim.test.tsx` (mock): op counts. A change to a property with a transition is one `STYLE` op.
 - The window self-test: an animation keeps drawing while the Worker is blocked (no commits), and the window is idle again once it ends.
