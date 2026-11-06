@@ -53,3 +53,24 @@ test("win.close asks the core to close like the button, and the safe area is zer
   expect(h.lastService()).toEqual({ kind: "window", op: "close" });
   expect(win.safeArea).toEqual({ top: 0, left: 0 });
 });
+
+// #56: a dragRegion needs no paint, alone or in a sidebar's shape (padded column, negative margins).
+test("an empty unpainted dragRegion in a sidebar asks to move the window", () => {
+  const h = new HeadlessCore();
+  open.push(h);
+  let strip!: Node;
+  mount(h.ui, () => (
+    <View style={{ flexDirection: "row", width: 600, height: 400 }}>
+      <View style={{ width: 228, padding: 12, backgroundColor: "#eee" }}>
+        <View ref={(n: Node) => (strip = n)} dragRegion style={{ height: 38, flexShrink: 0, marginLeft: -12, marginRight: -12 }} />
+        <View style={{ height: 100 }} />
+      </View>
+    </View>
+  ));
+  h.step();
+  expect(h.hit(100, 20)).toBe(strip);
+  h.pointer("down", 100, 20);
+  h.step();
+  expect(h.lastService()).toEqual({ kind: "window", op: "drag" });
+  h.pointer("up", 100, 20);
+});

@@ -129,6 +129,7 @@ win.onState((s) => save(s));                      // { focused, minimized, maxim
 
 // A custom title bar: a frameless window with a view that moves it.
 <View dragRegion style={{ height: 32 }}>…</View>
+// A drag region needs no paint or children, only a size that survives layout (`flexShrink: 0` in a column that can overflow).
 win.close();                                      // like the close button: the app gets closeRequested
 ```
 
