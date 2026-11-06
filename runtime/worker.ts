@@ -25,6 +25,6 @@ globalThis.addEventListener("message", async (e: Event) => {
       return;
     }
     console.error("mantou: the app failed to load:", err);
-    postMessage("mantou:failed");
+    postMessage({ type: "mantou:failed", error: String((err as Error)?.stack ?? err) });
   }
 });

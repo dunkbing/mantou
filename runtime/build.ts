@@ -47,12 +47,13 @@ export async function build(entry: string, outDir: string, name: string, windows
   const data = (e as MessageEvent).data;
   if (data?.type !== "mantou:entry") return;
   if (data.argv) process.argv = [process.argv[0], data.entry, ...data.argv];
-  try { await import(${q(app)}); } catch (err) { console.error("mantou: the app failed to load:", err); postMessage("mantou:failed"); }
+  try { await import(${q(app)}); } catch (err) { console.error("mantou: the app failed to load:", err); postMessage({ type: "mantou:failed", error: String((err as Error)?.stack ?? err) }); }
 }, { once: true });\n`,
   );
 
   const exe = join(outDir, name);
-  const r = await Bun.build({ entrypoints: [boot, worker], plugins: [mantouJsx], compile: { outfile: exe, ...(windows && process.platform === "win32" ? { windows } : {}) } as never });
+  // The baseline Bun runs on x64 CPUs without AVX2 (old CPUs, Windows 11 on ARM and VMs that hide it); the regular one crashes at start there.
+  const r = await Bun.build({ entrypoints: [boot, worker], plugins: [mantouJsx], compile: { outfile: exe, ...(process.platform === "win32" && process.arch === "x64" ? { target: "bun-windows-x64-baseline" } : {}), ...(windows && process.platform === "win32" ? { windows } : {}) } as never });
   if (!r.success) throw new Error(`mantou: build failed:\n${r.logs.join("\n")}`);
   rmSync(gen, { recursive: true, force: true });
   copyFileSync(core, join(dirname(exe), basename(core)));

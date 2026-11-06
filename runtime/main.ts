@@ -6,6 +6,7 @@
 //   (apps outside this repo use the `mantou` command: runtime/cli.ts)
 import { resolve } from "node:path";
 import { openCore } from "./ffi";
+import { reportFatal } from "./crash";
 import { launchArgs } from "./launch";
 import { encodeWindowConfig } from "./winconfig";
 
@@ -47,7 +48,13 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
   let asked: WindowOptions = {};
 
   process.env.MANTOU_T0 ??= String(Date.now());
-  const core = openCore();
+  let core: ReturnType<typeof openCore>;
+  try {
+    core = openCore();
+  } catch (err) {
+    reportFatal(err);
+    process.exit(70);
+  }
 
   // The Worker entry registers the JSX plugin, then imports the app. For
   // `mantou dev`, a supervisor runs the app in a Worker of its own, and starts
@@ -62,9 +69,9 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
         clearTimeout(timer);
         asked = data?.window ?? {};
         ok();
-      } else if (data === "mantou:failed") {
+      } else if (data === "mantou:failed" || data?.type === "mantou:failed") {
         clearTimeout(timer);
-        fail(new Error("mantou: the app failed to load (see the error above)"));
+        fail(new Error(`mantou: the app failed to load${data?.error ? `:\n${data.error}` : " (see the error above)"}`));
       }
     });
     w.addEventListener("error", (e) => {
@@ -73,7 +80,7 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
     });
     w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch), argv: launchArgs(args, entry) });
   }).catch((err) => {
-    console.error(err instanceof Error ? err.message : err);
+    reportFatal(err);
     process.exit(70);
   });
 
