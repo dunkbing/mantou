@@ -330,7 +330,10 @@ impl Win {
         let scene = lock(&self.inst.scene).clone();
         let (Some(gpu), Some(shared)) = (self.gpu.as_mut(), shared) else { return };
         self.window.pre_present_notify();
-        match gpu.draw(shared, &scene) {
+        let t = std::time::Instant::now();
+        let drawn = gpu.draw(shared, &scene);
+        crate::instance::add_us(&self.inst.stats.render_us, t);
+        match drawn {
             Drawn::Yes => bump(&self.inst.stats.frames),
             Drawn::Retry => self.window.request_redraw(),
             Drawn::Skipped => {}

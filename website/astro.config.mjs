@@ -38,7 +38,7 @@ export default defineConfig({
 				{
 					label: 'Status and test results',
 					collapsed: true,
-					items: ['progress/threading', 'progress/ui-tree', 'progress/text', 'progress/text-input', 'progress/scrolling', 'progress/animations', 'progress/hover', 'progress/pointer-events', 'progress/drag-and-drop', 'progress/html', 'progress/platform-services', 'progress/crash-reports', 'progress/accessibility', 'progress/macos'],
+					items: ['progress/threading', 'progress/ui-tree', 'progress/text', 'progress/text-input', 'progress/scrolling', 'progress/animations', 'progress/hover', 'progress/pointer-events', 'progress/drag-and-drop', 'progress/html', 'progress/platform-services', 'progress/crash-reports', 'progress/performance', 'progress/accessibility', 'progress/macos'],
 				},
 			],
 			plugins: [

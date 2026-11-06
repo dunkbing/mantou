@@ -41,6 +41,17 @@ jobs:
         run: cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib
       - name: Headless tests on the real core
         run: bun run test:headless
+      # Reported in the job's summary and kept as an artifact; timings vary between runners, so they never fail CI.
+      - name: Benchmarks (bench/, reported only)
+        continue-on-error: true
+        run: bun run bench --json bench.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ github.sha }}
+          path: bench.json
+          if-no-files-found: ignore
       - name: Reference images that didn't match (actual and diff)
         if: failure()
         uses: actions/upload-artifact@v4

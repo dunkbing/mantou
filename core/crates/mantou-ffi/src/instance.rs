@@ -29,10 +29,21 @@ pub struct Stats {
     pub redraw_requests: AtomicU64,
     pub op_errors: AtomicU64,
     pub presses: AtomicU64,
+    /// Time spent, in µs: applying op batches, laying out (and placing boxes), building scenes, and drawing
+    /// them (a window's frames; a headless instance's captures, read back included). For benchmarks.
+    pub apply_us: AtomicU64,
+    pub layout_us: AtomicU64,
+    pub scene_us: AtomicU64,
+    pub render_us: AtomicU64,
+}
+
+/// Adds the time since `since` to a µs counter.
+pub fn add_us(c: &AtomicU64, since: std::time::Instant) {
+    c.fetch_add(since.elapsed().as_micros() as u64, Ordering::Relaxed);
 }
 
 /// Counter order of `mt_stats`.
-pub const STAT_COUNT: usize = 15;
+pub const STAT_COUNT: usize = 19;
 
 /// Presses this close in time (ms) and space (logical px) count as a double (triple…) click.
 const MULTI_CLICK_MS: f64 = 500.0;
@@ -395,10 +406,15 @@ impl Instance {
     /// events (layout changes among them). Call with the tree locked.
     fn publish(&self, tree: &mut Tree) -> bool {
         self.access_dirty.store(true, Ordering::Release);
+        let t = std::time::Instant::now();
         let ran = tree.layout();
+        add_us(&self.stats.layout_us, t);
         // An unchanged tree would draw the same scene: keep the one published.
         if ran || tree.scene_stale() {
-            *lock(&self.scene) = Arc::new(tree.scene());
+            let t = std::time::Instant::now();
+            let scene = tree.scene();
+            add_us(&self.stats.scene_us, t);
+            *lock(&self.scene) = Arc::new(scene);
         }
         self.flush_events(tree);
         ran
@@ -408,7 +424,10 @@ impl Instance {
     pub fn commit(&self, bytes: &[u8]) -> i32 {
         let mut tree = lock(&self.tree);
         tree.set_time(self.now_ms()); // animations it starts start now
-        match tree.apply(bytes) {
+        let t = std::time::Instant::now();
+        let applied = tree.apply(bytes);
+        crate::instance::add_us(&self.stats.apply_us, t);
+        match applied {
             Ok(report) => {
                 for e in &report.errors {
                     log!("op skipped: {e}");
@@ -685,6 +704,10 @@ impl Instance {
             glyphs,
             tree_stats.scenes,
             tree_stats.text_layouts,
+            load(&st.apply_us),
+            load(&st.layout_us),
+            load(&st.scene_us),
+            load(&st.render_us),
         ]
     }
 }

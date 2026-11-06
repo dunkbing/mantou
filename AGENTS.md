@@ -27,6 +27,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 | `examples/gallery` | The base components (`runtime/widgets.tsx`, coloured by `runtime/widget-theme.ts`: Button, Checkbox, Toggle, RadioGroup, Slider, Tabs, Dialog, Tooltip, Splitter); `bun run gallery` |
 | `tests/` | Bun tests against the real core, headless (`headless.test.tsx`) |
 | `spike/` | `selftest.ts` (window self-test), `devtest.ts` (`mantou dev` reloads in a window), `app.ts` (threading demo) |
+| `bench/` | Benchmarks (`bun run bench`): each `*.bench.tsx` is a scenario run headless in its own process; `run.ts` prints the table, saves JSON and compares runs |
 | `scripts/` | `npm.ts` (stages the npm packages of a release), `smoke.ts` (installs them into a fresh app and tests it), `package-smoke-windows.ts` (installs and uninstalls a packaged app, in CI), `screenshots.tsx` (renders `docs/images/` at 2×: `bun run screenshots`) |
 | `website/` | Docs site (Astro + Starlight on Bun); deployed separately, not built in CI |
 
@@ -49,6 +50,7 @@ bun run showcase            # the showcase screen in a window
 bun run gallery             # the base components in a window
 bun run mail                # an HTML mail (<Html>) in a window
 bun run screenshots         # re-render the README's images (docs/images/) after a visible change
+bun run bench               # benchmarks: a table of timings (--json out.json, then --compare out.json after a change)
 cd core/fuzz && LSAN_OPTIONS=suppressions=$PWD/lsan.supp cargo +nightly fuzz run layout -- -max_total_time=60   # or decode, apply
 cd website && bun run build # docs site (Astro runs on Bun via `bunx --bun`)
 ```

@@ -893,7 +893,9 @@ pub unsafe extern "C" fn mt_test_capture(inst: u32, dst: *mut u8, cap: u32) -> i
             Offscreen::new().inspect_err(|e| log!("offscreen rendering unavailable: {e}"))
         });
         let Ok(offscreen) = offscreen.as_mut() else { return -1 };
+        let t = std::time::Instant::now();
         let pixels = offscreen.capture(&scene);
+        instance::add_us(&i.stats.render_us, t);
         out[..pixels.len()].copy_from_slice(&pixels);
         bump(&i.stats.frames);
         pixels.len() as i32

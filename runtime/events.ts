@@ -63,8 +63,13 @@ export interface Stats {
   scenes: number;
   /** Text layouts computed, not reused from a node or the cache. */
   textLayouts: number;
+  /** Time spent in the core, in µs: applying op batches, laying out, building scenes, and drawing (a window's frames; a headless instance's captures, read back included). */
+  applyMicros: number;
+  layoutMicros: number;
+  sceneMicros: number;
+  renderMicros: number;
 }
-export const STAT_NAMES: (keyof Stats)[] = ["frames", "commits", "wakes", "events", "resizes", "redrawRequests", "layouts", "ops", "opErrors", "quads", "nodes", "presses", "glyphs", "scenes", "textLayouts"];
+export const STAT_NAMES: (keyof Stats)[] = ["frames", "commits", "wakes", "events", "resizes", "redrawRequests", "layouts", "ops", "opErrors", "quads", "nodes", "presses", "glyphs", "scenes", "textLayouts", "applyMicros", "layoutMicros", "sceneMicros", "renderMicros"];
 
 export function statsFrom(a: BigUint64Array): Stats {
   return Object.fromEntries(STAT_NAMES.map((k, i) => [k, Number(a[i])])) as unknown as Stats;
