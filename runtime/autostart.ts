@@ -32,8 +32,9 @@ function entry(): string {
   return `[Desktop Entry]\nType=Application\nName=${name()}\nExec=${args.map(quote).join(" ")}\n`;
 }
 
+// windowsHide: a console program started by an app without a console would flash a console window
 async function reg(...a: string[]): Promise<boolean> {
-  return (await Bun.spawn(["reg", ...a], { stdout: "ignore", stderr: "ignore" }).exited) === 0;
+  return (await Bun.spawn(["reg", ...a], { stdout: "ignore", stderr: "ignore", windowsHide: true }).exited) === 0;
 }
 
 /** Whether the app starts at login, and turning that on or off. The command is the one running now. */
