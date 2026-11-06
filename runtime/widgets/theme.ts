@@ -1,6 +1,6 @@
 // The base widgets' colours as named tokens that follow the current theme (light unless the app sets another).
-import { useColorScheme } from "./theme";
-import { createSignal } from "./solid/solid";
+import { useColorScheme } from "../theme";
+import { createSignal } from "../solid/solid";
 
 export interface Theme {
   /** The window's backdrop. */
