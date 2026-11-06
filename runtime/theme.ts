@@ -1,4 +1,5 @@
 // The system's colour scheme as a signal, and themes whose values follow it.
+import { watchLinuxScheme } from "./linux-scheme";
 import { activeUi } from "./platform";
 import { createSignal } from "./solid/solid";
 import type { Ui } from "./ui";
@@ -14,8 +15,12 @@ function follow() {
   const ui = activeUi();
   if (!ui || ui === hooked) return;
   hooked = ui;
-  setSystem(ui.windowState.dark ? "dark" : "light");
-  ui.onWindowState((s) => setSystem(s.dark ? "dark" : "light"));
+  // On Linux the window doesn't know (winit doesn't report it): the desktop portal's answer wins when there is one
+  // (dunkbing/mantou#79).
+  let desktop: ColorScheme | null = null;
+  if (process.platform === "linux") watchLinuxScheme((s) => setSystem((desktop = s)));
+  setSystem(desktop ?? (ui.windowState.dark ? "dark" : "light"));
+  ui.onWindowState((s) => setSystem(desktop ?? (s.dark ? "dark" : "light")));
 }
 
 /** The colour scheme in use, as a signal: the system's, unless `setColorScheme` chose one. */

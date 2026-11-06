@@ -48,3 +48,10 @@ test("--check-motion fails on an endless animation unless it's allowed", () => {
   expect(r.out).toContain("motion: never-settles spinner");
   expect(snap("--scene", "loading", "--quiet", "--check-motion", "300", "--allow", "spinner").code).toBe(0);
 }, 60_000);
+
+test.if(process.platform === "linux")("on Linux, the desktop's colour scheme reaches useColorScheme (dunkbing/mantou#79)", () => {
+  const app = join(import.meta.dir, "apps", "scheme-app.tsx");
+  const run = (scheme: string) => Bun.spawnSync([process.execPath, cli, "snap", app], { env: { ...process.env, MANTOU_COLOR_SCHEME: scheme }, stdout: "pipe" }).stdout.toString();
+  expect(run("dark")).toContain('[scheme] "dark"');
+  expect(run("light")).toContain('[scheme] "light"');
+}, 60_000);

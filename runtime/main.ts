@@ -78,6 +78,13 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
       clearTimeout(timer);
       fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
     });
+    // The app quit before it was ready (a second launch handing its arguments to the first, say): so does the
+    // process, with its exit code (dunkbing/mantou#84).
+    w.addEventListener("close", (e) => {
+      clearTimeout(timer);
+      const code = (e as Event & { code?: number }).code;
+      process.exit(typeof code === "number" ? code : 0);
+    });
     w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch), snap: dev && process.env.MANTOU_DEV_SNAP, argv: launchArgs(args, entry) });
   }).catch((err) => {
     reportFatal(err);

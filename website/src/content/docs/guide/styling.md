@@ -159,7 +159,7 @@ A leaving view ignores the pointer, and is gone from the app's tree at once.
 
 ## Light and dark
 
-`useColorScheme()` is a signal of the system's scheme (`"light"` or `"dark"`) that follows the OS. `defineTheme` gives each scheme its values; what it returns changes with the scheme wherever it is used, so nothing else needs to read the signal.
+`useColorScheme()` is a signal of the system's scheme (`"light"` or `"dark"`) that follows the OS. On Linux it comes from the desktop's appearance setting through the XDG desktop portal (GNOME, KDE Plasma and others), followed as it changes, with GNOME's settings as a fallback; `MANTOU_COLOR_SCHEME=dark` (or `light`) overrides it for a run. `defineTheme` gives each scheme its values; what it returns changes with the scheme wherever it is used, so nothing else needs to read the signal.
 
 ```tsx
 import { defineTheme, useColorScheme, setColorScheme } from "mantou-ui";
