@@ -91,6 +91,10 @@ mantou snap src/main.tsx --script open.json --strip open.png --check-motion
 
 `mantou dev --snap` writes `.mantou/dev-snap.png` and its tree (`dev-snap.txt`) after every start and reload, so an agent editing the app can read what its change did.
 
+## Performance warnings
+
+`mantou dev` watches the core's counters and says, once each, when the app does work the framework would do better: a commit almost every frame (an animation driven from JS: use `transition` or `animate()`), frames that take long in the core (with where the time goes), ops the core rejected, and very large trees (use `<List>`). `MANTOU_PERF_WARN=0` turns them off.
+
 ## Finding out why it looks wrong
 
 - `MANTOU_DEBUG=layout bun run dev` outlines every box in the window, a colour per node, so you can see which view takes the space (the usual cause is `flexShrink` or a missing `minHeight: 0`).

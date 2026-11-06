@@ -9,6 +9,7 @@ import { mkdirSync, watch } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { STAT_NAMES, statsFrom, type Stats } from "./events";
 import { openCore } from "./ffi";
+import { perfWarnings } from "./perf-warn";
 import { Ui } from "./ui";
 
 const lib = openCore();
@@ -48,9 +49,26 @@ addEventListener(
     snapTo = data.snap || null;
     start();
     watchFiles(data.watch as string);
+    watchPerformance();
   },
   { once: true },
 );
+
+/** Performance warnings (perf-warn.ts), each said once a session; MANTOU_PERF_WARN=0 turns them off. */
+function watchPerformance() {
+  if (process.env.MANTOU_PERF_WARN === "0") return;
+  const said = new Set<string>();
+  let before = stats();
+  setInterval(() => {
+    const now = stats();
+    for (const w of perfWarnings(before, now, 2000)) {
+      if (said.has(w.kind)) continue;
+      said.add(w.kind);
+      console.warn(`mantou: ${w.message} (MANTOU_PERF_WARN=0 hides this)`);
+    }
+    before = now;
+  }, 2000).unref?.();
+}
 
 /** `mantou dev --snap`: where each start's and reload's snapshot goes. */
 let snapTo: string | null = null;
