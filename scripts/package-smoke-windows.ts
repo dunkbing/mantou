@@ -26,7 +26,7 @@ const until = async (what: string, cond: () => boolean, ms = 20_000) => {
 
 if (process.platform !== "win32") fail("this runs on Windows");
 const work = mkdtempSync(join(tmpdir(), "mantou-smoke-"));
-const dir = join(work, "Mantou Smoke app");
+const dir = join(work, "app") // no spaces: /D= can't be quoted;
 const lnk = join(process.env.APPDATA!, "Microsoft", "Windows", "Start Menu", "Programs", `${NAME}.lnk`);
 try {
   const [installer] = await packageWindows("examples/counter/main.tsx", join(work, "dist"), {
