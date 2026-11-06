@@ -42,8 +42,8 @@ jobs:
           # Built on the oldest Ubuntu runner, so it runs on older glibc too.
           - { target: linux-x64, os: ubuntu-22.04, file: libmantou_ffi.so }
           - { target: linux-arm64, os: ubuntu-22.04-arm, file: libmantou_ffi.so }
-          - { target: darwin-arm64, os: macos-14, file: libmantou_ffi.dylib }
-          - { target: darwin-x64, os: macos-14, file: libmantou_ffi.dylib, rust: x86_64-apple-darwin }
+          - { target: darwin-arm64, os: macos-15, file: libmantou_ffi.dylib }
+          - { target: darwin-x64, os: macos-15, file: libmantou_ffi.dylib, rust: x86_64-apple-darwin }
           - { target: win32-x64, os: windows-2022, file: mantou_ffi.dll }
     env:
       # Small binaries for the packages: no debug info, symbols stripped.
@@ -122,7 +122,7 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -198,7 +198,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

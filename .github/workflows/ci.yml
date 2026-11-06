@@ -64,7 +64,7 @@ jobs:
           - name: Linux x86_64 (X11, Mesa lavapipe)
             os: ubuntu-24.04
           - name: macOS aarch64 (Metal)
-            os: macos-14
+            os: macos-15
           - name: Windows x86_64 (D3D12, WARP)
             os: windows-2022
     name: Window self-test · ${{ matrix.name }}
