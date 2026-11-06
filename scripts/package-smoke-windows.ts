@@ -44,6 +44,9 @@ try {
   const exe = join(dir, `${NAME}.exe`);
   for (const f of [`${NAME}.exe`, "mantou_ffi.dll", "uninstall.exe"]) check(existsSync(join(dir, f)), `${f} installed`);
   check(existsSync(lnk), "Start menu shortcut");
+  // the core must not need the Visual C++ redistributable (a fresh Windows lacks it: the app would die at load)
+  const imports = new TextDecoder("latin1").decode(await Bun.file(join(dir, "mantou_ffi.dll")).bytes());
+  check(!/VCRUNTIME140|MSVCP140/i.test(imports), "mantou_ffi.dll doesn't import the Visual C++ runtime");
   const version = reg(uninstKey, "DisplayVersion").stdout.toString();
   check(version.includes("1.2.0"), "Apps & features: version");
   check(reg(uninstKey, "Publisher").stdout.toString().includes("Mantou Tests"), "Apps & features: publisher");

@@ -1,0 +1,4 @@
+# Windows: link the C runtime into mantou_ffi.dll. Otherwise it needs VCRUNTIME140.dll, which a machine without the
+# Visual C++ redistributable lacks, and the app dies at load.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
