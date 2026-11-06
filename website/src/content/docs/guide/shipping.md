@@ -24,6 +24,12 @@ bunx mantou package src/main.tsx --id com.example.myapp \
 
 `my-profile` is a profile saved with `xcrun notarytool store-credentials`.
 
+The `icon` (an SVG or a large PNG, from `--icon` or the `"mantou"` block of `package.json`, as on Linux and Windows) becomes `Contents/Resources/AppIcon.icns` (16 to 1024 px with @2x) and `CFBundleIconFile` names it, before signing.
+
+## Files embedded in the app
+
+`import icon from "./tray.svg" with { type: "file" }` embeds a file in the executable made by `mantou build` or `package`, at a path inside Bun's virtual filesystem (`/$bunfs/...`, `B:/~BUN/...` on Windows) that the native core can't open. Mantou handles it where a path goes to the core: `createTray({ icon })` writes the embedded file to a temp copy (`mantou-embedded/` in the system temp folder, named by content) and passes that, and `<Image src>` sends the bytes. `file:` URLs from `new URL("./tray.svg", import.meta.url)` work the same. Other paths are untouched.
+
 ## Linux packages
 
 ```bash

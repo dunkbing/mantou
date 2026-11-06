@@ -2,6 +2,7 @@
 // boxes, the app menu and context menus. They go through the core, which shows
 // the native UI; a headless instance answers from what the test queued.
 import type { Ui, WindowState } from "./ui";
+import { realPath } from "./embedded";
 
 let active: Ui | null = null;
 
@@ -230,7 +231,7 @@ export async function setBadge(badge: number | string | null): Promise<boolean> 
 }
 
 export interface TrayOptions {
-  /** A PNG, JPEG, WebP or SVG file. */
+  /** A PNG, JPEG, WebP or SVG file; a file embedded in a compiled app (`with { type: "file" }`) works too. */
   icon: string;
   tooltip?: string;
   /** Items as for `setMenu`; chosen ones reach `onMenu`. */
@@ -239,7 +240,7 @@ export interface TrayOptions {
 
 /** Adds an icon to the menu bar (macOS; false elsewhere for now). */
 export async function createTray(options: TrayOptions): Promise<boolean> {
-  return (await ui().service<boolean>({ kind: "createTray", ...options })) === true;
+  return (await ui().service<boolean>({ kind: "createTray", ...options, icon: realPath(options.icon) })) === true;
 }
 
 /** Removes the tray icon. */

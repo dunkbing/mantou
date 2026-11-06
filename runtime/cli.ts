@@ -25,7 +25,8 @@ const USAGE = `usage:
   mantou package <entry.tsx> [--out DIR] [--name N] [--id com.example.app] [--version 1.0.0]
                  [--identity "Developer ID Application: …"] [--notary PROFILE] [--no-dmg]
                                           macOS: a hardened-runtime .app and .dmg; signed ad hoc without --identity,
-                                          notarized and stapled with --notary (a \`xcrun notarytool store-credentials\` profile)
+                                          notarized and stapled with --notary (a \`xcrun notarytool store-credentials\` profile);
+                                          --icon (SVG or large PNG) becomes the .icns; options also come from package.json's "mantou" block
                  [--linux deb,tar,appimage] [--icon icon.svg] [--description D] [--categories Network,Email]
                  [--keywords K,L] [--maintainer "Name <mail>"] [--homepage URL] [--depends A,B] [--recommends A,B]
                                           Linux: a .deb, a .tar.gz (install.sh, uninstall.sh) and an AppImage, with a
@@ -146,6 +147,7 @@ switch (command) {
           identity: opt("identity") ?? "-",
           notary: opt("notary"),
           dmg: !rest.includes("--no-dmg"),
+          icon: opt("icon") ?? cfg.icon,
         });
       for (const m of [made].flat()) console.log(`mantou: ${m}`);
     } catch (e) {

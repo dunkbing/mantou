@@ -9,6 +9,7 @@ import type { InputCoreEvent } from "./events";
 import { createComputed, createRoot, untrack } from "./solid/solid";
 import { expandStyle, f32bits, parseColor, type Style } from "./style";
 import type { Color } from "./gen/protocol";
+import { embeddedBytes } from "./embedded";
 
 export type { Style } from "./style";
 
@@ -421,14 +422,15 @@ export class Node {
 
   /**
    * An Image's source: a PNG, JPEG, WebP or SVG file (a path the core reads,
-   * relative to the working directory) or its bytes. onImageLoad or
+   * relative to the working directory, or a file embedded in a compiled app) or its bytes. onImageLoad or
    * onImageError follows.
    */
   src(source: string | Uint8Array): this {
     this.alive();
     if (!this.isImage) throw new Error(`mantou: src is for <Image>, not <${this.kindName}>`);
-    if (typeof source === "string") this.ui.enc.imagePath(this.id, source);
-    else this.ui.enc.imageData(this.id, source);
+    const bytes = typeof source === "string" ? embeddedBytes(source) : source;
+    if (bytes) this.ui.enc.imageData(this.id, bytes);
+    else this.ui.enc.imagePath(this.id, source as string);
     this.ui.schedule();
     return this;
   }

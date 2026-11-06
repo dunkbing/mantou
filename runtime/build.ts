@@ -1,9 +1,10 @@
 // `mantou build` and `mantou package` (design §13.2): one executable with Bun,
 // the app (JSX compiled ahead of time, so no Babel at run time) and the Worker
 // entry; `package` wraps it and the native core into a macOS .app and .dmg.
-import { existsSync, mkdirSync, rmSync, copyFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, copyFileSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { libPath } from "./ffi";
+import { makeIcns } from "./icns";
 import { mantouJsx } from "./solid/plugin";
 
 const runtime = import.meta.dir;
@@ -68,6 +69,8 @@ export interface PackageOptions {
   /** A notarytool keychain profile; without one the app is signed but not notarized. */
   notary?: string;
   dmg: boolean;
+  /** An SVG or a large PNG, made into the app's .icns. */
+  icon?: string;
 }
 
 // JavaScriptCore's JIT needs allow-jit; Bun's compiled executable also needs
@@ -89,7 +92,7 @@ const plist = (o: PackageOptions) => `<?xml version="1.0" encoding="UTF-8"?>
 <key>CFBundleIdentifier</key><string>${o.id}</string>
 <key>CFBundleExecutable</key><string>${o.name}</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>${o.version}</string>
+${o.icon ? "<key>CFBundleIconFile</key><string>AppIcon</string>\n" : ""}<key>CFBundleShortVersionString</key><string>${o.version}</string>
 <key>CFBundleVersion</key><string>${o.version}</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -107,6 +110,11 @@ export async function packageMac(entry: string, outDir: string, o: PackageOption
   const exe = await build(entry, macos, o.name);
   chmodSync(exe, 0o755);
   writeFileSync(join(app, "Contents", "Info.plist"), plist(o));
+  if (o.icon) {
+    if (!existsSync(o.icon)) throw new Error(`mantou package: no such icon: ${o.icon}`);
+    mkdirSync(join(app, "Contents", "Resources"), { recursive: true });
+    writeFileSync(join(app, "Contents", "Resources", "AppIcon.icns"), makeIcns(new Uint8Array(readFileSync(o.icon))));
+  }
   const ent = join(outDir, ".entitlements.plist");
   writeFileSync(ent, ENTITLEMENTS);
 
