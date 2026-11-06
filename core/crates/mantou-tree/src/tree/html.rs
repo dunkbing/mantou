@@ -21,13 +21,29 @@ pub(super) struct HtmlNode {
     bands: std::cell::RefCell<std::collections::HashMap<u32, (u64, u32, std::sync::Arc<mantou_image::Pixels>)>>,
 }
 
+/// Runs `f` on a document, and drops the document if the HTML engine panics on it (some input it can't take):
+/// the node then shows nothing, and the app goes on (dunkbing/mantou#87). The panic is logged by the hook.
+#[cfg(feature = "html")]
+fn guarded<R>(doc: &mut Option<mantou_html::HtmlDoc>, f: impl FnOnce(&mut mantou_html::HtmlDoc) -> R) -> Option<R> {
+    let d = doc.as_mut()?;
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(d))) {
+        Ok(r) => Some(r),
+        Err(_) => {
+            *doc = None;
+            None
+        }
+    }
+}
+
 impl HtmlNode {
     /// The size it takes `width` wide (`None`: as wide as it likes) at `scale`, logical px.
     pub(super) fn measure(&self, width: Option<f32>, scale: f32) -> (f32, f32) {
         #[cfg(feature = "html")]
-        if let Some(doc) = self.doc.borrow_mut().as_mut() {
+        {
             let w = width.unwrap_or(600.0);
-            return (w, doc.layout(w, scale).1);
+            if let Some(h) = guarded(&mut self.doc.borrow_mut(), |doc| doc.layout(w, scale).1) {
+                return (w, h);
+            }
         }
         let _ = scale;
         (width.unwrap_or(0.0), 0.0)
@@ -38,13 +54,25 @@ impl HtmlNode {
     /// if they changed. Bands that no longer show are dropped.
     #[cfg(feature = "html")]
     pub(super) fn bands(&self, content: [f32; 4], visible: [f32; 4], k: f32, scale: f32) -> Vec<([f32; 4], std::sync::Arc<mantou_image::Pixels>)> {
-        let mut out = Vec::new();
-        let mut doc = self.doc.borrow_mut();
+        let mut slot = self.doc.borrow_mut();
         let mut bands = self.bands.borrow_mut();
-        let Some(doc) = doc.as_mut() else {
+        let out = guarded(&mut slot, |doc| Self::paint_bands(doc, &mut bands, content, visible, k, scale)).unwrap_or_default();
+        if slot.is_none() {
             bands.clear();
-            return out;
-        };
+        }
+        out
+    }
+
+    #[cfg(feature = "html")]
+    fn paint_bands(
+        doc: &mut mantou_html::HtmlDoc,
+        bands: &mut std::collections::HashMap<u32, (u64, u32, std::sync::Arc<mantou_image::Pixels>)>,
+        content: [f32; 4],
+        visible: [f32; 4],
+        k: f32,
+        scale: f32,
+    ) -> Vec<([f32; 4], std::sync::Arc<mantou_image::Pixels>)> {
+        let mut out = Vec::new();
         let k = k.max(1e-3);
         let width = (content[2] - content[0]) / k;
         // Textures are at most 8192 px on a side: a very wide document is drawn at a lower scale.
@@ -155,7 +183,8 @@ impl Tree {
         let Some(h) = node.html.as_mut() else { return Err(format!("{id} is not an Html node")) };
         #[cfg(feature = "html")]
         {
-            *h.doc.get_mut() = Some(mantou_html::HtmlDoc::new(html, flags & crate::protocol::html_flag::DARK != 0));
+            let dark = flags & crate::protocol::html_flag::DARK != 0;
+            *h.doc.get_mut() = std::panic::catch_unwind(|| mantou_html::HtmlDoc::new(html, dark)).ok();
             h.bands.get_mut().clear();
         }
         #[cfg(not(feature = "html"))]
@@ -172,7 +201,7 @@ impl Tree {
         let node = self.nodes.get_mut(&id).ok_or_else(|| format!("no node {id}"))?;
         let Some(h) = node.html.as_mut() else { return Err(format!("{id} is not an Html node")) };
         #[cfg(feature = "html")]
-        let took = h.doc.get_mut().as_mut().is_some_and(|d| d.provide(url, data));
+        let took = guarded(h.doc.get_mut(), |d| d.provide(url, data)).unwrap_or(false);
         #[cfg(not(feature = "html"))]
         let took = {
             let _ = (h, url, data);

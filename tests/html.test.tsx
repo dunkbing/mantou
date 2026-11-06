@@ -3,7 +3,7 @@
 // and bands drawn only where it shows.
 import { encodePng } from "mantou-ui/images";
 import { afterEach, expect, test } from "bun:test";
-import { Html, Scroll, View, createSignal, mount, type Node } from "mantou-ui";
+import { Html, Scroll, Text, View, createSignal, mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 
 const open: HeadlessCore[] = [];
@@ -172,4 +172,31 @@ test("dragging selects the document's text, the highlight is drawn, and Copy cop
   h.key("c", { primary: true });
   expect(h.clipboard).toBe("");
   expect(String(h.capture().at(25, 35))).toBe(String(before.at(25, 35))); // the highlight went
+});
+
+test("a stylesheet with a relative or protocol-relative URL is asked for, not a crash (dunkbing/mantou#87)", () => {
+  for (const html of [
+    '<html><head><link href="//fonts.googleapis.com/css?family=Google+Sans" rel="stylesheet"></head><body><p>Hello</p></body></html>',
+    "<html><head><style>@import url(//fonts.googleapis.com/css?family=Google+Sans);</style></head><body><p>Hello</p></body></html>",
+  ]) {
+    const asked: string[] = [];
+    let doc!: Node;
+    const h = app(() => <Html ref={doc} html={html} loadImage={(url) => (asked.push(url), null)} style={{ width: 300 }} />);
+    h.step();
+    expect(asked).toEqual(["https://fonts.googleapis.com/css?family=Google+Sans"]);
+    expect(h.rect(doc)![3] - h.rect(doc)![1]).toBeGreaterThan(10); // laid out without it
+  }
+});
+
+test("a document the HTML engine can't take shows nothing, and the app goes on", () => {
+  let doc!: Node;
+  const h = app(() => (
+    <View>
+      <Html ref={doc} html={'<style>@import url("http://[");</style><p>Hello</p>'} style={{ width: 300 }} />
+      <Text>After</Text>
+    </View>
+  ));
+  h.step();
+  expect(h.treeText()).toContain('"After"');
+  expect(h.rect(doc)).not.toBeNull();
 });

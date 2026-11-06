@@ -13,6 +13,9 @@ use blitz_html::HtmlDocument;
 use blitz_traits::net::{Bytes, NetHandler, NetProvider, Request};
 use blitz_traits::shell::{ColorScheme, Viewport};
 
+/// What relative URLs in a document resolve against.
+pub const BASE_URL: &str = "https://mantou.invalid/";
+
 /// The viewport height documents are laid out against (for `vh` units); their height is their content's.
 const VIEWPORT_HEIGHT: f32 = 600.0;
 
@@ -81,6 +84,10 @@ impl HtmlDoc {
                 net_provider: Some(net.clone()),
                 font_ctx: Some(mantou_text::font_context()),
                 style_threading: StyleThreading::Sequential,
+                // Blitz's default base is a data: URL, which can't resolve a relative or protocol-relative URL
+                // (it panics: dunkbing/mantou#87). Against this one, `//fonts…` is https, and `logo.png` is asked
+                // for as https://mantou.invalid/logo.png (the app can tell those apart and answer nothing).
+                base_url: Some(BASE_URL.to_owned()),
                 ..Default::default()
             },
         );
@@ -288,6 +295,28 @@ mod tests {
         let (_, narrow) = p.layout(200.0, 1.0);
         let (_, wide) = p.layout(800.0, 1.0);
         assert!(narrow > wide * 3.0, "wrapping: {narrow} vs {wide}");
+    }
+
+    #[test]
+    fn relative_and_protocol_relative_stylesheets_are_asked_for_not_a_panic() {
+        // dunkbing/mantou#87: Blitz's default base URL is a data: URL, which can't resolve these.
+        for html in [
+            r#"<html><head><link href="//fonts.googleapis.com/css?family=Google+Sans" rel="stylesheet"></head><body><p>Hello</p></body></html>"#,
+            "<html><head><style>@import url(//fonts.googleapis.com/css?family=Google+Sans);</style></head><body><p>Hello</p></body></html>",
+            r#"<html><head><link href="styles/mail.css" rel="stylesheet"></head><body><img src="logo.png"><p>Hello</p></body></html>"#,
+        ] {
+            let mut d = HtmlDoc::new(html, false);
+            d.layout(400.0, 1.0);
+            let asked = d.requests();
+            assert!(!asked.is_empty(), "{html}");
+            assert!(asked.iter().all(|u| u.starts_with("https://")), "{asked:?}");
+            // The app answers nothing (no loader, or blocked): the document lays out without them.
+            for u in &asked {
+                d.provide(u, None);
+            }
+            let (_, h) = d.layout(400.0, 1.0);
+            assert!(h > 10.0, "laid out: {h}");
+        }
     }
 
     #[test]

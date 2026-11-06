@@ -109,10 +109,11 @@ A static HTML/CSS document, such as an HTML mail, laid out and drawn by the core
 </Scroll>
 ```
 
-- **Images and stylesheets** the document asks for go to `loadImage(url)`, once per URL. It returns the bytes, a promise of them, or `null` to leave one out (blocked, or not found). Without `loadImage` nothing loads, and `data:` URLs always do. To load what was blocked, make a new `<Html>` (the example does it with `<Show>`).
+- **Images and stylesheets** the document asks for go to `loadImage(url)`, once per URL. It returns the bytes, a promise of them, or `null` to leave one out (blocked, or not found). Without `loadImage` nothing loads, and `data:` URLs always do. Relative URLs resolve against `https://mantou.invalid/` (so `//fonts.googleapis.com/…` asks for https, and `logo.png` for `https://mantou.invalid/logo.png`, which you can answer with `null`). Until a stylesheet is answered, the document waits for it to lay out. To load what was blocked, make a new `<Html>` (the example does it with `<Show>`).
 - **What it handles:** tables (with `bgcolor`, `width` and `cellpadding`), inline and `<style>` CSS with media queries, `<center>` and `<font>`, rounded corners, PNG, JPEG, GIF, WebP and SVG images. It's [Blitz](https://github.com/DioxusLabs/blitz): Stylo for CSS, with the same Taffy and Parley as the rest of the core.
 - **Selecting text:** dragging over the document selects its text, and Cmd+C (Ctrl+C elsewhere) copies it. The core does this with no JS, and the pointer shows the text cursor over text. A press elsewhere drops the selection.
 - **Not yet:** double-click to select a word, Select All, and one-sided cell borders in `border-collapse: collapse` tables.
+- **Input it can't take:** if the HTML engine fails on a document (it panics on some malformed CSS), that `<Html>` shows nothing and the rest of the app goes on; the core logs it.
 - `bun run mail` shows an HTML mail with "Load images".
 
 ## WebView
