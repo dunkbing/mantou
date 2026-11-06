@@ -19,16 +19,16 @@ export function Counter() {
   return (
     <View style={{ flexGrow: 1, padding: 24, gap: 16, backgroundColor: "#111318" }}>
       <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-        <View style={[button, { backgroundColor: "#16a34a" }]} onPress={() => setCount((n) => n + 1)}>
+        <View testId="add" style={[button, { backgroundColor: "#16a34a" }]} onPress={() => setCount((n) => n + 1)}>
           <Text style={label}>+1</Text>
         </View>
-        <View style={[button, { backgroundColor: "#dc2626" }]} onPress={() => setCount((n) => Math.max(0, n - 1))}>
+        <View testId="remove" style={[button, { backgroundColor: "#dc2626" }]} onPress={() => setCount((n) => Math.max(0, n - 1))}>
           <Text style={label}>−1</Text>
         </View>
-        <View style={[button, { backgroundColor: "#4b5563" }]} onPress={() => setCount(0)}>
+        <View testId="reset" style={[button, { backgroundColor: "#4b5563" }]} onPress={() => setCount(0)}>
           <Text style={label}>Reset</Text>
         </View>
-        <Text style={{ flexGrow: 1, textAlign: "end", color: "#f9fafb", fontSize: 32, fontWeight: 700 }}>{count()}</Text>
+        <Text testId="count" style={{ flexGrow: 1, textAlign: "end", color: "#f9fafb", fontSize: 32, fontWeight: 700 }}>{count()}</Text>
       </View>
       <View
         style={{

@@ -108,6 +108,9 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "style":
       applyStyle(node, value as StyleProp, prev as StyleProp);
       return;
+    case "testId":
+      node.testId = typeof value === "string" && value ? value : null;
+      return;
     case "onPress":
       setHandler(node, name, value, (f: (e: PressEvent) => void) => node.onPress(f));
       return;

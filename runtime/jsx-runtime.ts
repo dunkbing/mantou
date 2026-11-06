@@ -8,7 +8,12 @@ import type { CanvasContext } from "./canvas";
 export type { StyleProp } from "./solid/renderer";
 
 /** What screen readers are told about a node (design §10); see `Node.access`. */
-export interface AccessProps {
+/** For tests and tools: a stable name to find the node by (`h.find("save")`, `h.press("save")`, `mantou snap`'s scripts). */
+export interface TestProps {
+  testId?: string;
+}
+
+export interface AccessProps extends TestProps {
   /** Default: from the kind (Text a label, Input a text field, a View with onPress a button). "none" leaves the node itself out. */
   role?: AccessRoleName;
   /** Its name; default: the text inside it. */
@@ -97,7 +102,7 @@ export interface ViewProps extends AccessProps, PointerProps, FocusProps {
 }
 
 /** A drawing surface (see `Canvas`). */
-export interface CanvasProps {
+export interface CanvasProps extends TestProps {
   /** Size in logical px (also settable in `style`). */
   width?: number;
   height?: number;
@@ -136,7 +141,7 @@ export interface ListHandle {
 }
 
 /** An image (see `Image`). */
-export interface ImageProps {
+export interface ImageProps extends TestProps {
   /** A PNG, JPEG, WebP or SVG: a path (relative to the working directory) or the file's bytes. */
   src: string | Uint8Array;
   style?: StyleProp;
@@ -156,7 +161,7 @@ export interface ImageProps {
 }
 
 /** A static HTML/CSS document drawn by the core (see `Html`). */
-export interface HtmlProps {
+export interface HtmlProps extends TestProps {
   /** The document: HTML with its CSS (inline, or in `<style>`). No scripts run, and nothing is fetched but through `loadImage`. */
   html: string;
   /** What the document's `prefers-color-scheme` answers (default "light"). */

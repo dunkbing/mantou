@@ -5,9 +5,17 @@
 import { openCore, type CoreLib } from "./ffi";
 import { EventReader, route, STAT_NAMES, statsFrom, type CoreEvent, type Stats } from "./events";
 import { KeyModifier, NamedKey, StyleProp } from "./gen/protocol";
+import { captureStrip, checkMotion, type MotionCheckOptions, type MotionFinding, type StripOptions } from "./frames";
+import type { Image } from "./png";
+import { parsePresented, presentedTree, testIds, treeText, type Presented, type PresentedNode } from "./inspect";
 import { Ui, type Node } from "./ui";
 
 export type { CoreEvent, Stats } from "./events";
+export type { PresentedNode } from "./inspect";
+export type { MotionFinding, MotionCheckOptions, StripOptions } from "./frames";
+
+/** A node, its `testId`, or a point in logical px. */
+export type Target = Node | string | [number, number];
 
 export interface HeadlessOptions {
   /** Logical size. Default 640 × 400. */
@@ -125,8 +133,8 @@ export class HeadlessCore {
   }
 
   /** Moves the pointer to logical (x, y), or over the centre of a node, then step. */
-  hover(target: Node | [number, number]): this {
-    const [x, y] = Array.isArray(target) ? target : this.center(target);
+  hover(target: Target): this {
+    const [x, y] = this.point(target);
     return this.pointer("move", x, y);
   }
 
@@ -157,9 +165,9 @@ export class HeadlessCore {
     return this.step();
   }
 
-  /** Presses (down + up) at logical (x, y), or at the centre of a node. */
-  press(target: Node | [number, number]): this {
-    const [x, y] = Array.isArray(target) ? target : this.center(target);
+  /** Presses (down + up) at logical (x, y), or at the centre of a node (or the node with that testId). */
+  press(target: Target): this {
+    const [x, y] = this.point(target);
     this.pointer("down", x, y);
     return this.pointer("up", x, y);
   }
@@ -214,7 +222,8 @@ export class HeadlessCore {
   }
 
   /** An Input's text as the core has it, or null if the node isn't an Input. */
-  value(node: Node): string | null {
+  value(target: Node | string): string | null {
+    const node = this.node(target);
     this.step();
     return this.readString((buf) => this.lib.symbols.mt_test_value(this.handle, node.id, buf, buf.byteLength));
   }
@@ -237,6 +246,12 @@ export class HeadlessCore {
     return new TextDecoder().decode(buf.subarray(0, n));
   }
 
+  /** Scrolls the wheel over a node (or its testId), positive dy scrolling content up; then step. */
+  scroll(target: Target, dy: number, dx = 0): this {
+    const [x, y] = this.point(target);
+    return this.wheel(x, y, dy, dx);
+  }
+
   /** Scrolls the wheel at logical (x, y); positive dy scrolls content up. */
   wheel(x: number, y: number, dy: number, dx = 0): this {
     this.ui.flush();
@@ -245,15 +260,17 @@ export class HeadlessCore {
   }
 
   /** The node's laid-out box [x0, y0, x1, y1] in logical px, or null. */
-  rect(node: Node): [number, number, number, number] | null {
+  rect(target: Node | string): [number, number, number, number] | null {
+    const node = this.node(target);
     this.step();
     const r = new Float32Array(4);
     return this.lib.symbols.mt_test_node_rect(this.handle, node.id, r) === 0 ? [r[0], r[1], r[2], r[3]] : null;
   }
 
-  center(node: Node): [number, number] {
+  center(target: Node | string): [number, number] {
+    const node = this.node(target);
     const r = this.rect(node);
-    if (!r) throw new Error(`mantou: node ${node.id} is not laid out`);
+    if (!r) throw new Error(`mantou: ${node.testId ? `"${node.testId}"` : `node ${node.id}`} is not laid out (hidden, or not in the tree)`);
     return [(r[0] + r[2]) / 2, (r[1] + r[3]) / 2];
   }
 
@@ -269,6 +286,66 @@ export class HeadlessCore {
     this.scale = scale;
     this.lib.symbols.mt_test_viewport(this.handle, Math.round(width * scale), Math.round(height * scale), scale);
     return this.step();
+  }
+
+  /** The live node with this `testId`, or null (commits pending changes first). */
+  find(testId: string): Node | null {
+    this.step();
+    return this.ui.find(testId);
+  }
+
+  /** Every live node with this `testId`. */
+  findAll(testId: string): Node[] {
+    this.step();
+    return this.ui.findAll(testId);
+  }
+
+  /** A node, or the one with that testId; throws, naming the testIds there are, when there's none. */
+  node(target: Node | string): Node {
+    if (typeof target !== "string") return target;
+    const n = this.find(target);
+    if (!n) {
+      const ids = testIds(this.ui);
+      throw new Error(`mantou: no node with testId "${target}"${ids.length ? ` (there are: ${ids.map((i) => `"${i}"`).join(", ")})` : " (none has a testId)"}`);
+    }
+    return n;
+  }
+
+  private point(target: Target): [number, number] {
+    return Array.isArray(target) ? target : this.center(target);
+  }
+
+  /** Every placed box as drawn now, by node id (`tree()` puts them on the app's nodes). */
+  presented(): Presented {
+    this.step();
+    const text = this.readString((buf) => this.lib.symbols.mt_test_presented(this.handle, buf, buf.byteLength)) ?? "";
+    const size = this.ui.windowSize;
+    return parsePresented(text, [size?.width ?? Infinity, size?.height ?? Infinity]);
+  }
+
+  /**
+   * The app's tree as it's on screen now: each node's kind, testId, text (an Input's value), role and label,
+   * its box as drawn (transforms and animations applied), what of it shows inside its clips, its opacity
+   * with its ancestors', and whether it's animating or focused. JSON-friendly.
+   */
+  tree(root?: Node | string): PresentedNode | null {
+    const boxes = this.presented();
+    return presentedTree(this.ui, boxes, this.focused(), (n) => this.value(n), root === undefined ? undefined : this.node(root));
+  }
+
+  /** Steps the clock between captures and lays the frames out in one image (`captureStrip`). */
+  strip(options?: StripOptions): Image {
+    return captureStrip(this, options);
+  }
+
+  /** Runs `act`, plays the clock frame by frame and reports jumps, flicker and endless animations (`checkMotion`). */
+  checkMotion(act?: () => void, options?: MotionCheckOptions): MotionFinding[] {
+    return checkMotion(this, act, options);
+  }
+
+  /** `tree()` as compact text, one node per line: `Text#7 [title] "Counter" 20,20 120×24 animating`. */
+  treeText(root?: Node | string): string {
+    return treeText(this.tree(root));
   }
 
   /** The latest scene as text: `size`, `clear`, then one `quad x0 y0 x1 y1 #rrggbbaa` per rectangle. */

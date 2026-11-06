@@ -736,6 +736,12 @@ export class Node {
     return this;
   }
   private acc: AccessInfo = {};
+  /** What it tells screen readers (as set; the core adds defaults for its kind). */
+  get accessInfo(): Readonly<AccessInfo> {
+    return this.acc;
+  }
+  /** The `testId` prop: a stable name for tests and tools to find it by (`ui.find`). */
+  testId: string | null = null;
   private sentAcc = "0,0,";
 
   /** @internal Sends what is batched until the end of the turn (text, input options). */
@@ -1404,6 +1410,19 @@ export class Ui {
   private nextStyleId = 1;
   private styleIds = new WeakMap<SharedStyle, number>();
   private root: Node | null = null;
+
+  /** The live nodes with this `testId`, in the order they were made. */
+  findAll(testId: string): Node[] {
+    const out: Node[] = [];
+    for (const n of this.nodes.values()) if (n.testId === testId && !n.released) out.push(n);
+    return out;
+  }
+
+  /** The live node with this `testId` (the first made, if several), or null. */
+  find(testId: string): Node | null {
+    for (const n of this.nodes.values()) if (n.testId === testId && !n.released) return n;
+    return null;
+  }
 
   /** The root of the tree (for debugging tools). */
   get rootNode(): Node | null {

@@ -5,8 +5,8 @@
 // (mt_reset: the window and its instance stay) and starts the app again in a
 // new Worker. A load error or an uncaught error is printed and shown in the
 // window until the next save.
-import { watch } from "node:fs";
-import { relative } from "node:path";
+import { mkdirSync, watch } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { STAT_NAMES, statsFrom, type Stats } from "./events";
 import { openCore } from "./ffi";
 import { Ui } from "./ui";
@@ -45,11 +45,15 @@ addEventListener(
     if (data?.type !== "mantou:entry") return;
     entry = data.entry;
     argv = data.argv;
+    snapTo = data.snap || null;
     start();
     watchFiles(data.watch as string);
   },
   { once: true },
 );
+
+/** `mantou dev --snap`: where each start's and reload's snapshot goes. */
+let snapTo: string | null = null;
 
 /** Starts the app in a new Worker; the previous one (if any) is gone already. */
 function start() {
@@ -91,10 +95,25 @@ async function reported(gen: number, before: Stats, what: string, since: number)
     const now = stats();
     if (now.commits > before.commits && now.frames > before.frames) {
       console.log(`mantou: ${what} in ${Math.round(performance.now() - since)} ms (to its first frame; ${now.glyphs} glyphs)`);
+      if (snapTo) void snapshot(gen, snapTo);
       return;
     }
     await new Promise((r) => setTimeout(r, 2));
   }
+}
+
+/**
+ * `mantou dev --snap`: the app as it starts, headless (`mantou snap`, in a process of its own), as a PNG and
+ * its tree beside it as text, so an agent editing the app sees each change land without a screen.
+ */
+async function snapshot(gen: number, out: string) {
+  mkdirSync(dirname(out), { recursive: true });
+  const tree = out.replace(/\.png$/, "") + ".txt";
+  const cli = Bun.fileURLToPath(new URL("./cli.ts", import.meta.url));
+  const p = Bun.spawn([process.execPath, cli, "snap", Bun.fileURLToPath(entry), "--out", out, "--tree", tree, "--quiet"], { stdout: "inherit", stderr: "pipe" });
+  const err = await new Response(p.stderr).text();
+  if ((await p.exited) !== 0) console.error(`mantou: no snapshot: ${err.trim()}`);
+  else if (gen === generation) console.log(`mantou: snapshot ${relative(process.cwd(), out)} (tree: ${relative(process.cwd(), tree)})`);
 }
 
 function reload(why: string) {
@@ -133,6 +152,7 @@ function watchFiles(dir: string) {
   console.log(`mantou: watching ${relative(process.cwd(), dir) || "."} for changes`);
   watch(dir, { recursive: true }, (_event, file) => {
     const name = String(file ?? "");
+    if (snapTo && resolve(dir, name).startsWith(snapTo.replace(/\.png$/, ""))) return; // its own snapshots
     if (/(^|[/\\])(node_modules|\.git|dist|build|target)([/\\]|$)/.test(name) || /(^|[/\\])\./.test(name) || /~$|\.swp$/.test(name)) return;
     if (timer === undefined) changedAt = performance.now();
     clearTimeout(timer);

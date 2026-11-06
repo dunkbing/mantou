@@ -23,7 +23,12 @@ export interface RunOptions extends WindowOptions {
 }
 
 /** Renders `app` in the window and starts the native event loop. */
+/** @internal Set by `mantou snap`: `run()` mounts the app into it (a headless instance) instead of opening a window. */
+export const SNAP = Symbol.for("mantou.snap");
+
 export function run(app: () => JSX.Element, options: RunOptions = {}): MantouCore {
+  const snap = (globalThis as Record<symbol, unknown>)[SNAP] as ((app: () => JSX.Element, options: RunOptions) => unknown) | undefined;
+  if (snap) return snap(app, options) as MantouCore;
   const key = options.restoreState === true ? "main" : options.restoreState || null;
   const restored = key ? restoredOptions(key, options) : null;
   if (restored) options = restored.options;

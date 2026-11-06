@@ -65,7 +65,7 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 15: crash reports: mt_set_crash_dir, the CORE_ERROR event, mt_test_panic.
 /// 16: Html nodes: mt_html_link_at and the HTML_REQUEST event.
 /// 17: mt_render_image (icons for `mantou package`).
-pub const ABI_VERSION: u32 = 17;
+pub const ABI_VERSION: u32 = 18;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -705,6 +705,18 @@ pub unsafe extern "C" fn mt_test_access(inst: u32, dst: *mut u8, cap: u32) -> u3
     // SAFETY: guaranteed by the caller.
     let out = unsafe { bytes_mut(dst, cap) };
     with(inst, 0, |i| write_str(out, &lock(&i.tree).accessibility_dump()))
+}
+
+/// Test hook: every placed box as drawn now (`Tree::presented`), as text. Writes at most `cap` bytes and
+/// returns the full length.
+///
+/// # Safety
+/// `dst` must be valid for writes of `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_test_presented(inst: u32, dst: *mut u8, cap: u32) -> u32 {
+    // SAFETY: guaranteed by the caller.
+    let out = unsafe { bytes_mut(dst, cap) };
+    with(inst, 0, |i| write_str(out, &lock(&i.tree).presented()))
 }
 
 /// Test hook: the user chooses the app-menu item `id`.

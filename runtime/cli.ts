@@ -5,21 +5,26 @@
 //   mantou build-core                 build the native core from source (only without a prebuilt one, or to change it)
 //   mantou run <entry> [options]      run an app: --width N --height N --min-width N --min-height N --title T (flags win over run()'s options)
 //   mantou dev <entry> [options]      run it, and reload it when a file changes, keeping the window (--watch DIR)
+//   mantou snap <entry> [options]     run it headless: a screenshot, the tree, scenes, scripted input, motion checks
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
 //   mantou package <entry> [options]  macOS: a signed .app and .dmg; Linux: a .deb, a .tar.gz and an AppImage;
 //                                     Windows: an NSIS installer (see USAGE)
 import { existsSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { libPath } from "./ffi";
+import { SNAP_USAGE } from "./snap-usage";
 
 const USAGE = `usage:
   mantou create <dir>                     a starter app (a counter with a test) in a new folder
   mantou build-core                       build the native core from source (needs Rust: https://rustup.rs);
                                           not needed where mantou-ui ships a prebuilt one
   mantou run <entry.tsx> [--width N] [--height N] [--min-width N] [--min-height N] [--title T]
-  mantou dev <entry.tsx> [--watch DIR] [same options as run]
+  mantou dev <entry.tsx> [--watch DIR] [--snap [shot.png]] [same options as run]
                                           run it, and reload it when a file under DIR (default: the entry's folder)
-                                          changes, keeping the window; errors show in the window until the next save
+                                          changes, keeping the window; errors show in the window until the next save;
+                                          --snap writes a headless screenshot and the tree (shot.txt) after each
+                                          start and reload (default .mantou/dev-snap.png): an agent sees its edit land
+  ${SNAP_USAGE.replace(/\n/g, "\n  ")}
   mantou build <entry.tsx> [--out DIR] [--name N]
                                           compile the app to one executable; the native core is copied beside it
   mantou package <entry.tsx> [--out DIR] [--name N] [--id com.example.app] [--version 1.0.0]
@@ -42,7 +47,11 @@ switch (command) {
   case "dev": {
     const watchAt = rest.indexOf("--watch");
     const watchDir = watchAt >= 0 ? rest[watchAt + 1] : undefined;
-    const entry = rest.find((a, i) => !a.startsWith("--") && (watchAt < 0 || i !== watchAt + 1));
+    // --snap [PATH]: after each start and reload, a headless screenshot and the tree (for agents watching).
+    const snapAt = command === "dev" ? rest.indexOf("--snap") : -1;
+    const snapValue = snapAt >= 0 && rest[snapAt + 1]?.endsWith(".png") ? rest[snapAt + 1] : undefined;
+    if (snapAt >= 0) process.env.MANTOU_DEV_SNAP = resolve(snapValue ?? join(".mantou", "dev-snap.png"));
+    const entry = rest.find((a, i) => !a.startsWith("--") && (watchAt < 0 || i !== watchAt + 1) && !(snapValue && i === snapAt + 1));
     if (!entry) {
       console.error(USAGE);
       process.exit(2);
@@ -54,6 +63,14 @@ switch (command) {
     const { start } = await import("./main");
     await start(entry, rest, undefined, command === "dev" ? { watch: watchDir ?? dirname(entry) } : undefined);
     break;
+  }
+  case "snap": {
+    if (!existsSync(libPath())) {
+      console.error("mantou: no native core for this platform; build one with `mantou build-core` (needs Rust)");
+      process.exit(2);
+    }
+    const { snap } = await import("./snap");
+    process.exit(await snap(rest));
   }
   case "create": {
     const dir = rest.find((a) => !a.startsWith("--"));

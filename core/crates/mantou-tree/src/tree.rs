@@ -1534,6 +1534,29 @@ impl Tree {
         }
     }
 
+    /// Every placed box as it's drawn now, one per line in paint order, for tools that look at the screen
+    /// (tests, agents): `id x0 y0 x1 y1 vx0 vy0 vx1 vy1 opacity animating`, logical px. The first rect is
+    /// the box with its transforms; the second what of it shows inside its ancestors' clips (empty when
+    /// nothing does); opacity is its own times its ancestors'; animating is 1 while an animation moves or
+    /// fades it or an ancestor.
+    pub fn presented(&self) -> String {
+        use std::fmt::Write;
+        let mut out = String::new();
+        let mut state: rustc_hash::FxHashMap<u32, (f32, bool)> = Default::default();
+        for b in &self.boxes {
+            let Some(node) = self.nodes.get(&b.id) else { continue };
+            let (pa, pm) = node.parent.and_then(|p| state.get(&p).copied()).unwrap_or((1.0, false));
+            let alpha = pa * node.vis().opacity;
+            let moving = pm || node.anim.as_ref().is_some_and(|a| a.is_active());
+            state.insert(b.id, (alpha, moving));
+            let r = b.rect;
+            let v = intersect(r, b.clip);
+            let v = if v[2] > v[0] && v[3] > v[1] { v } else { [0.0; 4] };
+            let _ = writeln!(out, "{} {} {} {} {} {} {} {} {} {} {}", b.id, r[0], r[1], r[2], r[3], v[0], v[1], v[2], v[3], alpha, moving as u8);
+        }
+        out
+    }
+
     /// The node's box in logical pixels, after the last layout.
     pub fn rect(&self, id: u32) -> Option<[f32; 4]> {
         self.boxes.iter().find(|b| b.id == id).map(|b| b.rect)

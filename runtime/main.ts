@@ -78,7 +78,7 @@ export async function start(entry: string, args: string[] = [], worker?: Worker,
       clearTimeout(timer);
       fail((e as ErrorEvent).error ?? new Error((e as ErrorEvent).message));
     });
-    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch), argv: launchArgs(args, entry) });
+    w.postMessage({ type: "mantou:entry", entry: Bun.pathToFileURL(resolve(entry)).href, watch: dev && resolve(dev.watch), snap: dev && process.env.MANTOU_DEV_SNAP, argv: launchArgs(args, entry) });
   }).catch((err) => {
     reportFatal(err);
     process.exit(70);

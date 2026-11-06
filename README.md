@@ -23,7 +23,13 @@ run(() => <App />);
 
 ## Use it
 
-Needs [Bun](https://bun.sh) 1.4.4.
+Needs [Bun](https://bun.sh) 1.4.4. A new app (a counter with a test, and an AGENTS.md):
+
+```bash
+bunx -p mantou-ui mantou create my-app
+```
+
+Or in a project you have:
 
 ```bash
 bun add mantou-ui
@@ -34,6 +40,12 @@ bunx mantou run src/main.tsx
 ```
 
 In `tsconfig.json`, set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; for `bun test`, preload `mantou-ui/preload` in `bunfig.toml`. The native core comes prebuilt for Linux, macOS and Windows.
+
+## With an agent
+
+Mantou is built to be driven by coding agents: every app runs headless, and `mantou snap` prints the screen as text (each node's `testId`, text and box as drawn), writes screenshots, plays scripted input and checks motion. Give your agent this:
+
+> Build me a <thing> with Mantou (github.com/dunkbing/mantou). Start with `bunx -p mantou-ui mantou create my-app`, read its AGENTS.md, and check your work headlessly with `bun run snap` and `bun test`.
 
 ## Examples
 
