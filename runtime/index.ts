@@ -7,6 +7,7 @@ export {
   clipboard, openFile, saveFile, message, dialogsAvailable, showMenu, setMenu, onMenu, onFileDrop, win, type WindowInfo, monitors, type Monitor, openExternal, reveal, notify, setBadge, createTray, removeTray, type NotifyOptions, type TrayOptions,
   type OpenFileOptions, type SaveFileOptions, type MessageOptions, type MenuItem, type FileFilter,
 } from "./platform";
+export { Badge, Avatar, Kbd, ShortcutRecorder, SegmentedControl, Collapsible, Accordion, Popover, HoverCard, TreeView, RollingNumber, SortableList, formatShortcut, shortcutOf, type BadgeProps, type AvatarProps, type KbdProps, type ShortcutRecorderProps, type SegmentedControlProps, type CollapsibleProps, type AccordionProps, type AccordionItem, type PopoverProps, type HoverCardProps, type TreeItem, type TreeViewProps, type TreeViewHandle, type RollingNumberProps, type SortableListProps } from "./widgets-more";
 export { useColorScheme, setColorScheme, defineTheme, type ColorScheme } from "./theme";
 export { instant, useReducedMotion, setReducedMotion, setAnimationSpeed } from "./motion";
 export { theme, setTheme, light as lightTheme, dark as darkTheme, type Theme } from "./widget-theme";

@@ -103,6 +103,9 @@ impl Tree {
             role::GROUP => Role::Group,
             role::STATUS => Role::Status,
             role::ALERT => Role::Alert,
+            role::TREE => Role::Tree,
+            role::TREE_ITEM => Role::TreeItem,
+            role::RADIO_GROUP => Role::RadioGroup,
             _ => match n.kind {
                 p::node_kind::TEXT => Role::Label,
                 p::node_kind::IMAGE => Role::Image,
@@ -134,7 +137,7 @@ impl Tree {
             p::node_kind::TEXT if ak_role == Role::Label => node.set_value(n.text.clone()),
             p::node_kind::TEXT => node.set_label(if a.label.is_empty() { n.text.clone() } else { a.label.clone() }),
             _ if !a.label.is_empty() => node.set_label(a.label.clone()),
-            _ if matches!(ak_role, Role::Button | Role::CheckBox | Role::Switch | Role::RadioButton | Role::Link | Role::Heading | Role::ListItem | Role::Tab | Role::MenuItem | Role::Dialog) => {
+            _ if matches!(ak_role, Role::Button | Role::CheckBox | Role::Switch | Role::RadioButton | Role::Link | Role::Heading | Role::ListItem | Role::Tab | Role::MenuItem | Role::Dialog | Role::TreeItem) => {
                 let mut t = Vec::new();
                 self.text_inside(id, &mut t);
                 if !t.is_empty() {
@@ -157,6 +160,11 @@ impl Tree {
         }
         if a.flags & flag::SELECTED != 0 {
             node.set_selected(true);
+        }
+        if a.flags & flag::EXPANDED != 0 {
+            node.set_expanded(true);
+        } else if a.flags & flag::COLLAPSED != 0 {
+            node.set_expanded(false);
         }
         if a.flags & flag::DISABLED != 0 {
             node.set_disabled();
@@ -215,6 +223,11 @@ impl Tree {
             }
             if n.is_selected() == Some(true) {
                 s.push_str(" selected");
+            }
+            match n.is_expanded() {
+                Some(true) => s.push_str(" expanded"),
+                Some(false) => s.push_str(" collapsed"),
+                None => {}
             }
             if n.is_disabled() {
                 s.push_str(" disabled");

@@ -14,6 +14,7 @@ export interface PresentedNode {
   checked?: boolean | "mixed";
   selected?: boolean;
   disabled?: boolean;
+  expanded?: boolean;
   /** Its box as drawn, [x, y, width, height] in logical px from the window's top left; null when not placed. */
   rect: [number, number, number, number] | null;
   /** What of it shows inside its ancestors' clips (and the window); null when none does. */
@@ -58,6 +59,7 @@ export function presentedTree(ui: Ui, boxes: Presented, focused: Node | null, va
     if (a.checked !== undefined) out.checked = a.checked;
     if (a.selected) out.selected = true;
     if (a.disabled) out.disabled = true;
+    if (a.expanded !== undefined) out.expanded = a.expanded;
     if (b?.animating) out.animating = true;
     if (focused === n) out.focused = true;
     // A Text's spans are part of its text, not boxes of their own.
@@ -84,6 +86,7 @@ export function treeText(node: PresentedNode | null, depth = 0): string {
   if (node.checked !== undefined) parts.push(node.checked === "mixed" ? "mixed" : node.checked ? "checked" : "unchecked");
   if (node.selected) parts.push("selected");
   if (node.disabled) parts.push("disabled");
+  if (node.expanded !== undefined) parts.push(node.expanded ? "expanded" : "collapsed");
   if (r && !node.visible) parts.push("hidden");
   else if (r && node.visible && (node.visible[2] < r[2] - 0.5 || node.visible[3] < r[3] - 0.5)) parts.push("clipped");
   if (r && node.opacity !== 1) parts.push(`opacity=${node.opacity}`);

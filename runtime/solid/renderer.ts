@@ -180,6 +180,7 @@ function setProperty(node: Child, name: string, value: unknown, prev: unknown) {
     case "checked":
     case "selected":
     case "disabled":
+    case "expanded":
       node.access({ [name]: value as boolean | undefined } as AccessInfo);
       return;
     case "accessHidden":

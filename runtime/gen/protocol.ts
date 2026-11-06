@@ -92,8 +92,8 @@ export const EventMask = {"Press":1,"Layout":2,"Scroll":4,"Hover":8,"Pointer":16
 export const InputFlag = {"Multiline":1,"Secure":2,"ReadOnly":4} as const;
 export const FocusScopeFlag = {"Trap":1,"Restore":2} as const;
 export const FocusableFlag = {"Focusable":1,"SkipTab":2} as const;
-export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,"Radio":5,"Link":6,"Heading":7,"List":8,"ListItem":9,"Dialog":10,"Tab":11,"TabList":12,"Menu":13,"MenuItem":14,"Image":15,"Group":16,"Status":17,"Alert":18} as const;
-export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16} as const;
+export const AccessRole = {"Auto":0,"None":1,"Button":2,"Checkbox":3,"Switch":4,"Radio":5,"Link":6,"Heading":7,"List":8,"ListItem":9,"Dialog":10,"Tab":11,"TabList":12,"Menu":13,"MenuItem":14,"Image":15,"Group":16,"Status":17,"Alert":18,"Tree":19,"TreeItem":20,"RadioGroup":21} as const;
+export const AccessFlag = {"Checked":1,"Mixed":2,"Selected":4,"Disabled":8,"Hidden":16,"Expanded":32,"Collapsed":64} as const;
 export const WindowFlag = {"NotResizable":1,"Frameless":2,"AlwaysOnTop":4,"Fullscreen":8,"Maximized":16,"HasPosition":32,"TitleOverlay":64} as const;
 export const WindowStateFlag = {"Focused":1,"Minimized":2,"Maximized":4,"Fullscreen":8,"Dark":16} as const;
 export const HtmlFlag = {"Dark":1} as const;
@@ -105,7 +105,7 @@ export const ScrollFlag = {"By":1} as const;
 export const ScrollBlock = {"Nearest":0,"Start":1,"Center":2,"End":3} as const;
 export const Unit = { px: 0, percent: 1, auto: 2 } as const;
 export const KeyModifier = {"Shift":1,"Control":2,"Alt":4,"Meta":8} as const;
-export const NamedKey = {"Escape":1114112,"Enter":1114113,"ArrowUp":1114114,"ArrowDown":1114115,"ArrowLeft":1114116,"ArrowRight":1114117,"Backspace":1114118,"Delete":1114119,"Tab":1114120,"Home":1114121,"End":1114122,"PageUp":1114123,"PageDown":1114124,"Unidentified":1179647} as const;
+export const NamedKey = {"Escape":1114112,"Enter":1114113,"ArrowUp":1114114,"ArrowDown":1114115,"ArrowLeft":1114116,"ArrowRight":1114117,"Backspace":1114118,"Delete":1114119,"Tab":1114120,"Home":1114121,"End":1114122,"PageUp":1114123,"PageDown":1114124,"F1":1114125,"F2":1114126,"F3":1114127,"F4":1114128,"F5":1114129,"F6":1114130,"F7":1114131,"F8":1114132,"F9":1114133,"F10":1114134,"F11":1114135,"F12":1114136,"Unidentified":1179647} as const;
 
 export const Event = {
   /** The window opened. a = width px, b = height px, c = scale (f32). */

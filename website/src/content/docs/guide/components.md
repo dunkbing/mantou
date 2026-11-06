@@ -181,7 +181,33 @@ import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select,
 - **Pointer:** hover and pressed looks, a slider you press or drag anywhere on, a splitter handle you drag. A tooltip shows after the pointer rests (`delay`, default 500 ms).
 - **Styles:** `style` is laid over the default look. It can be a function of the state: `style={(s) => ({ backgroundColor: s.pressed ? "#000" : s.hovered ? "#333" : "#555" })}`, where `s` has `hovered`, `pressed`, `focused` and `disabled` (and `checked` or `value` where they apply).
 
-Not yet: Select and Combobox (they need native menus, #21), Popover.
+### More components
+
+```tsx
+import { Accordion, Avatar, Badge, Collapsible, HoverCard, Kbd, Popover, RollingNumber, SegmentedControl, ShortcutRecorder, SortableList, TreeView } from "mantou-ui";
+
+<Badge tone="danger">3</Badge>                              // "neutral" | "accent" | "success" | "warning" | "danger"
+<Avatar name="Ada Lovelace" />                              // initials on a colour of their own, or src={photo}
+<Kbd keys="Mod+Shift+K" />                                  // ⌘⇧K on macOS, Ctrl+Shift+K elsewhere
+<ShortcutRecorder value={key()} onChange={setKey} />        // press it, then the keys; Escape cancels, Backspace clears
+<SegmentedControl value={view()} onChange={setView} options={[{ value: "day", label: "Day" }, { value: "week", label: "Week" }]} />
+<Collapsible title="Advanced" open={open()} onToggle={setOpen}>…</Collapsible>
+<Accordion open={ids()} onChange={setIds} items={[{ id: "general", title: "General", content: () => <General /> }]} />  // multiple to open several
+<Popover open={open()} onClose={() => setOpen(false)} content={() => <Share />}><Button onPress={() => setOpen(true)}>Share…</Button></Popover>
+<HoverCard content={() => <Profile id="ada" />}><Text>@ada</Text></HoverCard>
+<TreeView items={files} selected={file()} onSelect={setFile} onOpen={openFile} ref={(t) => (tree = t)} />  // tree.reveal(id)
+<RollingNumber value={count()} />                           // digits roll like an odometer
+<SortableList items={todos()} itemHeight={32} onReorder={move}>{(todo) => <Row todo={todo} />}</SortableList>
+```
+
+- **TreeView** is virtualized (only the rows that show exist, so a tree of thousands is cheap) and works like a file tree: the arrows move, Right opens or goes in, Left closes or goes out, Home and End jump, Enter calls `onOpen` (so does a double press), and typing jumps to the next item starting with what you typed. It keeps its own open items unless you pass `expanded`. `reveal(id)` opens the way to an item, selects it and scrolls to it.
+- **SegmentedControl**'s thumb slides on a spring to the chosen segment; the arrows move it. **Collapsible** and **Accordion** turn their chevron and fade the content in.
+- **Popover** and **HoverCard** open on the side you ask for (`below`, `above`, `right`, `left`) and flip to the other side when there's no room. A popover keeps Tab inside it and closes on Escape or a press outside; a hover card opens after the pointer rests (`openDelay`, 400 ms) and stays while the pointer is on it.
+- **SortableList**: drag a row and the others slide out of the way; Alt+↑ and Alt+↓ move the focused row. The app reorders its array in `onReorder(from, to)`.
+- **RollingNumber**: each digit is a column that rolls on a spring when the value changes, run by the core.
+- Screen readers hear them with their roles: tree and tree items (with expanded or collapsed), radio groups, disclosure buttons. Each takes a `testId` for tests and `mantou snap`; tree and list rows get `<testId>-<id>`.
+
+Not yet: Select and Combobox use the app's own popups, not native menus (#21).
 
 ## Widget themes
 

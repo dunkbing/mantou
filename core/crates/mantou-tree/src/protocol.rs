@@ -233,6 +233,9 @@ pub mod access_role {
     pub const GROUP: u32 = 16;
     pub const STATUS: u32 = 17;
     pub const ALERT: u32 = 18;
+    pub const TREE: u32 = 19;
+    pub const TREE_ITEM: u32 = 20;
+    pub const RADIO_GROUP: u32 = 21;
 }
 
 pub mod access_flag {
@@ -241,6 +244,8 @@ pub mod access_flag {
     pub const SELECTED: u32 = 4;
     pub const DISABLED: u32 = 8;
     pub const HIDDEN: u32 = 16;
+    pub const EXPANDED: u32 = 32;
+    pub const COLLAPSED: u32 = 64;
 }
 
 pub mod focus_scope_flag {
@@ -280,6 +285,18 @@ pub mod named_key {
     pub const END: u32 = 0x11000a;
     pub const PAGE_UP: u32 = 0x11000b;
     pub const PAGE_DOWN: u32 = 0x11000c;
+    pub const F1: u32 = 0x11000d;
+    pub const F2: u32 = 0x11000e;
+    pub const F3: u32 = 0x11000f;
+    pub const F4: u32 = 0x110010;
+    pub const F5: u32 = 0x110011;
+    pub const F6: u32 = 0x110012;
+    pub const F7: u32 = 0x110013;
+    pub const F8: u32 = 0x110014;
+    pub const F9: u32 = 0x110015;
+    pub const F10: u32 = 0x110016;
+    pub const F11: u32 = 0x110017;
+    pub const F12: u32 = 0x110018;
     pub const UNIDENTIFIED: u32 = 0x11ffff;
 }
 

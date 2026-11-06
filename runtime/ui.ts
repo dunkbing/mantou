@@ -122,6 +122,8 @@ export interface AccessInfo {
   checked?: boolean | "mixed";
   selected?: boolean;
   disabled?: boolean;
+  /** For what opens and closes (a tree item, a disclosure): true open, false closed, undefined neither. */
+  expanded?: boolean;
   /** Leave the node and what's inside it out. */
   hidden?: boolean;
 }
@@ -750,7 +752,7 @@ export class Node {
     {
       const a = this.acc;
       const role = a.role ? AccessRole[(a.role[0].toUpperCase() + a.role.slice(1)) as keyof typeof AccessRole] : 0;
-      const flags = (a.checked === true ? AccessFlag.Checked : 0) | (a.checked === "mixed" ? AccessFlag.Mixed : 0) | (a.selected ? AccessFlag.Selected : 0) | (a.disabled ? AccessFlag.Disabled : 0) | (a.hidden ? AccessFlag.Hidden : 0);
+      const flags = (a.checked === true ? AccessFlag.Checked : 0) | (a.checked === "mixed" ? AccessFlag.Mixed : 0) | (a.selected ? AccessFlag.Selected : 0) | (a.disabled ? AccessFlag.Disabled : 0) | (a.hidden ? AccessFlag.Hidden : 0) | (a.expanded === true ? AccessFlag.Expanded : 0) | (a.expanded === false ? AccessFlag.Collapsed : 0);
       const label = a.label ?? "";
       const key = `${role},${flags},${label}`;
       if (key !== this.sentAcc) {

@@ -87,10 +87,11 @@ export const windowStateFlags = { Focused: 1, Minimized: 2, Maximized: 4, Fullsc
 export const accessRoles = {
   Auto: 0, None: 1, Button: 2, Checkbox: 3, Switch: 4, Radio: 5, Link: 6, Heading: 7, List: 8, ListItem: 9,
   Dialog: 10, Tab: 11, TabList: 12, Menu: 13, MenuItem: 14, Image: 15, Group: 16, Status: 17, Alert: 18,
+  Tree: 19, TreeItem: 20, RadioGroup: 21,
 } as const;
 
 /** ACCESS flags. Checked and Mixed apply to checkboxes, switches, radios and menu items. */
-export const accessFlags = { Checked: 1, Mixed: 2, Selected: 4, Disabled: 8, Hidden: 16 } as const;
+export const accessFlags = { Checked: 1, Mixed: 2, Selected: 4, Disabled: 8, Hidden: 16, Expanded: 32, Collapsed: 64 } as const;
 
 export const focusScopeFlags = { Trap: 1, Restore: 2 } as const;
 
@@ -286,5 +287,6 @@ export const keyModifiers = { Shift: 1, Control: 2, Alt: 4, Meta: 8 } as const;
 export const namedKeys = {
   Escape: 0x110000, Enter: 0x110001, ArrowUp: 0x110002, ArrowDown: 0x110003, ArrowLeft: 0x110004, ArrowRight: 0x110005,
   Backspace: 0x110006, Delete: 0x110007, Tab: 0x110008, Home: 0x110009, End: 0x11000a, PageUp: 0x11000b, PageDown: 0x11000c,
+  F1: 0x11000d, F2: 0x11000e, F3: 0x11000f, F4: 0x110010, F5: 0x110011, F6: 0x110012, F7: 0x110013, F8: 0x110014, F9: 0x110015, F10: 0x110016, F11: 0x110017, F12: 0x110018,
   Unidentified: 0x11ffff,
 } as const;

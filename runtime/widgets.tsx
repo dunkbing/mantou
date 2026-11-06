@@ -1,5 +1,6 @@
 // Base components (dunkbing/mantou#22): Button, Checkbox, Toggle (a switch), RadioGroup,
-// Slider, Tabs, Dialog, Tooltip, Splitter, Select, Combobox, Menu, Table, Toast, Progress and Spinner, built on the primitives. Each
+// Slider, Tabs, Dialog, Tooltip, Splitter, Select, Combobox, Menu, Table, Toast, Progress and Spinner (more in
+// widgets-more.tsx), built on the primitives. Each
 // is accessible (a role, focus, the keyboard) and takes a `style`, either a
 // style or a function of the component's state (hovered, pressed, focused,
 // and its own: checked, selected…), laid over a plain default look. Keys follow
@@ -23,8 +24,8 @@ export interface WidgetState {
 export type WidgetStyle<S = WidgetState> = StyleProp | ((state: S) => StyleProp);
 
 
-/** Hover, press and focus state for a view, and the handlers that track them. */
-function useInteraction(disabled: () => boolean | undefined) {
+/** @internal Hover, press and focus state for a view, and the handlers that track them. */
+export function useInteraction(disabled: () => boolean | undefined) {
   const [hovered, setHovered] = createSignal(false);
   const [pressed, setPressed] = createSignal(false);
   const [focused, setFocused] = createSignal(false);
@@ -42,12 +43,13 @@ function useInteraction(disabled: () => boolean | undefined) {
   return { state, handlers };
 }
 
-function resolve<S>(style: WidgetStyle<S> | undefined, state: S): StyleProp {
+/** @internal */
+export function resolve<S>(style: WidgetStyle<S> | undefined, state: S): StyleProp {
   return typeof style === "function" ? style(state) : style;
 }
 
-/** Strings and numbers as Text; anything else as it is. */
-function label(children: JSX.Element, style: () => StyleProp): JSX.Element {
+/** @internal Strings and numbers as Text; anything else as it is. */
+export function label(children: JSX.Element, style: () => StyleProp): JSX.Element {
   return typeof children === "string" || typeof children === "number" ? <Text style={style()}>{children}</Text> : children;
 }
 

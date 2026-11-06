@@ -22,6 +22,8 @@ export interface AccessProps extends TestProps {
   checked?: boolean | "mixed";
   selected?: boolean;
   disabled?: boolean;
+  /** For what opens and closes (a tree item, a disclosure): open or closed. */
+  expanded?: boolean;
   /** Leave the node and what's inside it out. */
   accessHidden?: boolean;
 }

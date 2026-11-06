@@ -1,5 +1,9 @@
 // The base components in one screen (dunkbing/mantou#22): bun run gallery.
-import { Button, Checkbox, Combobox, Dialog, Menu, Progress, RadioGroup, Select, Slider, Spinner, Splitter, Table, Tabs, Text, Toast, Toggle, Tooltip, View, createSignal, setTheme, theme, type JSX } from "mantou-ui";
+import { Accordion, Avatar, Badge, Button, Checkbox, Combobox, Dialog, HoverCard, Kbd, Menu, Popover, Progress, RadioGroup, RollingNumber, SegmentedControl, Select, ShortcutRecorder, Slider, SortableList, Spinner, Splitter, Table, Tabs, Text, Toast, Toggle, Tooltip, TreeView, View, createSignal, setTheme, theme, type JSX } from "mantou-ui";
+
+export type GalleryTab = "controls" | "layout" | "more";
+/** The tab showing (module state, so `mantou snap --scene` can pick one). */
+export const [tab, setTab] = createSignal<GalleryTab>("controls");
 
 function Section(props: { title: string; children: JSX.Element }) {
   return (
@@ -11,7 +15,6 @@ function Section(props: { title: string; children: JSX.Element }) {
 }
 
 export function Gallery() {
-  const [tab, setTab] = createSignal<"controls" | "layout">("controls");
   const [news, setNews] = createSignal(true);
   const [terms, setTerms] = createSignal(false);
   const [wifi, setWifi] = createSignal(true);
@@ -29,7 +32,7 @@ export function Gallery() {
   return (
     <View style={{ flexGrow: 1, minHeight: 0, padding: 24, gap: 16, backgroundColor: theme.background }}>
       <Text style={{ fontSize: 20, fontWeight: 700, color: theme.text }}>Components</Text>
-      <Tabs tabs={[{ id: "controls", label: "Controls" }, { id: "layout", label: "Layout" }]} value={tab()} onChange={setTab} style={{ flexGrow: 1, minHeight: 0 }}>
+      <Tabs tabs={[{ id: "controls", label: "Controls" }, { id: "layout", label: "Layout" }, { id: "more", label: "More" }]} value={tab()} onChange={setTab} style={{ flexGrow: 1, minHeight: 0 }}>
         {(id) =>
           id === "controls" ? (
             <View style={{ flexDirection: "row", gap: 40 }}>
@@ -77,6 +80,8 @@ export function Gallery() {
                 </Section>
               </View>
             </View>
+          ) : id === "more" ? (
+            <More />
           ) : (
             <View style={{ gap: 16, flexGrow: 1, minHeight: 0 }}>
             <Table style={{ height: 130 }} columns={[{ key: "id", header: "ID", width: 60 }, { key: "name", header: "Name" }, { key: "size", header: "Size", width: 80, align: "end" }]} rows={Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `File ${i + 1}.txt`, size: `${(i * 37) % 900} KB` }))} sort={{ key: "id" }} onSort={() => {}} />
@@ -98,6 +103,95 @@ export function Gallery() {
           <Button onPress={() => setOpen(false)}>Discard</Button>
         </View>
       </Dialog>
+    </View>
+  );
+}
+
+const files = [
+  { id: "src", label: "src", children: [{ id: "app", label: "App.tsx" }, { id: "state", label: "state.ts" }, { id: "ui", label: "ui", children: [{ id: "button", label: "Button.tsx" }, { id: "list", label: "List.tsx" }] }] },
+  { id: "tests", label: "tests", children: [{ id: "app-test", label: "App.test.tsx" }] },
+  { id: "readme", label: "README.md" },
+  { id: "pkg", label: "package.json" },
+];
+
+/** The newer components. */
+function More() {
+  const [view, setView] = createSignal<"day" | "week" | "month">("week");
+  const [sections, setSections] = createSignal<string[]>(["general"]);
+  const [shortcut, setShortcut] = createSignal<string | null>("Mod+K");
+  const [pop, setPop] = createSignal(false);
+  const [count, setCount] = createSignal(1284);
+  const [file, setFile] = createSignal<string | null>("app");
+  const [todo, setTodo] = createSignal(["Write the docs", "Fix the build", "Ship it"]);
+  const reorder = (from: number, to: number) => {
+    const next = [...todo()];
+    next.splice(to, 0, ...next.splice(from, 1));
+    setTodo(next);
+  };
+  return (
+    <View style={{ flexDirection: "row", gap: 32, flexGrow: 1, minHeight: 0 }}>
+      <View style={{ gap: 18, width: 230 }}>
+        <Section title="Segmented control">
+          <SegmentedControl testId="view" value={view()} onChange={setView} options={[{ value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }]} />
+        </Section>
+        <Section title="Badges and avatars">
+          <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+            <Avatar name="Ada Lovelace" />
+            <Avatar name="Grace Hopper" />
+            <Badge tone="accent">3</Badge>
+            <Badge tone="success">Live</Badge>
+            <Badge>Beta</Badge>
+          </View>
+        </Section>
+        <Section title="Shortcuts">
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <Text style={{ color: theme.dimText }}>Search</Text>
+            <Kbd keys="Mod+K" />
+          </View>
+          <ShortcutRecorder testId="shortcut" value={shortcut()} onChange={setShortcut} />
+        </Section>
+        <Section title="Rolling number">
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <RollingNumber testId="count" value={count()} />
+            <Button variant="secondary" onPress={() => setCount(count() + 17)}>+17</Button>
+          </View>
+        </Section>
+        <Section title="Popover and hover card">
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Popover open={pop()} onClose={() => setPop(false)} content={() => <><Text style={{ fontWeight: 600, color: theme.text }}>Share</Text><Text style={{ color: theme.dimText }}>Anyone with the link can view.</Text><Button onPress={() => setPop(false)}>Copy link</Button></>}>
+              <Button variant="secondary" onPress={() => setPop(true)}>Share…</Button>
+            </Popover>
+            <HoverCard content={() => <View style={{ flexDirection: "row", gap: 10 }}><Avatar name="Ada Lovelace" size={40} /><View style={{ gap: 2 }}><Text style={{ fontWeight: 600, color: theme.text }}>Ada Lovelace</Text><Text style={{ color: theme.dimText, fontSize: 12 }}>Wrote the first program</Text></View></View>}>
+              <Text style={{ color: theme.accent, paddingTop: 7 }}>@ada</Text>
+            </HoverCard>
+          </View>
+        </Section>
+      </View>
+      <View style={{ gap: 18, width: 230, minHeight: 0 }}>
+        <Section title="Tree">
+          <TreeView testId="files" items={files} defaultExpanded={["src"]} selected={file()} onSelect={setFile} style={{ height: 150, flexGrow: 0, borderWidth: 1, borderColor: theme.divider }} />
+        </Section>
+        <Section title="Accordion">
+          <Accordion
+            open={sections()}
+            onChange={setSections}
+            items={[
+              { id: "general", title: "General", content: () => <Text style={{ color: theme.dimText }}>Name, language and region.</Text> },
+              { id: "privacy", title: "Privacy", content: () => <Text style={{ color: theme.dimText }}>Who can see what.</Text> },
+            ]}
+          />
+        </Section>
+        <Section title="Sortable list (drag)">
+          <SortableList items={todo()} itemHeight={30} onReorder={reorder} style={{ borderWidth: 1, borderColor: theme.divider, borderRadius: 8, backgroundColor: theme.surface }}>
+            {(item) => (
+              <View style={{ height: 30, flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 10, backgroundColor: theme.surface, borderRadius: 8 }}>
+                <Text style={{ color: theme.dimText }}>⋮⋮</Text>
+                <Text style={{ color: theme.text }}>{item}</Text>
+              </View>
+            )}
+          </SortableList>
+        </Section>
+      </View>
     </View>
   );
 }
