@@ -8,7 +8,12 @@ import { fileURLToPath } from "node:url";
 
 /** The path of a `file:` URL, else the string as is. */
 function plain(p: string): string {
-  return p.startsWith("file:") ? fileURLToPath(p) : p;
+  if (!p.startsWith("file:")) return p;
+  try {
+    return fileURLToPath(p);
+  } catch {
+    return decodeURIComponent(new URL(p).pathname); // Windows rejects /$bunfs/...
+  }
 }
 
 /** Whether `path` is inside a compiled executable (`/$bunfs/...`, or `B:/~BUN/...` on Windows). */
