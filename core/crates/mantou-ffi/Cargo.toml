@@ -16,6 +16,7 @@ pollster = "1"
 arboard = { version = "3", default-features = false }
 mantou-tree = { path = "../mantou-tree", features = ["html"] }
 mantou-render = { path = "../mantou-render" }
+mantou-image = { path = "../mantou-image" }
 
 # Platform services (design §10): file dialogs and message boxes everywhere, the app and context menus natively.
 serde_json = "1"
@@ -28,7 +29,6 @@ notify-rust = "4"
 muda = "0.21"
 # The tray icon and the dock badge.
 tray-icon = "0.26"
-mantou-image = { path = "../mantou-image" }
 # A native web view as a child of the window (macOS first; Linux would need GTK and WebKitGTK dev packages).
 wry = "0.57"
 objc2 = "0.6"

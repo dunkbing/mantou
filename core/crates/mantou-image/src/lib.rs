@@ -104,9 +104,58 @@ impl Image {
     }
 }
 
+impl Image {
+    /// The image at exactly `width` × `height` px, RGBA with straight alpha: an SVG rasterized at that size, a
+    /// raster image scaled (Catmull-Rom, on premultiplied colours so transparent edges keep their colour).
+    /// For icons and other exports; drawing uses `pixels`.
+    pub fn render(&self, width: u32, height: u32) -> Option<Arc<Pixels>> {
+        let (w, h) = (width.clamp(1, MAX_SIDE), height.clamp(1, MAX_SIDE));
+        let Image::Raster(p) = self else { return self.pixels(w, h) };
+        if (p.width, p.height) == (w, h) {
+            return Some(p.clone());
+        }
+        let mut pre = p.rgba.clone();
+        for px in pre.chunks_exact_mut(4) {
+            let a = px[3] as u32;
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * a + 127) / 255) as u8;
+            }
+        }
+        let src = image::RgbaImage::from_raw(p.width, p.height, pre)?;
+        let mut out = image::imageops::resize(&src, w, h, image::imageops::FilterType::CatmullRom).into_raw();
+        for px in out.chunks_exact_mut(4) {
+            let a = px[3] as u32;
+            if a > 0 && a < 255 {
+                for c in &mut px[..3] {
+                    *c = ((*c as u32 * 255 + a / 2) / a).min(255) as u8;
+                }
+            }
+        }
+        Some(Pixels::new(w, h, out))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn render_scales_rasters_and_rasterizes_svgs_at_the_size_asked() {
+        // A 4 × 4 opaque red square inside an 8 × 8 transparent PNG.
+        let img = image::RgbaImage::from_fn(8, 8, |x, y| if (2..6).contains(&x) && (2..6).contains(&y) { image::Rgba([255, 0, 0, 255]) } else { image::Rgba([0, 0, 0, 0]) });
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let p = Image::decode(&buf.into_inner()).unwrap().render(32, 32).unwrap();
+        assert_eq!((p.width, p.height), (32, 32));
+        let at = |x: u32, y: u32| &p.rgba[((y * 32 + x) * 4) as usize..][..4];
+        assert_eq!(at(16, 16), [255, 0, 0, 255]);
+        assert_eq!(at(1, 1)[3], 0, "the corner stays transparent");
+        // A half-covered edge pixel keeps the square's colour, not a dark fringe.
+        let edge = (0..32).map(|x| at(x, 16)).find(|px| px[3] > 20 && px[3] < 235).unwrap();
+        assert!(edge[0] > 200 && edge[1] < 30, "{edge:?}");
+        let svg = Image::decode(ICON.as_bytes()).unwrap().render(64, 48).unwrap();
+        assert_eq!((svg.width, svg.height), (64, 48));
+    }
 
     fn png(w: u32, h: u32) -> Vec<u8> {
         let img = image::RgbaImage::from_fn(w, h, |x, y| image::Rgba([(x * 40) as u8, (y * 40) as u8, 200, 255]));

@@ -6,7 +6,7 @@
 //   mantou run <entry> [options]      run an app: --width N --height N --min-width N --min-height N --title T (flags win over run()'s options)
 //   mantou dev <entry> [options]      run it, and reload it when a file changes, keeping the window (--watch DIR)
 //   mantou build <entry> [--out DIR] [--name N]       compile the app to one executable (the core beside it)
-//   mantou package <entry> [options]  macOS: a signed .app and .dmg (see USAGE)
+//   mantou package <entry> [options]  macOS: a signed .app and .dmg; Linux: a .deb, a .tar.gz and an AppImage (see USAGE)
 import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { libPath } from "./ffi";
@@ -24,7 +24,11 @@ const USAGE = `usage:
   mantou package <entry.tsx> [--out DIR] [--name N] [--id com.example.app] [--version 1.0.0]
                  [--identity "Developer ID Application: …"] [--notary PROFILE] [--no-dmg]
                                           macOS: a hardened-runtime .app and .dmg; signed ad hoc without --identity,
-                                          notarized and stapled with --notary (a \`xcrun notarytool store-credentials\` profile)`;
+                                          notarized and stapled with --notary (a \`xcrun notarytool store-credentials\` profile)
+                 [--linux deb,tar,appimage] [--icon icon.svg] [--description D] [--categories Network,Email]
+                 [--keywords K,L] [--maintainer "Name <mail>"] [--homepage URL] [--depends A,B] [--recommends A,B]
+                                          Linux: a .deb, a .tar.gz (install.sh, uninstall.sh) and an AppImage, with a
+                                          .desktop entry and icons; options also come from package.json's "mantou" block`;
 
 const [command, ...rest] = Bun.argv.slice(2);
 switch (command) {
@@ -80,22 +84,43 @@ switch (command) {
       process.exit(2);
     }
     const opt = (n: string) => rest[rest.indexOf(`--${n}`) + 1] && rest.includes(`--${n}`) ? rest[rest.indexOf(`--${n}`) + 1] : undefined;
-    const name = opt("name") ?? basename(entry).replace(/\.[^.]+$/, "");
+    const list = (n: string) => opt(n)?.split(",").map((s) => s.trim()).filter(Boolean);
+    const { readConfig } = await import("./package-linux");
+    const pkg = readConfig(process.cwd());
+    const cfg = pkg.config;
+    const name = opt("name") ?? cfg.name ?? basename(entry).replace(/\.[^.]+$/, "");
     const out = opt("out") ?? "dist";
+    const version = opt("version") ?? pkg.version ?? "1.0.0";
     try {
       const b = await import("./build");
-      const made =
-        command === "build"
-          ? await b.build(entry, out, name)
-          : await b.packageMac(entry, out, {
-              name,
-              id: opt("id") ?? `com.example.${name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
-              version: opt("version") ?? "1.0.0",
-              identity: opt("identity") ?? "-",
-              notary: opt("notary"),
-              dmg: !rest.includes("--no-dmg"),
-            });
-      console.log(`mantou: ${made}`);
+      let made: string | string[];
+      if (command === "build") made = await b.build(entry, out, name);
+      else if (process.platform === "linux") {
+        const { packageLinux } = await import("./package-linux");
+        made = await packageLinux(entry, out, {
+          name,
+          version,
+          slug: cfg.linux?.slug,
+          description: opt("description") ?? cfg.description ?? pkg.description,
+          icon: opt("icon") ?? cfg.icon,
+          formats: (list("linux") ?? cfg.linux?.formats) as ("deb" | "tar" | "appimage")[] | undefined,
+          categories: list("categories") ?? cfg.linux?.categories,
+          keywords: list("keywords") ?? cfg.linux?.keywords,
+          maintainer: opt("maintainer") ?? cfg.linux?.maintainer,
+          homepage: opt("homepage") ?? cfg.homepage ?? pkg.homepage,
+          depends: list("depends") ?? cfg.linux?.depends,
+          recommends: list("recommends") ?? cfg.linux?.recommends,
+        });
+      } else
+        made = await b.packageMac(entry, out, {
+          name,
+          id: opt("id") ?? cfg.id ?? `com.example.${name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+          version,
+          identity: opt("identity") ?? "-",
+          notary: opt("notary"),
+          dmg: !rest.includes("--no-dmg"),
+        });
+      for (const m of [made].flat()) console.log(`mantou: ${m}`);
     } catch (e) {
       console.error(e instanceof Error ? e.message : e);
       process.exit(1);

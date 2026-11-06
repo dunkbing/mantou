@@ -33,6 +33,7 @@
     "./mock": "./runtime/mock.ts",
     "./preload": "./runtime/solid/preload.ts",
     "./images": "./runtime/images.ts",
+    "./png": "./runtime/png.ts",
     "./package.json": "./package.json"
   },
   "files": [

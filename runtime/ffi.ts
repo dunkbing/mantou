@@ -4,7 +4,7 @@ import { dlopen, suffix } from "bun:ffi";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const ABI_VERSION = 16;
+export const ABI_VERSION = 17;
 
 export const symbols = {
   mt_abi_version: { args: [], returns: "u32" },
@@ -17,6 +17,7 @@ export const symbols = {
   mt_reset: { args: ["u32"], returns: "void" },
   mt_set_crash_dir: { args: ["ptr", "u32"], returns: "void" },
   mt_test_panic: { args: ["u32"], returns: "void" },
+  mt_render_image: { args: ["ptr", "u32", "u32", "u32", "ptr", "u32"], returns: "i32" },
   mt_html_link_at: { args: ["u32", "u32", "f32", "f32", "ptr", "u32"], returns: "u32" },
   mt_window_open: { args: ["ptr", "u32"], returns: "u32" },
   mt_window_close: { args: ["u32"], returns: "void" },

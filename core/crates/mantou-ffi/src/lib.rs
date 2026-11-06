@@ -64,7 +64,8 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopProxy};
 /// 14: more windows: mt_window_open, mt_window_close, mt_window_focus.
 /// 15: crash reports: mt_set_crash_dir, the CORE_ERROR event, mt_test_panic.
 /// 16: Html nodes: mt_html_link_at and the HTML_REQUEST event.
-pub const ABI_VERSION: u32 = 16;
+/// 17: mt_render_image (icons for `mantou package`).
+pub const ABI_VERSION: u32 = 17;
 
 /// An Input's selection (anchor, focus = the caret), in UTF-16 code units of
 /// its text, into `dst[0..2]`. Returns 0, or -1 when `id` isn't an input.
@@ -729,6 +730,26 @@ pub unsafe extern "C" fn mt_test_value(inst: u32, id: u32, dst: *mut u8, cap: u3
     with(inst, u32::MAX, |i| match lock(&i.tree).value_of(id) {
         Some(v) => write_str(out, &v),
         None => u32::MAX,
+    })
+}
+
+/// Renders image bytes (PNG, JPEG, WebP or SVG) at exactly `width` × `height` px into `dst` as RGBA with straight
+/// alpha (`width * height * 4` bytes): an SVG is rasterized at that size, a raster image scaled. For icons.
+/// Returns 0; -1 when the bytes aren't an image; -2 when `dst` is too small.
+///
+/// # Safety
+/// `ptr` must be valid for `len` bytes and `dst` for `cap` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mt_render_image(ptr: *const u8, len: u32, width: u32, height: u32, dst: *mut u8, cap: u32) -> i32 {
+    // SAFETY: guaranteed by the caller.
+    let (src, out) = unsafe { (bytes(ptr, len), bytes_mut(dst, cap)) };
+    guard(-1, || {
+        let Some(px) = mantou_image::Image::decode(src).ok().and_then(|i| i.render(width, height)) else { return -1 };
+        if out.len() < px.rgba.len() {
+            return -2;
+        }
+        out[..px.rgba.len()].copy_from_slice(&px.rgba);
+        0
     })
 }
 
