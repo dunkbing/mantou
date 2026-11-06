@@ -1,4 +1,5 @@
-// Typing into a multiline Input holding 5,000 characters: each key is edited and laid out in the core.
+// Typing into a multiline Input holding 5,000 characters, as in a compose box that scrolls inside (minHeight: 0):
+// each key is edited and laid out in the core.
 import { Input, View, mount } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
 import { delta, report, summary, time } from "./lib";
@@ -7,7 +8,7 @@ const text = "The quick brown fox jumps over the lazy dog. ".repeat(110).slice(0
 const h = new HeadlessCore({ width: 600, height: 400 });
 mount(h.ui, () => (
   <View style={{ padding: 10, flexGrow: 1 }}>
-    <Input multiline autoFocus defaultValue={text} style={{ flexGrow: 1, fontSize: 14 }} />
+    <Input multiline autoFocus defaultValue={text} style={{ flexGrow: 1, minHeight: 0, fontSize: 14 }} />
   </View>
 ));
 h.step();

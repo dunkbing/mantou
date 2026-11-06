@@ -532,6 +532,32 @@ impl TextEngine {
         (lines, extents)
     }
 
+    /// The glyphs of the lines that reach between `y0` and `y1` (the layout's px): what a scrolled view of a
+    /// long text shows, without the rest.
+    pub(crate) fn glyphs_between(&mut self, layout: &Layout<u32>, y0: f32, y1: f32) -> Vec<PlacedGlyph> {
+        let mut out = Vec::new();
+        for line in layout.lines() {
+            let m = line.metrics();
+            if m.block_max_coord < y0 {
+                continue;
+            }
+            if m.block_min_coord > y1 {
+                break;
+            }
+            for item in line.items() {
+                if let PositionedLayoutItem::GlyphRun(run) = item {
+                    let font = self.font_id(run.run().font());
+                    let size = run.run().font_size();
+                    let span = run.style().brush;
+                    let synth = run.run().synthesis();
+                    let (skew, embolden) = (synth.skew().unwrap_or(0.0), synth.embolden());
+                    out.extend(run.positioned_glyphs().map(|g| PlacedGlyph { font, id: g.id, size, x: g.x, y: g.y, advance: g.advance, span, skew, embolden }));
+                }
+            }
+        }
+        out
+    }
+
     fn ellipsis(&mut self, style: &TextStyle) -> Vec<PlacedGlyph> {
         if let Some(e) = self.ellipses.get(&style.key()) {
             return e.clone();

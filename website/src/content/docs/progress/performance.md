@@ -29,13 +29,13 @@ On the CI-like container these pages were written on (an Intel Xeon at 2.1 GHz, 
 | 3,000 animated cells, a frame (CPU) | 2.5 ms (scene 0.8 ms) |
 | 3,000 cells recoloured from JS, a frame | 9.3 ms (JS 5.7, layout 2.2, applying 0.8, scene 0.5) |
 | 10,000-row list, a wheel step | 0.7 ms |
-| Typing in 5,000 characters, a key | 9.0 ms (layout 5.1, scene 2.2) |
+| Typing in 5,000 characters, a key | 9.0 ms (layout 5.1, scene 2.2); **2.3 ms** since the fix below |
 | 1,000 paragraphs: first layout / relayout at a new width | 46 ms / 3.6 ms |
 | HTML mail: first frame / a selection drag step | 57 ms / 10 ms |
 
 What they point at, roughly in order of what users would notice:
 
-- **Typing in a long text** lays out the whole text again on every key: 9 ms a key at 5,000 characters, so a long message would drop frames. Editing should re-lay out only the changed paragraph.
+- **Typing in a long text** laid the whole text out three times a key: 9 ms at 5,000 characters. Fixed: the editor's wrap width was set again on every frame and on every measure, and each time parley laid the text out again; an input stretched across a column was first measured at the default width (200 px) and then laid out at its own. Now a key lays the text out once, and only the lines that show are drawn: 2.3 ms (layout 0.01, scene 0.5), the rest being that one layout of the edited text. (The stretched input's height is now right too: it was its text's height at 200 px.) Laying out only the edited paragraph would take the rest.
 - **Dragging a selection in an Html document** repaints the bands that show, on the CPU: 10 ms a step. Painting documents on the GPU would fix this, and scrolling to a new band (6 ms) too.
 - **Startup** spends 167 ms importing `mantou-ui` before any window exists. A packaged app skips the Babel part, but not the import; it's worth profiling what loads. Ahead-of-time compilation (blocked on Bun's MDWE issue) cut this by more than half in an earlier trial.
 - **A big JS update** spends most of its time in JS (5.7 of 9.3 ms for 3,000 style changes), and 2.2 ms laying out colours that don't change the layout: a style change that only repaints shouldn't mark layout dirty.

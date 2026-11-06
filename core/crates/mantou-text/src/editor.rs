@@ -53,6 +53,9 @@ pub struct Editor {
     /// How far the content is scrolled (x for single-line, y for multiline).
     scroll: [f32; 2],
     size: [f32; 2],
+    /// The width the text is wrapped at now (parley's), which `set_width` only changes when it differs: setting
+    /// it always lays the whole text out again, which on every frame made typing in a long text slow.
+    wrap: Option<f32>,
     /// The real text of a secure input (the editor shows bullets); None otherwise.
     real: Option<String>,
 }
@@ -119,6 +122,7 @@ impl Editor {
             last_edit: None,
             scroll: [0.0; 2],
             size: [0.0; 2],
+            wrap: None,
             real: None,
         };
         e.apply_style(FAMILY.to_owned());
@@ -210,7 +214,19 @@ impl Editor {
     /// Sets the content box size; multiline text wraps at its width.
     pub fn set_size(&mut self, width: f32, height: f32) {
         self.size = [width.max(0.0), height.max(0.0)];
-        self.ed.set_width(if self.multiline { Some(self.size[0]) } else { None });
+        self.wrap_at(self.multiline.then_some(self.size[0]));
+    }
+
+    /// Wraps the text at `width` (None: not at all), laying it out again only when that's a change.
+    fn wrap_at(&mut self, width: Option<f32>) {
+        let same = match (self.wrap, width) {
+            (Some(a), Some(b)) => (a - b).abs() < 0.01,
+            (a, b) => a.is_none() && b.is_none(),
+        };
+        if !same {
+            self.ed.set_width(width);
+            self.wrap = width;
+        }
     }
 
     pub fn set_multiline(&mut self, multiline: bool) {
@@ -541,15 +557,14 @@ impl Editor {
         self.layout(engine).full_width()
     }
 
-    /// The text's height when wrapped at `width` (multiline), for measuring.
+    /// The text's height when wrapped at `width` (multiline), for measuring. The text stays wrapped there: the
+    /// box is usually placed at the width it was measured at, and then nothing is laid out again.
     pub fn measure_height(&mut self, engine: &mut TextEngine, width: f32) -> f32 {
         if !self.multiline {
             return self.line_height(engine);
         }
-        self.ed.set_width(Some(width.max(0.0)));
-        let h = self.content_height(engine);
-        self.ed.set_width(Some(self.size[0]));
-        h
+        self.wrap_at(Some(width.max(0.0)));
+        self.content_height(engine)
     }
 
     /// One line's height for the style.
@@ -591,13 +606,17 @@ impl Editor {
         [r.x0 as f32 - sx, r.y0 as f32 - sy, r.x1 as f32 - sx, r.y1 as f32 - sy]
     }
 
-    /// The glyphs to draw, scrolled.
-    pub fn glyphs(&mut self, engine: &mut TextEngine) -> Vec<PlacedGlyph> {
+    /// The glyphs to draw, scrolled: those of the lines that show between `visible` (content-box px, after
+    /// scrolling; None: the whole content box), with a line around it, so a long text costs what shows of it.
+    pub fn glyphs(&mut self, engine: &mut TextEngine, visible: Option<(f32, f32)>) -> Vec<PlacedGlyph> {
         self.refresh(engine);
         let [sx, sy] = self.scroll;
-        let layout = self.ed.try_layout().expect("refreshed").clone();
-        let (lines, _) = engine.glyphs_of(&layout, usize::MAX);
-        lines.into_iter().flatten().map(|g| PlacedGlyph { x: g.x - sx, y: g.y - sy, ..g }).collect()
+        let margin = self.style.size * 2.0;
+        let (top, bottom) = visible.unwrap_or((0.0, self.size[1]));
+        let (y0, y1) = if self.multiline { (sy + top - margin, sy + bottom + margin) } else { (f32::NEG_INFINITY, f32::INFINITY) };
+        let layout = self.ed.try_layout().expect("refreshed");
+        let glyphs = engine.glyphs_between(layout, y0, y1);
+        glyphs.into_iter().map(|g| PlacedGlyph { x: g.x - sx, y: g.y - sy, ..g }).collect()
     }
 
     pub fn caret(&mut self, engine: &mut TextEngine) -> Option<Rect> {
@@ -790,7 +809,7 @@ mod tests {
             ed.insert(&mut e, &ch.to_string());
         }
         assert_eq!(ed.text(), "hunter2");
-        assert_eq!(ed.glyphs(&mut e).len(), 7, "a bullet per character");
+        assert_eq!(ed.glyphs(&mut e, None).len(), 7, "a bullet per character");
         // Edits in the middle land in the right place of the real text.
         ed.navigate(&mut e, |d| d.move_left());
         ed.navigate(&mut e, |d| d.move_left());
@@ -838,7 +857,7 @@ mod tests {
         ed.keep_caret_visible(&mut e);
         let caret = ed.caret(&mut e).unwrap();
         assert!(caret[0] >= 0.0 && caret[2] <= 120.0 + 0.01, "{caret:?}");
-        assert!(ed.glyphs(&mut e).first().unwrap().x < 0.0, "scrolled left");
+        assert!(ed.glyphs(&mut e, None).first().unwrap().x < 0.0, "scrolled left");
         ed.navigate(&mut e, |d| d.move_to_text_start());
         ed.keep_caret_visible(&mut e);
         assert!(ed.caret(&mut e).unwrap()[0] < 1.0);
@@ -856,5 +875,36 @@ mod tests {
         ed.extend_to_point(&mut e, 200.0, 5.0);
         assert_eq!(ed.selected_text().as_deref(), Some("alpha beta"));
         assert!(!ed.selection(&mut e).is_empty());
+    }
+
+    #[test]
+    fn a_long_text_draws_only_the_lines_that_show() {
+        let mut e = TextEngine::new();
+        let mut ed = Editor::new(&TextStyle { size: 14.0, ..Default::default() });
+        ed.set_multiline(true);
+        ed.set_size(300.0, 100.0);
+        ed.set_text(&mut e, &"line of text\n".repeat(200));
+        let all = ed.glyphs(&mut e, Some((-1e6, 1e6))).len();
+        let shown = ed.glyphs(&mut e, None).len();
+        assert!(all >= 200 * 10, "{all}");
+        assert!(shown > 0 && shown * 10 < all, "only the box's lines and a margin: {shown} of {all}");
+        // A narrower visible part (the rest clipped by a scroll view): fewer still.
+        assert!(ed.glyphs(&mut e, Some((0.0, 20.0))).len() < shown);
+    }
+
+    #[test]
+    fn measuring_at_the_box_width_lays_nothing_out_again() {
+        let mut e = TextEngine::new();
+        let mut ed = Editor::new(&TextStyle { size: 14.0, ..Default::default() });
+        ed.set_multiline(true);
+        ed.set_size(300.0, 100.0);
+        ed.set_text(&mut e, &"word ".repeat(400));
+        let h = ed.measure_height(&mut e, 300.0);
+        let g = ed.ed.generation();
+        ed.set_size(300.0, 100.0);
+        assert_eq!(ed.measure_height(&mut e, 300.0), h);
+        ed.glyphs(&mut e, None);
+        assert_eq!(ed.ed.generation(), g, "the same width: no new layout");
+        assert!(ed.measure_height(&mut e, 150.0) > h, "narrower: taller");
     }
 }

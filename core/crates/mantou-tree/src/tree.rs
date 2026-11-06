@@ -1214,7 +1214,7 @@ impl Tree {
         let (vw, vh) = self.viewport_logical();
         let rt = self.nodes[&root].taffy;
         let space = Size { width: AvailableSpace::Definite(vw), height: AvailableSpace::Definite(vh) };
-        let (nodes, mut text, scale) = (&self.nodes, self.text.as_mut(), self.scale);
+        let (nodes, styles, mut text, scale) = (&self.nodes, &self.styles, self.text.as_mut(), self.scale);
         let measured = self.taffy.compute_layout_with_measure(rt, space, |inputs, _, ctx, style| {
             taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, avail| {
                 let Some(node) = ctx.and_then(|id| nodes.get(id)) else { return Size::ZERO };
@@ -1240,7 +1240,10 @@ impl Tree {
                         AvailableSpace::MinContent => 0.0,
                         _ => input::DEFAULT_WIDTH,
                     });
-                    let height = known.height.unwrap_or_else(|| inp.editor.borrow_mut().measure_height(text, width).ceil());
+                    // Its height is its text's at the width it will have: when a column stretches it, that's the
+                    // column's (not the default width), so the text is wrapped once, where it will show.
+                    let wrap = known.width.or_else(|| stretched_width(nodes, styles, node, style, avail.width)).unwrap_or(width);
+                    let height = known.height.unwrap_or_else(|| inp.editor.borrow_mut().measure_height(text, wrap).ceil());
                     return Size { width, height };
                 }
                 let width = known.width.or(match avail.width {
@@ -1749,7 +1752,9 @@ impl Tree {
                     let sel = rgba(v.selection_color.unwrap_or(SELECTION), alpha);
                     quads.extend(ed.selection(text).into_iter().map(|r| fill(r, sel)));
                 }
-                let placed = ed.glyphs(text);
+                // Only the lines that show: the content box, clipped by the window and the scroll views around it.
+                let visible = ((clip[1] / s - oy) / k, (clip[3] / s - oy) / k);
+                let placed = ed.glyphs(text, Some(visible));
                 glyphs |= push_glyphs(&mut quads, text, &placed, (ox, oy), k, s, &[color], clip);
                 if focused {
                     for r in ed.compose(text) {
@@ -2007,6 +2012,38 @@ impl Xf {
 
 fn finite(v: f32, or: f32) -> f32 {
     if v.is_finite() { v } else { or }
+}
+
+/// The width a node of auto width will be stretched to, if its parent is a column that stretches it (its own
+/// alignSelf, else the parent's alignItems): the space available less its margins, within its min and max.
+fn stretched_width(nodes: &HashMap<u32, Node>, styles: &HashMap<u32, Vec<(Prop, Value)>>, node: &Node, style: &Style, avail: AvailableSpace) -> Option<f32> {
+    let AvailableSpace::Definite(space) = avail else { return None };
+    if !style.size.width.is_auto() {
+        return None;
+    }
+    let parent = nodes.get(&node.parent?)?;
+    let mut ps = Style { flex_direction: FlexDirection::Column, ..Style::default() };
+    let mut pv = Visual::default();
+    let shared = styles.get(&parent.shared).map(|v| v.as_slice()).unwrap_or(&[]);
+    for (prop, value) in shared.iter().copied().chain(parent.own.iter().map(|(k, v)| (*k, *v))) {
+        set_prop(&mut ps, &mut pv, prop, value);
+    }
+    let column = ps.display == Display::Flex && matches!(ps.flex_direction, FlexDirection::Column | FlexDirection::ColumnReverse);
+    // `normal` (Taffy's default) stretches flex items too.
+    let align = style.align_self.unwrap_or(ps.align_items);
+    let stretch = matches!(align.keyword, taffy::style::AlignItemsKeyword::Stretch | taffy::style::AlignItemsKeyword::Normal);
+    if !column || !stretch {
+        return None;
+    }
+    let len = |l: LengthPercentageAuto| if l.is_auto() { 0.0 } else { l.resolve_to_option(space, |_, _| 0.0).unwrap_or(0.0) };
+    let mut w = space - len(style.margin.left) - len(style.margin.right);
+    if let Some(max) = style.max_size.width.resolve_to_option(space, |_, _| 0.0) {
+        w = w.min(max);
+    }
+    if let Some(min) = style.min_size.width.resolve_to_option(space, |_, _| 0.0) {
+        w = w.max(min);
+    }
+    Some(w.max(0.0))
 }
 
 fn intersect(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {

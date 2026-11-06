@@ -349,3 +349,34 @@ fn a_closing_scope_leaves_the_focus_alone_if_the_user_moved_it() {
     t.layout();
     assert_eq!(t.focused(), Some(3), "focus was in the scope's input, now hidden: back to where it was before");
 }
+
+/// A multiline input of auto width in a column is stretched to the column's width, and its height is its text's
+/// wrapped there (not at the default input width): the same as an input given that width.
+#[test]
+fn a_stretched_multiline_input_is_as_tall_as_its_text_at_its_width() {
+    let text = "word ".repeat(120);
+    let build = |width: Option<f32>, align: Option<u32>| {
+        let mut o = Ops::new();
+        o.create(1).style(1, Prop::Width, px(500.0)).create_input(2).input_options(2, input_flag::MULTILINE, 0).value(2, 0, &text);
+        if let Some(w) = width {
+            o.style(2, Prop::Width, px(w));
+        }
+        if let Some(a) = align {
+            o.style(1, Prop::AlignItems, Value::Enum(a));
+        }
+        o.insert(1, 2, 0).set_root(1);
+        let mut t = Tree::new();
+        t.set_viewport(500, 2000, 1.0);
+        t.apply(&o.bytes()).unwrap();
+        t.layout();
+        t.rect(2).unwrap()
+    };
+    let stretched = build(None, None);
+    let given = build(Some(500.0), None);
+    assert_eq!(stretched[2] - stretched[0], 500.0, "stretched across the column");
+    assert_eq!(stretched, given, "as tall as an input given that width");
+    // Not stretched (alignItems: start): the default width, and its text's height there, so taller.
+    let start = build(None, Some(mantou_tree::protocol::align_items::START));
+    assert!(start[2] - start[0] < 500.0);
+    assert!(start[3] - start[1] > given[3] - given[1], "{start:?} vs {given:?}");
+}
