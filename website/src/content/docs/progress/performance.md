@@ -55,8 +55,8 @@ Measured after a full garbage collection, same machine, median of 3 runs. "Nativ
 | … with `mantou-ui` imported | 96 MB |
 | … an empty instance | 102 MB |
 | … after the first frame drawn (GPU device and pipelines) | 180 MB |
-| A view | 4.6 KB native + 3.5 KB JS |
-| A `<Text>` (its shaped text kept) | 12 KB native + 3.5 KB JS |
+| A view | 4.6 KB native + 3.5 KB JS; **2.2 KB JS** since handlers are made when first used |
+| A `<Text>` (its shaped text kept) | 12 KB native + 3.5 KB JS; **2.2 KB JS** since |
 | A 10,000-row `<List>` | 0.1 MB (only the rows that show exist) |
 | An HTML mail in `<Html>` | 10 MB |
 | Mounting and disposing 3,000 nodes, 50 times | 0 core nodes left; about 4 JS objects left per mount, whatever its size |
@@ -65,6 +65,6 @@ Leaks are counted in objects and nodes, not in the resident set: the allocators 
 
 What it points at:
 
-- **A JS `Node` costs 3.5 KB**, because it creates about 25 objects up front: a map of its styles and one of its transitions, a set of running animations, and an empty array for each kind of handler (press, wheel, layout, scroll, hover, five pointer kinds, drop, image), whether it uses them or not. Creating them when first used would cut most of it.
+- **A JS `Node` costs 3.5 KB**, because it creates about 25 objects up front: a map of its styles and one of its transitions, a set of running animations, and an empty array for each kind of handler (press, wheel, layout, scroll, hover, five pointer kinds, drop, image), whether it uses them or not. Fixed: they're made when first used (and an input's options, and the scroll offset, start shared), so a node costs 2.2 KB. Most of the rest is Solid's own per-element work and the node's map of styles.
 - **Importing `mantou-ui` costs 26 MB** (and most of the startup time above): worth seeing which modules it loads that an app may not need.
 - The benchmark found a crash on the way: disposing an app with a scroll view in it left the scroll view's thumb in the next scene, and drawing it panicked. Fixed, with a test.

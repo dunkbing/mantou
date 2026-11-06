@@ -247,6 +247,12 @@ export interface InputOptions {
   maxLength?: number;
 }
 
+/** An empty list for handlers a node never had. */
+const NONE: never[] = [];
+type Options = { flags: number; maxLength: number; allow: string };
+const NO_OPTIONS: Readonly<Options> = Object.freeze({ flags: 0, maxLength: 0, allow: "" });
+const NO_SCROLL: ScrollOffset = Object.freeze({ x: 0, y: 0 });
+
 type InputHandlers = {
   change: ((value: string) => void)[];
   submit: ((value: string) => void)[];
@@ -322,24 +328,62 @@ export class Node {
   /** Kept in the tree until its exit is done. */
   private exiting = false;
   private shared: SharedStyle | null = null;
-  private pressHandlers: ((e: PressEvent) => void)[] = [];
-  private wheelHandlers: ((e: WheelEvent) => void)[] = [];
-  private layoutHandlers: ((rect: Rect) => void)[] = [];
-  private scrollHandlers: ((offset: ScrollOffset) => void)[] = [];
-  private hoverHandlers: ((hovered: boolean) => void)[] = [];
-  private dropHandlers: { drop: ((e: DropEvent) => void)[]; over: ((e: DropEvent | null) => void)[] } = { drop: [], over: [] };
-  private pointerHandlers: Record<"down" | "up" | "move" | "context" | "double", ((e: PointerEvent) => void)[]> = { down: [], up: [], move: [], context: [], double: [] };
+  // Handlers, transitions and running animations are made when first used: most nodes have none, and making
+  // them all up front cost about 3 KB of JS heap per node (bench/memory).
+  private lazy: {
+    press?: ((e: PressEvent) => void)[];
+    wheel?: ((e: WheelEvent) => void)[];
+    layout?: ((rect: Rect) => void)[];
+    scroll?: ((offset: ScrollOffset) => void)[];
+    hover?: ((hovered: boolean) => void)[];
+    drop?: { drop: ((e: DropEvent) => void)[]; over: ((e: DropEvent | null) => void)[] };
+    pointer?: Record<"down" | "up" | "move" | "context" | "double", ((e: PointerEvent) => void)[]>;
+    image?: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] };
+    transitions?: Map<AnimatableProp, [number, number]>;
+    running?: Set<number>;
+    key?: ((e: KeyEvent) => void)[];
+  } = {};
+  private get pressHandlers() {
+    return (this.lazy.press ??= []);
+  }
+  private get wheelHandlers() {
+    return (this.lazy.wheel ??= []);
+  }
+  private get layoutHandlers() {
+    return (this.lazy.layout ??= []);
+  }
+  private get scrollHandlers() {
+    return (this.lazy.scroll ??= []);
+  }
+  private get hoverHandlers() {
+    return (this.lazy.hover ??= []);
+  }
+  private get dropHandlers() {
+    return (this.lazy.drop ??= { drop: [], over: [] });
+  }
+  private get pointerHandlers() {
+    return (this.lazy.pointer ??= { down: [], up: [], move: [], context: [], double: [] });
+  }
+  private get imageHandlers() {
+    return (this.lazy.image ??= { load: [], error: [] });
+  }
+  private get transitions(): Map<AnimatableProp, [number, number]> {
+    return (this.lazy.transitions ??= new Map());
+  }
+  private get running(): Set<number> {
+    return (this.lazy.running ??= new Set());
+  }
+  private get keyHandlers() {
+    return (this.lazy.key ??= []);
+  }
   /** Whether the pointer is over this node (or a descendant), as the core last reported; only tracked while it has hover handlers. */
   hovered = false;
-  private imageHandlers: { load: ((size: { width: number; height: number }) => void)[]; error: ((message: string) => void)[] } = { load: [], error: [] };
   /** The transitions last sent, by property: duration and easing code. */
-  private transitions = new Map<AnimatableProp, [number, number]>();
   /** Running animations' ids. */
-  private running = new Set<number>();
   /** An Image's natural size once it has loaded (logical px), or the error if it failed. */
   imageState: { width: number; height: number } | { error: string } | null = null;
   /** A scroll view's offset, as the core last reported it to scroll handlers. */
-  scrollOffset: ScrollOffset = { x: 0, y: 0 };
+  scrollOffset: ScrollOffset = NO_SCROLL;
   /** The box the core last reported to this node's layout handlers. */
   layout: Rect | null = null;
   /** The content last sent for a Text node. */
@@ -356,8 +400,11 @@ export class Node {
   private pendingValue: { text: string; rev: number } | null = null;
   private pendingSelection: [number, number] | null = null;
   private placeholderText = "";
-  private options = { flags: 0, maxLength: 0, allow: "" };
-  private sentOptions = { flags: 0, maxLength: 0, allow: "" };
+  private opts: Options | null = null; // inputs only
+  private get options() {
+    return (this.opts ??= { ...NO_OPTIONS });
+  }
+  private sentOptions: Readonly<Options> = NO_OPTIONS;
   private inputHandlers: InputHandlers | null = null;
 
   constructor(readonly ui: Ui, readonly id: number, readonly kind: number) {}
@@ -450,8 +497,8 @@ export class Node {
   /** @internal */
   handleImage(result: { width: number; height: number } | { error: string }) {
     this.imageState = result;
-    if ("error" in result) for (const h of [...this.imageHandlers.error]) h(result.error);
-    else for (const h of [...this.imageHandlers.load]) h(result);
+    if ("error" in result) for (const h of [...(this.lazy.image?.error ?? NONE)]) h(result.error);
+    else for (const h of [...(this.lazy.image?.load ?? NONE)]) h(result);
   }
 
   /** A name for messages: "View", "Text" or "Input". */
@@ -569,11 +616,10 @@ export class Node {
     this.keyHandlers.push(handler);
     return () => void this.keyHandlers.splice(this.keyHandlers.indexOf(handler) >>> 0, 1);
   }
-  private keyHandlers: ((e: KeyEvent) => void)[] = [];
 
   /** @internal Runs this node's key handlers; returns whether one stopped the event. */
   handleKey(e: KeyEvent, stopped: () => boolean): boolean {
-    for (const h of [...this.keyHandlers]) {
+    for (const h of [...(this.lazy.key ?? NONE)]) {
       h(e);
       if (stopped()) return true;
     }
@@ -942,17 +988,11 @@ export class Node {
     this.parent?.detach(this);
     for (const c of this.children) c.parent = null;
     this.children.length = 0;
-    this.pressHandlers.length = 0;
-    this.wheelHandlers.length = 0;
-    this.layoutHandlers.length = 0;
-    this.scrollHandlers.length = 0;
-    this.hoverHandlers.length = 0;
-    this.keyHandlers.length = 0;
-    this.dropHandlers.drop.length = this.dropHandlers.over.length = 0;
-    for (const k of Object.keys(this.pointerHandlers) as (keyof typeof this.pointerHandlers)[]) this.pointerHandlers[k].length = 0;
+    const running = this.lazy.running;
+    this.lazy = {}; // its handlers, transitions and animations go with it
     this.inputHandlers = null;
     this.released = true;
-    for (const a of this.running) this.ui.endAnimation(a);
+    if (running) for (const a of running) this.ui.endAnimation(a);
     this.ui.free(this);
   }
 
@@ -973,12 +1013,12 @@ export class Node {
       next.set(animatable(prop), [timing.duration, timing.easing]);
     }
     for (const [prop, [d, e]] of next) {
-      const old = this.transitions.get(prop);
+      const old = this.lazy.transitions?.get(prop);
       if (old && old[0] === d && old[1] === e) continue;
       this.ui.enc.transition(this.id, StyleProp[prop].code, d, e);
     }
-    for (const prop of this.transitions.keys()) if (!next.has(prop)) this.ui.enc.transition(this.id, StyleProp[prop].code, 0, 0);
-    this.transitions = next;
+    for (const prop of this.lazy.transitions?.keys() ?? []) if (!next.has(prop)) this.ui.enc.transition(this.id, StyleProp[prop].code, 0, 0);
+    this.lazy.transitions = next;
     this.ui.schedule();
     return this;
   }
@@ -1017,7 +1057,7 @@ export class Node {
     return {
       finished,
       stop: () => {
-        if (!this.running.has(id) || this.released) return;
+        if (!this.lazy.running?.has(id) || this.released) return;
         // A zero-length animation of the property (id 0: no event) replaces it, and ends at once.
         this.ui.enc.animate(this.id, 0, StyleProp[p].code, to, to, 0, 0, 1, 0);
         this.ui.schedule();
@@ -1049,13 +1089,14 @@ export class Node {
   }
 
   private listen() {
+    const l = this.lazy; // not the getters: asking makes the lists
     const mask =
-      (this.pressHandlers.length ? EventMask.Press : 0) |
-      (this.layoutHandlers.length ? EventMask.Layout : 0) |
-      (this.scrollHandlers.length ? EventMask.Scroll : 0) |
-      (this.hoverHandlers.length ? EventMask.Hover : 0) |
-      (this.dropHandlers.drop.length || this.dropHandlers.over.length ? EventMask.Drop : 0) |
-      (Object.values(this.pointerHandlers).some((h) => h.length) ? EventMask.Pointer : 0) |
+      (l.press?.length ? EventMask.Press : 0) |
+      (l.layout?.length ? EventMask.Layout : 0) |
+      (l.scroll?.length ? EventMask.Scroll : 0) |
+      (l.hover?.length ? EventMask.Hover : 0) |
+      (l.drop?.drop.length || l.drop?.over.length ? EventMask.Drop : 0) |
+      (l.pointer && Object.values(l.pointer).some((h) => h.length) ? EventMask.Pointer : 0) |
       (this.inputHandlers?.select.length ? EventMask.Select : 0);
     this.ui.enc.listen(this.id, mask);
     this.ui.schedule();
@@ -1163,7 +1204,8 @@ export class Node {
     const run = (list: ((e: PointerEvent) => void)[]) => {
       for (const h of [...list]) h(ev);
     };
-    const h = this.pointerHandlers;
+    const h = this.lazy.pointer;
+    if (!h) return stopped;
     if (kind === 0) {
       run(h.down);
       if (e.button === 2 || (isMac && e.button === 0 && e.ctrl)) run(h.context);
@@ -1248,12 +1290,12 @@ export class Node {
   /** @internal */
   handleDrop(kind: 0 | 1 | 2, e: Omit<DropEvent, "currentTarget" | "stopPropagation"> | null): { stopped: boolean; ran: boolean } {
     let stopped = false;
-    const ran = kind === 2 ? this.dropHandlers.drop.length > 0 : this.dropHandlers.over.length > 0;
+    const ran = kind === 2 ? (this.lazy.drop?.drop.length ?? 0) > 0 : (this.lazy.drop?.over.length ?? 0) > 0;
     if (kind === 2 && e) {
-      for (const h of [...this.dropHandlers.drop]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+      for (const h of [...(this.lazy.drop?.drop ?? NONE)]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
     } else if (kind === 0 && e) {
-      for (const h of [...this.dropHandlers.over]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
-    } else for (const h of [...this.dropHandlers.over]) h(null);
+      for (const h of [...(this.lazy.drop?.over ?? NONE)]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+    } else for (const h of [...(this.lazy.drop?.over ?? NONE)]) h(null);
     return { stopped, ran };
   }
 
@@ -1261,13 +1303,13 @@ export class Node {
   handleHover(hovered: boolean) {
     if (hovered === this.hovered) return;
     this.hovered = hovered;
-    for (const h of [...this.hoverHandlers]) h(hovered);
+    for (const h of [...(this.lazy.hover ?? NONE)]) h(hovered);
   }
 
   /** @internal */
   handleScroll(offset: ScrollOffset) {
     this.scrollOffset = offset;
-    for (const h of [...this.scrollHandlers]) h(offset);
+    for (const h of [...(this.lazy.scroll ?? NONE)]) h(offset);
   }
 
   /** Scrolls this scroll view to an offset (an axis left out stays), clamped, after this turn's layout. */
@@ -1302,7 +1344,7 @@ export class Node {
   /** @internal */
   handleLayout(rect: Rect) {
     this.layout = rect;
-    for (const h of [...this.layoutHandlers]) h(rect);
+    for (const h of [...(this.lazy.layout ?? NONE)]) h(rect);
   }
 
   /** Adds a wheel handler; returns a function that removes it. Wheel events bubble like presses. */
@@ -1318,14 +1360,14 @@ export class Node {
   /** @internal */
   handleWheel(e: WheelEvent): boolean {
     let stopped = false;
-    for (const h of [...this.wheelHandlers]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
+    for (const h of [...(this.lazy.wheel ?? NONE)]) h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
     return stopped;
   }
 
   /** @internal */
   handlePress(e: PressEvent): boolean {
     let stopped = false;
-    for (const h of [...this.pressHandlers]) {
+    for (const h of [...(this.lazy.press ?? NONE)]) {
       h({ ...e, currentTarget: this, stopPropagation: () => (stopped = true) });
     }
     return stopped;
