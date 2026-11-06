@@ -2,7 +2,7 @@
 // (advancing the animations, placing boxes, building the scene), with no JS. Like BUI's 3,000-cell benchmark.
 import { Index, View, mount, type Node } from "mantou-ui";
 import { HeadlessCore } from "../runtime/headless";
-import { breakdown, delta, report, rssMB, summary, time } from "./lib";
+import { breakdown, delta, report, summary, time } from "./lib";
 
 const N = 3000;
 const h = new HeadlessCore({ width: 600, height: 500 });
@@ -30,7 +30,6 @@ report({
   "frame p95 ms": f.p95,
   ...breakdown(d, 130),
   "draw + read back median ms": draw.median,
-  "rss MB": rssMB(),
 });
 h.free();
 

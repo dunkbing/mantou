@@ -78,3 +78,34 @@ fn incremental_layout_matches_layout_from_scratch() {
 fn incremental_layout_matches_on_long_runs() {
     run(1000..1010, 400);
 }
+
+/// A style change that doesn't move anything (a colour, opacity) only draws again; one that does (a width, a font
+/// size) lays out again, and only then.
+#[test]
+fn paint_only_style_changes_lay_nothing_out() {
+    use mantou_tree::protocol::Prop;
+    use mantou_tree::{Length, Ops, Tree, Value};
+    let px = |v: f32| Value::Length(Length::Px(v));
+    let mut o = Ops::new();
+    o.create(1).create(2).style(2, Prop::Width, px(50.0)).style(2, Prop::Height, px(20.0)).insert(1, 2, 0);
+    o.create_text(3).text(3, "Hello").insert(1, 3, 0).set_root(1);
+    let mut t = Tree::new();
+    t.set_viewport(200, 200, 1.0);
+    t.apply(&o.bytes()).unwrap();
+    t.layout();
+    t.scene();
+    let layouts = t.stats().layouts;
+    let text_before = t.rect(3).unwrap();
+    t.apply(&Ops::new().style(2, Prop::BackgroundColor, Value::Color(0xff0000ff)).style(3, Prop::Opacity, Value::F32(0.5)).bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.stats().layouts, layouts, "colours and opacity: no layout");
+    assert!(t.scene_stale(), "but drawn again");
+    t.apply(&Ops::new().style(2, Prop::Width, px(80.0)).bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.stats().layouts, layouts + 1, "a width: laid out");
+    assert_eq!(t.rect(2).unwrap()[2], 80.0);
+    t.apply(&Ops::new().style(3, Prop::FontSize, Value::F32(28.0)).bytes()).unwrap();
+    t.layout();
+    assert_eq!(t.stats().layouts, layouts + 2, "a font size: measured and laid out");
+    assert!(t.rect(3).unwrap()[3] - t.rect(3).unwrap()[1] > text_before[3] - text_before[1], "the text grew");
+}

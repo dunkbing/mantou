@@ -28,13 +28,25 @@ export function delta(a: Stats, b: Stats): Stats {
 
 export type Metrics = Record<string, number>;
 
-/** Prints the scenario's metrics for the runner. Keys end in their unit: "frame ms", "rss MB", "ops". */
+/**
+ * Prints the scenario's metrics for the runner. Keys end in their unit: "frame ms", "rss MB", "ops". The process's
+ * memory at the end is added: its resident set (everything: Bun, the core, the GPU driver) and the JS heap.
+ */
 export function report(metrics: Metrics) {
-  const rounded = Object.fromEntries(Object.entries(metrics).map(([k, v]) => [k, Math.round(v * 100) / 100]));
+  const m = process.memoryUsage();
+  const all = { ...metrics, "rss at the end MB": m.rss / 2 ** 20, "JS heap at the end MB": m.heapUsed / 2 ** 20 };
+  const rounded = Object.fromEntries(Object.entries(all).map(([k, v]) => [k, Math.round(v * 100) / 100]));
   console.log("BENCH " + JSON.stringify(rounded));
 }
 
 export const rssMB = () => process.memoryUsage().rss / 2 ** 20;
+
+/** Memory after a full garbage collection, MB: the resident set and the JS heap. */
+export function memory(): { rss: number; heap: number } {
+  Bun.gc(true);
+  const m = process.memoryUsage();
+  return { rss: m.rss / 2 ** 20, heap: m.heapUsed / 2 ** 20 };
+}
 
 /** A frame's cost from the core's counters, ms per frame: where the time went. */
 export function breakdown(d: Stats, frames: number): Metrics {

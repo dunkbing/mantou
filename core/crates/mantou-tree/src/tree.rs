@@ -850,6 +850,7 @@ impl Tree {
                 let _ = self.taffy.remove(node.taffy);
                 if self.root == Some(id) {
                     self.root = None;
+                    self.layout_dirty = true; // detach() does for the others; the root has no parent
                 }
                 if self.focus == Some(id) {
                     self.focus = None;
@@ -1152,19 +1153,33 @@ impl Tree {
         }
         v.hidden = style.display == Display::None;
         let taffy = node.taffy;
-        let _ = self.taffy.set_style(taffy, style);
-        let node = self.nodes.get_mut(&id).expect("exists");
-        if let (Some(inp), Some(engine)) = (node.input.as_mut(), self.text.as_ref()) {
-            inp.editor.get_mut().set_style(engine, &v.text);
+        // Only what changed costs anything: a new layout style lays out again (Taffy marks the node and its
+        // ancestors), a new text style measures the node again, and the rest (colours, opacity, transforms…)
+        // only places the boxes again and draws.
+        let layout_changed = self.taffy.style(taffy).map_or(true, |old| *old != style);
+        if layout_changed {
+            let _ = self.taffy.set_style(taffy, style);
         }
-        *node.drawn.get_mut() = None; // the text style may have changed
+        let node = self.nodes.get_mut(&id).expect("exists");
+        let text_changed = node.v.text != v.text;
+        if text_changed {
+            if let (Some(inp), Some(engine)) = (node.input.as_mut(), self.text.as_ref()) {
+                inp.editor.get_mut().set_style(engine, &v.text);
+            }
+            *node.drawn.get_mut() = None;
+            let _ = self.taffy.mark_dirty(taffy);
+        }
         if v.scrolls != node.scroll.is_some() {
             node.scroll = v.scrolls.then(ScrollState::default);
         }
         let (before, drawn_before) = (node.v, node.vis());
         node.v = v;
         let (rich, span_of) = (node.rich.is_some(), node.span_of);
-        self.layout_dirty = true;
+        if layout_changed || text_changed {
+            self.layout_dirty = true;
+        } else {
+            self.boxes_dirty = true;
+        }
         self.start_transitions(id, before, drawn_before);
         // A Text's spans build on its style; a span's style changes its Text's runs.
         if rich {
@@ -1207,7 +1222,9 @@ impl Tree {
         }
         self.layout_dirty = false;
         let Some(root) = self.root else {
+            // No root (the app's was released): nothing is placed, scroll thumbs included.
             self.boxes.clear();
+            self.thumbs.clear();
             self.update_hover();
             return true;
         };

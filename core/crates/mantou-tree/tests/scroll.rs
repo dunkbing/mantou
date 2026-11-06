@@ -190,3 +190,24 @@ fn scroll_listeners_hear_each_new_offset_once() {
     t.layout();
     assert!(t.take_events().is_empty());
 }
+
+/// Releasing the root of a tree with a scroll view in it (as disposing the app does) leaves no scroll thumb behind:
+/// the next scene used to read the released view and panic.
+#[test]
+fn releasing_the_root_with_a_scroll_view_in_it() {
+    use mantou_tree::protocol::{Prop, overflow};
+    use mantou_tree::{Length, Ops, Tree, Value};
+    let px = |v: f32| Value::Length(Length::Px(v));
+    let mut o = Ops::new();
+    o.create(1).create(2).style(2, Prop::Overflow, Value::Enum(overflow::SCROLL)).style(2, Prop::Height, px(100.0));
+    o.create(3).style(3, Prop::Height, px(500.0)).insert(2, 3, 0).insert(1, 2, 0).set_root(1);
+    let mut t = Tree::new();
+    t.set_viewport(200, 200, 1.0);
+    t.apply(&o.bytes()).unwrap();
+    t.layout();
+    t.scene();
+    t.apply(&Ops::new().release(3).release(2).release(1).bytes()).unwrap();
+    t.layout();
+    let s = t.scene();
+    assert!(s.quads.is_empty(), "nothing left to draw");
+}
