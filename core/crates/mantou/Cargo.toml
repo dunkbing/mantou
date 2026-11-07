@@ -1,0 +1,10 @@
+[package]
+name = "mantou"
+description = "Mantou from Rust: a native window drawn by Mantou's core, built from nodes and styles, with no JavaScript."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mantou-ffi = { path = "../mantou-ffi" }
+mantou-tree = { path = "../mantou-tree" }

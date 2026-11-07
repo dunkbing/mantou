@@ -2547,6 +2547,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mantou"
+version = "0.0.1"
+dependencies = [
+ "mantou-ffi",
+ "mantou-tree",
+]
+
+[[package]]
 name = "mantou-ffi"
 version = "0.0.1"
 dependencies = [

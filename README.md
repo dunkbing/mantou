@@ -41,6 +41,10 @@ bunx mantou run src/main.tsx
 
 In `tsconfig.json`, set `"jsx": "preserve"` and `"jsxImportSource": "mantou-ui"`; for `bun test`, preload `mantou-ui/preload` in `bunfig.toml`. The native core comes prebuilt for Linux, macOS and Windows.
 
+## From Rust
+
+The core is Rust, and the `mantou` crate drives it without JavaScript: build nodes and styles, get events back, in one ~25 MB executable. It's the low-level layer (no components or reactivity); see [Using Mantou from Rust](https://mantou.dunkbing.dev/guide/rust/).
+
 ## With an agent
 
 Mantou is built to be driven by coding agents: every app runs headless, and `mantou snap` prints the screen as text (each node's `testId`, text and box as drawn), writes screenshots, plays scripted input and checks motion. Give your agent this:

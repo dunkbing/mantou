@@ -18,7 +18,7 @@ export default defineConfig({
 			routeMiddleware: './src/routeData.ts',
 			customCss: ['./src/styles/custom.css'],
 			sidebar: [
-				{ label: 'Guide', items: ['guide/getting-started', 'guide/components', 'guide/styling', 'guide/events', 'guide/platform', 'guide/testing', 'guide/shipping'] },
+				{ label: 'Guide', items: ['guide/getting-started', 'guide/components', 'guide/styling', 'guide/events', 'guide/platform', 'guide/testing', 'guide/shipping', 'guide/rust'] },
 				{
 					label: 'How it works',
 					collapsed: true,

@@ -298,6 +298,35 @@ pub mod named_key {
     pub const F11: u32 = 0x110017;
     pub const F12: u32 = 0x110018;
     pub const UNIDENTIFIED: u32 = 0x11ffff;
+    /// Each named key's name (as the TypeScript side spells it) and code.
+    pub const NAMES: &[(&str, u32)] = &[
+        ("Escape", 0x110000),
+        ("Enter", 0x110001),
+        ("ArrowUp", 0x110002),
+        ("ArrowDown", 0x110003),
+        ("ArrowLeft", 0x110004),
+        ("ArrowRight", 0x110005),
+        ("Backspace", 0x110006),
+        ("Delete", 0x110007),
+        ("Tab", 0x110008),
+        ("Home", 0x110009),
+        ("End", 0x11000a),
+        ("PageUp", 0x11000b),
+        ("PageDown", 0x11000c),
+        ("F1", 0x11000d),
+        ("F2", 0x11000e),
+        ("F3", 0x11000f),
+        ("F4", 0x110010),
+        ("F5", 0x110011),
+        ("F6", 0x110012),
+        ("F7", 0x110013),
+        ("F8", 0x110014),
+        ("F9", 0x110015),
+        ("F10", 0x110016),
+        ("F11", 0x110017),
+        ("F12", 0x110018),
+        ("Unidentified", 0x11ffff),
+    ];
 }
 
 pub mod unit {

@@ -114,6 +114,8 @@ function rs(): string {
   for (const [k, v] of Object.entries(keyModifiers)) L.push(`    pub const ${screaming(k)}: u32 = ${v};`);
   L.push("}", "", "pub mod named_key {");
   for (const [k, v] of Object.entries(namedKeys)) L.push(`    pub const ${screaming(k)}: u32 = 0x${v.toString(16)};`);
+  L.push("    /// Each named key's name (as the TypeScript side spells it) and code.");
+  L.push(`    pub const NAMES: &[(&str, u32)] = &[${Object.entries(namedKeys).map(([k, v]) => `("${k}", 0x${v.toString(16)})`).join(", ")}];`);
   L.push("}", "", "pub mod unit {");
   units.forEach((u, i) => L.push(`    pub const ${screaming(u)}: u32 = ${i};`));
   L.push("}", "", "pub mod event {");

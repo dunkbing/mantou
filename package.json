@@ -52,7 +52,7 @@
     "gen:check": "bun schema/gen.ts --check",
     "typecheck": "bun check",
     "test": "bun test runtime examples/counter schema",
-    "test:core": "cargo test --manifest-path core/Cargo.toml -p mantou-tree -p mantou-text -p mantou-image && cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib",
+    "test:core": "cargo test --manifest-path core/Cargo.toml -p mantou-tree -p mantou-text -p mantou-image && cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib && cargo test --release --manifest-path core/Cargo.toml -p mantou",
     "selftest": "bun runtime/main.ts spike/selftest.ts --title \"Mantou self-test\"",
     "counter": "bun runtime/cli.ts run examples/counter/main.tsx --title Mantou",
     "todos": "bun runtime/cli.ts run examples/todos/main.tsx --width 420 --height 520",
