@@ -98,7 +98,8 @@ switch (command) {
       console.error("mantou: cargo not found; install Rust from https://rustup.rs and run this again");
       process.exit(2);
     }
-    const p = Bun.spawn(["cargo", "build", "--release", "--manifest-path", manifest, "-p", "mantou-ffi"], { stdio: ["inherit", "inherit", "inherit"] });
+    // The dist profile, as releases ship: smaller (LTO, stripped) and no slower; it takes a few minutes longer.
+    const p = Bun.spawn(["cargo", "build", "--profile", "dist", "--manifest-path", manifest, "-p", "mantou-ffi"], { stdio: ["inherit", "inherit", "inherit"] });
     const code = await p.exited;
     if (code === 0) console.log(`mantou: native core built: ${libPath()}`);
     process.exit(code);

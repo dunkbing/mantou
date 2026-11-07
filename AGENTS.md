@@ -36,6 +36,7 @@ Guide for coding agents (and people) working on Mantou: a native GUI framework f
 ```bash
 bun install                 # deps (root); `cd website && bun install` for the site
 bun run build:core          # cargo build --release (needed before headless tests or a window)
+cargo build --profile dist --manifest-path core/Cargo.toml -p mantou-ffi   # the core as releases ship it: LTO, stripped (minutes, not seconds)
 bun run gen                 # regenerate protocol bindings + fixtures after editing schema/protocol.ts
 bun run gen:check           # fails if generated files are stale
 bun run typecheck           # bun check

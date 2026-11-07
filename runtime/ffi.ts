@@ -1,7 +1,7 @@
 // bun:ffi bindings to the native core (core/crates/mantou-ffi). Both the main
 // thread and the Worker dlopen the same library and share its state.
 import { dlopen, suffix } from "bun:ffi";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export const ABI_VERSION = 19;
@@ -77,9 +77,13 @@ export function libPath(): string {
   // A compiled app ships the core beside its executable (`mantou build`).
   const beside = join(dirname(process.execPath), FILE);
   if (existsSync(beside)) return beside;
+  // A core built from source: the newer of a `--release` build (development) and a `dist` one (`mantou
+  // build-core`, as releases ship), else a debug one.
   const target = join(import.meta.dir, "..", "core", "target");
-  const release = join(target, "release", FILE), debug = join(target, "debug", FILE);
-  for (const p of [release, debug]) if (existsSync(p)) return p;
+  const [release, dist, debug] = ["release", "dist", "debug"].map((p) => join(target, p, FILE));
+  const built = [release, dist].filter((p) => existsSync(p)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+  if (built) return built;
+  if (existsSync(debug)) return debug;
   return prebuiltPath() ?? release;
 }
 

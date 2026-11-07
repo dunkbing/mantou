@@ -17,7 +17,7 @@ Apps get Mantou from npm: `bun add mantou-ui`. The package holds the runtime as 
 | `mantou-ui-darwin-x64` | macOS 14, cross-compiled |
 | `mantou-ui-windows-x64` | Windows Server 2022 |
 
-The runtime loads `MANTOU_CORE` if it's set, else a core built from the package's own sources (`mantou build-core`, which needs Rust), else the prebuilt one. So a platform without a prebuilt core, or an app that depends on mantou-ui from GitHub, still works after one build. Release builds are stripped: about 14 MB on Linux, 6 MB compressed.
+The runtime loads `MANTOU_CORE` if it's set, else a core built from the package's own sources (`mantou build-core`, which needs Rust), else the prebuilt one. So a platform without a prebuilt core, or an app that depends on mantou-ui from GitHub, still works after one build. Released cores are built with the `dist` profile (`core/Cargo.toml`): link-time optimization in one unit, no debug info, symbols stripped, and size over speed for the big parts that never run per frame (the HTML/CSS engine, accessibility, dialogs). On Linux that's about 25 MB, 11 MB compressed, against 36 MB for a plain stripped `--release` build, with no measurable cost in speed (see Performance). `mantou build-core` builds the same way.
 
 Releases are made by `.github/workflows/release.yml` from a version tag. It builds every core, packs every package, installs them from the tarballs into a fresh app on Linux (x64, arm64), macOS and Windows and runs a headless test there, and only then publishes, platform packages first, with npm provenance. It ends by installing the published version from npm on the same machines and testing it again.
 

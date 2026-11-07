@@ -52,6 +52,21 @@ What they point at, roughly in order of what users would notice:
 
 Not measured yet: frames in a real window (presenting, vsync, input to photon), and a GPU's draw time (`draw + read back` here is llvmpipe on the CPU).
 
+## Size
+
+The core on Linux, x86-64, measured with each build's whole dependency tree rebuilt, and `bench/` run three times alternating the builds (medians; the machine's noise is about ±8%):
+
+| Build | Size | gzip | Speed against the plain build |
+|---|--:|--:|---|
+| `--release`, stripped (what shipped) | 35.8 MB | 14.1 MB | |
+| + LTO, one codegen unit | 27.7 MB | 11.9 MB | the same or faster: Html's first frame −19%, a new Html band −36%, a key in a long text −14% |
+| + `opt-level = "s"` everywhere | 21.7 MB | 9.3 MB | text and layout 10–22% slower (relayout at a new width +20%, a key's scene +22%) |
+| + `opt-level = "s"` only for cold parts (**`dist`**, what ships now) | 25.1 MB | 10.8 MB | within noise of LTO alone |
+
+The cold parts are the HTML/CSS engine behind `<Html>` (Stylo, html5ever, Blitz, vello_cpu), accessibility, dialogs and notifications. The hot paths (Mantou's crates, Taffy, Parley, swash, wgpu) stay at full optimization. Debug info is what made the development build 283 MB.
+
+Not done: building only the wgpu backends a platform needs. On Linux both of the backends compiled in are needed (Vulkan, and GL where there's no Vulkan), and on macOS only Metal is compiled already; it would only trim the Windows build (Vulkan and GL beside DirectX 12), which can't be measured here. The HTML engine is the biggest single part left; making `<Html>` optional would take most of it out of apps that don't use it.
+
 ## Memory
 
 Measured after a full garbage collection, same machine, median of 3 runs. "Native" is the resident set less the JS heap: Bun, the core, and the GPU driver (llvmpipe here, which is on the CPU; a GPU's driver keeps less in the process).

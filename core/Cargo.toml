@@ -11,3 +11,61 @@ license = "MIT OR Apache-2.0"
 # Panics are caught at the C ABI (catch_unwind), so keep unwinding.
 panic = "unwind"
 debug = "line-tables-only"
+
+# What ships (the release workflow, `mantou build-core`): one optimized unit with link-time optimization, no
+# debug info, symbols stripped. About 25 MB instead of 36 on Linux, and no slower: measured with bench/
+# (LTO alone made Html 20-35% faster). Development keeps `--release`, which links in seconds after a change.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = "symbols"
+
+# Size over speed for big parts that never run per frame: the HTML/CSS engine behind <Html> (it lays out
+# and paints when a document changes), accessibility, dialogs and notifications. The hot paths (our crates,
+# Taffy, Parley, swash, wgpu) stay at full speed; with this, Html measured within noise of the rest at -O3.
+[profile.dist.package.stylo]
+opt-level = "s"
+[profile.dist.package.selectors]
+opt-level = "s"
+[profile.dist.package.html5ever]
+opt-level = "s"
+[profile.dist.package.markup5ever]
+opt-level = "s"
+[profile.dist.package.xml5ever]
+opt-level = "s"
+[profile.dist.package.cssparser]
+opt-level = "s"
+[profile.dist.package.blitz-dom]
+opt-level = "s"
+[profile.dist.package.blitz-html]
+opt-level = "s"
+[profile.dist.package.blitz-paint]
+opt-level = "s"
+[profile.dist.package.vello_cpu]
+opt-level = "s"
+[profile.dist.package.vello_common]
+opt-level = "s"
+[profile.dist.package.anyrender]
+opt-level = "s"
+[profile.dist.package.anyrender_vello_cpu]
+opt-level = "s"
+[profile.dist.package.anyrender_svg]
+opt-level = "s"
+[profile.dist.package.accesskit]
+opt-level = "s"
+[profile.dist.package.accesskit_consumer]
+opt-level = "s"
+[profile.dist.package.accesskit_unix]
+opt-level = "s"
+[profile.dist.package.accesskit_atspi_common]
+opt-level = "s"
+[profile.dist.package.accesskit_winit]
+opt-level = "s"
+[profile.dist.package.zbus]
+opt-level = "s"
+[profile.dist.package.rfd]
+opt-level = "s"
+[profile.dist.package.notify-rust]
+opt-level = "s"

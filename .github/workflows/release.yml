@@ -46,9 +46,6 @@ jobs:
           - { target: darwin-x64, os: macos-15, file: libmantou_ffi.dylib, rust: x86_64-apple-darwin }
           - { target: win32-x64, os: windows-2022, file: mantou_ffi.dll }
     env:
-      # Small binaries for the packages: no debug info, symbols stripped.
-      CARGO_PROFILE_RELEASE_DEBUG: "false"
-      CARGO_PROFILE_RELEASE_STRIP: "symbols"
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
       - uses: actions/checkout@v4
@@ -62,12 +59,13 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          # The dist profile (core/Cargo.toml): LTO, no debug info, symbols stripped.
           if [ -n "${{ matrix.rust }}" ]; then
-            cargo build --release --manifest-path core/Cargo.toml -p mantou-ffi --target ${{ matrix.rust }}
-            out=core/target/${{ matrix.rust }}/release
+            cargo build --profile dist --manifest-path core/Cargo.toml -p mantou-ffi --target ${{ matrix.rust }}
+            out=core/target/${{ matrix.rust }}/dist
           else
-            cargo build --release --manifest-path core/Cargo.toml -p mantou-ffi
-            out=core/target/release
+            cargo build --profile dist --manifest-path core/Cargo.toml -p mantou-ffi
+            out=core/target/dist
           fi
           mkdir -p dist/${{ matrix.target }}
           cp "$out/${{ matrix.file }}" dist/${{ matrix.target }}/
