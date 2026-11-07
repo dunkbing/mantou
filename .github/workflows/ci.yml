@@ -38,7 +38,7 @@ jobs:
       - name: Build the native core
         run: cargo build --release --manifest-path core/Cargo.toml
       - name: The core's own unit tests (dialogs, HTML documents)
-        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib
+        run: cargo test --release --manifest-path core/Cargo.toml -p mantou-ffi -p mantou-html --lib && cargo test --release --manifest-path core/Cargo.toml -p mantou
       - name: Headless tests on the real core
         run: bun run test:headless
       # Reported in the job's summary and kept as an artifact; timings vary between runners, so they never fail CI.
